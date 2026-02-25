@@ -5,9 +5,9 @@ import numpy as np
 INPUT_FILE  = "normalizedstats223.csv"
 OUTPUT_FILE = "nba_filtered.csv"
 
-MIN_GAMES   = 41   # at least half a season
-MIN_MP      = 1500 # total minutes played (≈20 mpg over 75 games)
-MIN_SEASON = 2000
+MIN_GAMES   = 41
+MIN_MP      = 1500
+MIN_SEASON  = 1950
 
 # ── LOAD ─────────────────────────────────────────────────
 df = pd.read_csv(INPUT_FILE)
@@ -17,23 +17,20 @@ print("Columns:", list(df.columns))
 # ── CLEAN ────────────────────────────────────────────────
 df.columns = df.columns.str.strip().str.lower()
 
-# Drop TOT rows (multi-team aggregates)
 df = df[df["tm"].str.upper() != "TOT"]
 print(f"After removing TOT: {len(df)} rows")
 
-# Min games + minutes filter
 df = df[df["g"] >= MIN_GAMES]
 df = df[df["mp"] >= MIN_MP]
-df=df[df['season']>=MIN_SEASON]
-print(f"After min games ({MIN_GAMES}) + min MP ({MIN_MP}): {len(df)} rows")
+df = df[df["season"] >= MIN_SEASON]
+print(f"After filters: {len(df)} rows")
 
 # ── DETECT STAT FORMAT ───────────────────────────────────
 is_per100 = any("per_100" in c for c in df.columns)
 suf = "_per_100_poss" if is_per100 else "_per_36_min"
-print(f"Stat format detected: {'per 100 poss' if is_per100 else 'per 36 min'}")
+print(f"Stat format: {'per 100 poss' if is_per100 else 'per 36 min'}")
 
 def col(base):
-    # Try exact suffix, then alternatives
     for name in [f"{base}{suf}", f"{base}_per_100_poss", f"{base}_per_36_min", base]:
         if name in df.columns:
             return name
@@ -74,7 +71,7 @@ def normalize_pos(p):
     for k in POS_MAP:
         if p.startswith(k):
             return POS_MAP[k]
-    return "SF"  # fallback
+    return "SF"
 
 df["pos_clean"] = df["pos"].apply(normalize_pos)
 
@@ -94,17 +91,29 @@ fga  = s(stat_map["fga"])
 x3pa = s(stat_map["x3pa"])
 fta  = s(stat_map["fta"])
 
+# FG%
 fg_raw = pd.to_numeric(df["fg_percent"], errors="coerce").fillna(0)
-fg_pct = fg_raw.apply(lambda x: x * 100 if x <= 1 else x)  # normalize 0.421 → 42.1
+fg_pct = fg_raw.apply(lambda x: x * 100 if x <= 1 else x)
 
-# TS% = pts / (2 * (fga + 0.44 * fta))
+# FT%
+ft_raw = pd.to_numeric(df["ft_percent"], errors="coerce").fillna(0)
+ft_pct = ft_raw.apply(lambda x: x * 100 if x <= 1 else x)
+
+# 3P% (real historical)
+x3p_raw = pd.to_numeric(df["x3p_percent"], errors="coerce").fillna(0)
+x3p_pct = x3p_raw.apply(lambda x: x * 100 if x <= 1 else x)
+
+# FT rate = FTA per FGA
+ft_rate = np.where(fga > 0, (fta / fga).round(2), 0.0)
+
+# TS%
 ts_denom = 2 * (fga + 0.44 * fta)
 ts_pct = np.where(ts_denom > 0, (pts / ts_denom * 100).round(1), 50.0)
 
-# 3P attempt rate
+# 3P attempt rate (tendency — used by sim for shot selection)
 tr = np.where(fga > 0, (x3pa / fga).round(2), 0.0)
 
-# Player label: "F. LastName 'YY"
+# Player label
 def make_label(row):
     name = str(row["player"]).strip()
     season = str(row["season"])
@@ -118,23 +127,25 @@ df["label"] = df.apply(make_label, axis=1)
 
 # ── KNN FILL MISSING STL/BLK ─────────────────────────────
 out = pd.DataFrame({
-    "name":     df["label"],        # "N. Jokić '22"
-    "fullName": df["player"],       # "Nikola Jokic"
-    "pos":      df["pos_clean"],    # PG/SG/SF/PF/C
-    "season":   df["season"],       # 2022
-    "tm":       df["tm"].str.upper(), # DEN
+    "name":     df["label"],
+    "fullName": df["player"],
+    "pos":      df["pos_clean"],
+    "season":   df["season"],
+    "tm":       df["tm"].str.upper(),
     "pts":      pts.round(1),
     "ast":      ast.round(1),
     "reb":      reb.round(1),
     "stl":      stl.round(2),
     "blk":      blk.round(2),
     "tov":      tov.round(1),
-    "fg":       fg_pct.round(1),    # FG% as 0-100 (e.g. 58.3)
-    "ts":       ts_pct,             # TS% as 0-100
-    "tR":       tr,                 # 3PA rate (0.0-1.0)
+    "fg":       fg_pct.round(1),
+    "ts":       ts_pct,
+    "tR":       tr,
+    "ftPct":    ft_pct.round(1),
+    "ftRate":   ft_rate,
+    "tpPct":    x3p_pct.round(1),   # real historical 3P%
 })
 
-# KNN estimate for missing stl/blk (0 values)
 def knn_fill(df_out, target_col, k=5):
     has_data = df_out[df_out[target_col] > 0].copy()
     missing  = df_out[df_out[target_col] <= 0].copy()
@@ -171,16 +182,14 @@ out["cost"] = out["cost"].clip(5, 40)
 
 # ── SORT & SAVE ──────────────────────────────────────────
 out = out.sort_values("rating", ascending=False).reset_index(drop=True)
-out = out.drop_duplicates(subset=["fullName"], keep="first")  # ← add here
+out = out.drop_duplicates(subset=["fullName"], keep="first")
 out = out.reset_index(drop=True)
 
-# Verify columns match exactly what the app expects
-expected = ["name","fullName","pos","season","tm","pts","ast","reb","stl","blk","tov","fg","ts","tR","rating","cost"]
+expected = ["name","fullName","pos","season","tm","pts","ast","reb","stl","blk","tov","fg","ts","tR","ftPct","ftRate","tpPct","rating","cost"]
 assert list(out.columns) == expected, f"Column mismatch!\nGot:      {list(out.columns)}\nExpected: {expected}"
 
 out.to_csv(OUTPUT_FILE, index=False)
 print(f"\nCSV columns: {list(out.columns)}")
-
 print(f"\n✓ Done! {len(out)} players saved to '{OUTPUT_FILE}'")
 print(f"  Rating range: {mn:.1f} – {mx:.1f}")
 print(f"  Cost range:   {out['cost'].min()} – {out['cost'].max()}")
