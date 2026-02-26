@@ -670,17 +670,17 @@ export function getArchetype(p) {
 
   const isSwiss = p.pts > 32 && p.ast > 7 && p.reb > 9 && p.fg > 48;
 
-  const isPmBig = isBig && p.ast > 5 && p.reb > 9 && p.pts < 48 && p.rating > 55;
+  const isPmBig = isBig && p.ast > 6 && p.reb > 9 && p.pts < 38 && p.rating > 56;
   const isRimProt =
-    isBig && ((p.blk > 2.5 && p.reb > 10) || (p.blk > 3.2 && p.reb > 9));
+    isBig && p.blk > 2.7 && p.reb > 10 && p.pts < 24;
   const isPaint = isBig && p.reb > 16 && p.tR < 0.05;
   const isStretchBig =
     isBig &&
-    p.tR > 0.3 &&
-    p.tpPct > 33 &&
-    p.reb > 5 &&
-    p.pts > 17 &&
-    p.rating > 44;
+    p.tR > 0.25 &&
+    p.tpPct > 30 &&
+    p.reb > 4 &&
+    p.pts > 14 &&
+    p.rating > 42;
   const isMidrange =
     (isBig || isWing || isGuard) &&
     p.pts > 18 &&
@@ -688,7 +688,7 @@ export function getArchetype(p) {
     p.fg > 44 &&
     p.rating > 46;
   const isGlass =
-    isBig && p.reb > 11 && p.pts < 28 && p.fg > 48 && p.rating > 40;
+    isBig && p.reb > 10 && p.pts < 30 && p.fg > 46 && p.rating > 38;
 
   const isPointForward =
     (p.pos === "SF" || p.pos === "PF") &&
@@ -713,13 +713,13 @@ export function getArchetype(p) {
   const isScoringGuard =
     isGuard && p.pts > 20 && p.ast >= 2 && p.rating > 45;
   const isBucketGetter =
-    (isGuard || isWing) &&
-    p.pts > 22 &&
+    (isGuard || isWing || p.pos === "PF") &&
+    p.pts > 20 &&
     p.ast < 7 &&
-    p.reb >= 3 &&
-    p.fg >= 48 &&
-    p.tov <= 2.5 &&
-    p.rating > 48;
+    p.reb >= 2 &&
+    p.fg >= 46 &&
+    p.tov <= 2.6 &&
+    p.rating > 46;
 
   const isLockdown =
     p.stl > 2.5 && (p.blk > 1.2 || p.pts < 14) && p.rating > 45;
@@ -740,10 +740,10 @@ export function getArchetype(p) {
     return { label: "SWISS ARMY KNIFE", color: "#f472b6", id: "swiss" };
   if (isPmBig)
     return { label: "PLAYMAKING BIG", color: "#a78bfa", id: "pmBig" };
-  if (isRimProt)
-    return { label: "RIM PROTECTOR", color: "#60a5fa", id: "rimProt" };
   if (isPaint)
     return { label: "PAINT MONSTER", color: "#4ade80", id: "paint" };
+  if (isRimProt)
+    return { label: "RIM PROTECTOR", color: "#60a5fa", id: "rimProt" };
   if (isLockdown)
     return { label: "LOCKDOWN", color: "#f87171", id: "lockdown" };
   if (is3D) return { label: "3&D", color: "#34d399", id: "threeD" };
