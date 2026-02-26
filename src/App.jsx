@@ -661,14 +661,7 @@ if(phase==="teamSetup") return(
               <div style={{fontSize:24}}>💀</div><div style={{fontSize:16,fontWeight:900,color:"#ef4444"}}>YOUR SEASON IS OVER</div>
             </div>
           )}
-          <BracketDisplay
-            bracket={bracket}
-            onPlayMatch={id=>{
-              // Select matchup; actual sim happens from the detail panel button.
-              setActiveMatchId(id);
-              setPlayoffResult(null);
-            }}
-          />
+          <BracketDisplay bracket={bracket} onPlayMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);playPlayoffGame(id);}}/>
           {activeMatchId&&(()=>{
             const matchup=
               activeMatchId==="pi1"?bracket.playIn[0]:activeMatchId==="pi2"?bracket.playIn[1]:activeMatchId==="pi3"?bracket.playIn[2]:
