@@ -251,13 +251,13 @@ function getArchetype(p){
   const is3D=p.tpPct>35&&p.tR>0.35&&(p.stl>1.2||p.blk>0.8)&&p.pts<26;
   const isFloorGeneral=p.ast>10&&p.pts<50&&(p.pos==="PG"||p.pos==="SG");
   const isIsoScorer=(isGuard||isWing)&&p.pts>28&&p.ast<6&&p.tov>2.5&&p.fg<48;
-  const isPointForward=(p.pos==="SF"||p.pos==="PF")&&p.ast>6&&p.reb>6&&p.pts<24;
+  const isPointForward=(p.pos==="SF"||p.pos==="PF")&&p.ast>4&&p.reb>5&&p.pts<28;
 const isBucketGetter=(isGuard||isWing)&&p.pts>22&&p.ast<7&&p.reb>=3&&p.fg>=48&&p.tov<=2.5;
-const isStretchBig=isBig&&p.tR>0.32&&p.tpPct>34&&p.reb>9&&p.pts>22;
+const isStretchBig=isBig&&p.tR>0.25&&p.tpPct>30&&p.reb>6&&p.pts>16;
 const isWingScorer=isWing&&p.pts>18&&p.ast>=3&&p.reb>=3;
 const isScoringGuard=isGuard&&p.pts>20&&p.ast>=3;
 const isSpotUp=p.tR>0.40&&p.tpPct>34&&p.pts<28;
-const isMidrange=isBig&&p.pts>16&&p.tR<0.20&&p.fg>48;
+const isMidrange=(isBig||isWing)&&p.pts>14&&p.tR<0.25&&p.fg>46;
 const isGlass=isBig&&p.reb>10&&p.blk<2.5&&p.pts<28;
   if(isSwiss)return{label:"SWISS ARMY KNIFE",color:"#f472b6",id:"swiss"};
   if(isPmBig)return{label:"PLAYMAKING BIG",color:"#a78bfa",id:"pmBig"};
