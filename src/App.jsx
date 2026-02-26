@@ -243,22 +243,32 @@ function getArchetype(p){
 const isGuard=p.pos==="PG"||p.pos==="SG";
 const isWing=p.pos==="SF";
 const isBig=p.pos==="PF"||p.pos==="C";
+
+// Elite multi-category
 const isSwiss=p.pts>32&&p.ast>7&&p.reb>9&&p.fg>48;
-const isPmBig=isBig&&p.ast>5&&p.reb>9&&p.pts<45;
-const isRimProt=isBig&&((p.blk>2.2&&p.reb>10)||(p.blk>3.0&&p.reb>8));
+
+// Bigs
+const isPmBig=isBig&&p.ast>5&&p.reb>9&&p.pts<48&&p.rating>55;
+const isRimProt=isBig&&((p.blk>2.5&&p.reb>10)||(p.blk>3.2&&p.reb>9));
 const isPaint=isBig&&p.reb>16&&p.tR<0.05;
+const isStretchBig=(isBig||isWing)&&p.tR>0.30&&p.tpPct>33&&p.reb>7&&p.pts>17&&p.rating>45;
+const isMidrange=(isBig||isWing||isGuard)&&p.pts>18&&p.tR<0.28&&p.fg>46&&p.rating>48;
+const isGlass=isBig&&p.reb>11&&p.pts<28&&p.fg>48&&p.rating>40;
+
+// Wings/Forwards
+const isPointForward=(p.pos==="SF"||p.pos==="PF"||p.pos==="PG")&&p.ast>5&&p.reb>6&&p.pts<27&&p.rating>50;
+const isWingScorer=isWing&&p.pts>20&&p.ast>=3&&p.reb>=3&&p.rating>45;
+
+// Guards
+const isFloorGeneral=p.ast>11&&p.pts<50&&(p.pos==="PG"||p.pos==="SG")&&p.rating>50;
+const isIsoScorer=(isGuard||isWing)&&p.pts>28&&p.ast<6&&p.tov>2.5&&p.fg<48&&p.rating>55;
+const isScoringGuard=isGuard&&p.pts>20&&p.ast>=2&&p.rating>48;
+const isBucketGetter=(isGuard||isWing)&&p.pts>22&&p.ast<7&&p.reb>=3&&p.fg>=48&&p.tov<=2.5&&p.rating>48;
+
+// Defense/Shooting
 const isLockdown=p.stl>2.5&&(p.blk>1.0||p.pts<14);
-const is3D=p.tpPct>37&&p.tR>0.38&&(p.stl>1.5||p.blk>1.0)&&p.pts<24;
-const isFloorGeneral=p.ast>11&&p.pts<50&&(p.pos==="PG"||p.pos==="SG");
-const isIsoScorer=(isGuard||isWing)&&p.pts>28&&p.ast<6&&p.tov>2.5&&p.fg<48;
-const isPointForward=(p.pos==="SF"||p.pos==="PF")&&p.ast>5&&p.reb>6&&p.pts<24;
-const isBucketGetter=(isGuard||isWing)&&p.pts>22&&p.ast<7&&p.reb>=3&&p.fg>=48&&p.tov<=2.5;
-const isStretchBig=(isBig||isWing)&&p.tR>0.32&&p.tpPct>34&&p.reb>7&&p.pts>18;
-const isWingScorer=isWing&&p.pts>20&&p.ast>=4&&p.reb>=4;
-const isScoringGuard=isGuard&&p.pts>24&&p.ast>=4;
-const isSpotUp=p.tR>0.45&&p.tpPct>37&&p.pts<26&&(p.stl>1.0||p.reb>3);
-const isMidrange=(isBig||isWing)&&p.pts>16&&p.tR<0.25&&p.fg>46;
-const isGlass=isBig&&p.reb>11&&p.blk<2.0&&p.pts<24;
+const is3D=p.tpPct>37&&p.tR>0.38&&(p.stl>1.5||p.blk>1.0)&&p.pts<24&&p.rating>40;
+const isSpotUp=p.tR>0.45&&p.tpPct>37&&p.pts<26&&(p.stl>1.0||p.reb>3)&&p.rating>38;
   if(isSwiss)return{label:"SWISS ARMY KNIFE",color:"#f472b6",id:"swiss"};
   if(isPmBig)return{label:"PLAYMAKING BIG",color:"#a78bfa",id:"pmBig"};
   if(isRimProt)return{label:"RIM PROTECTOR",color:"#60a5fa",id:"rimProt"};
