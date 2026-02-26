@@ -251,14 +251,13 @@ function getArchetype(p){
   const is3D=p.tpPct>36&&p.tR>0.38&&(p.stl>1.5||p.blk>1.0)&&p.pts<24;
   const isFloorGeneral=p.ast>11&&p.pts<50;
   const isIsoScorer=isGuard&&p.pts>36&&p.ast<12;
-  const isBucketGetter=(isGuard||isWing||isBig)&&p.pts>28&&p.ast<8&&p.reb<13;
-  const isStretchBig=isBig&&p.tR>0.32&&p.tpPct>34&&p.reb>9&&p.pts>22;
-  const isWingScorer=(isWing||p.pos==="SG")&&p.pts>22&&p.ast>=3&&p.reb>=3;
-  const isScoringGuard=isGuard&&p.pts>26&&p.ast>=4;
-  const isSpotUp=p.tR>0.45&&p.tpPct>37&&p.pts<32;
-  const isMidrange=isBig&&p.pts>20&&p.tR<0.18&&p.fg>50;
-  const isGlass=isBig&&p.reb>13&&p.blk<2.5&&p.pts<38;
-  const isPlaymaker=p.ast>9&&p.pts<30;
+const isBucketGetter=isWing&&p.pts>24&&p.ast<6&&p.reb>=3;
+const isStretchBig=isBig&&p.tR>0.32&&p.tpPct>34&&p.reb>9&&p.pts>22;
+const isWingScorer=isWing&&p.pts>22&&p.ast>=4&&p.reb>=4;
+const isScoringGuard=isGuard&&p.pts>26&&p.ast>=4;
+const isSpotUp=p.tR>0.45&&p.tpPct>37&&p.pts<32;
+const isMidrange=isBig&&p.pts>20&&p.tR<0.18&&p.fg>50;
+const isGlass=isBig&&p.reb>13&&p.blk<2.5&&p.pts<38;
   if(isSwiss)return{label:"SWISS ARMY KNIFE",color:"#f472b6",id:"swiss"};
   if(isPmBig)return{label:"PLAYMAKING BIG",color:"#a78bfa",id:"pmBig"};
   if(isRimProt)return{label:"RIM PROTECTOR",color:"#60a5fa",id:"rimProt"};
@@ -274,7 +273,6 @@ if(isWingScorer)return{label:"WING SCORER",color:"#e879f9",id:"wing"};
   if(isSpotUp)return{label:"SPOT UP SHOOTER",color:"#38bdf8",id:"spotUp"};
   if(isMidrange)return{label:"MIDRANGE ARTIST",color:"#c084fc",id:"midrange"};
   if(isGlass)return{label:"GLASS CLEANER",color:"#86efac",id:"glass"};
-  if(isPlaymaker)return{label:"PLAYMAKER",color:"#fbbf24",id:"playmaker"};
   return{label:"ROLE PLAYER",color:"#94a3b8",id:"role"};
 }
 function archetypeMatchupFactor(defArch,offArch){
