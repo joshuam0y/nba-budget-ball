@@ -172,7 +172,7 @@ def calc_rating(r):
     return round(
         r["pts"]*1.0 + r["ast"]*1.5 + r["reb"]*1.1 +
         r["stl"]*2.2 + r["blk"]*1.8 - r["tov"]*1.2 +
-        (r["fg"]-44)*0.4 + (r["ts"]-54)*0.15, 1
+        (r["fg"]-44)*0.4 + (r["ts"]-54)*0.3, 1
     )
 
 out["rating"] = out.apply(calc_rating, axis=1)
