@@ -659,15 +659,14 @@ const volumeSlider = (
 
   const drop=slot=>{if(inSeason)return;setRoster(r=>({...r,[slot]:null}));if(slotSel===slot)setSlotSel(null);};
 
-  const startSeason=()=>{
-    if(!full)return;
-    const teams=generateLeague(myLineup,playerPool),simmed=simLeagueGames(teams,teamRoster);
-    setAiTeams(simmed);setInSeason(true);setSeason(emptySeason());setGameNum(1);setSchedIdx(0);
-    setResult(null);
-    myLineup.forEach(({player}) => incrementPick(player.name));
-    setPhase("game");setBracket(null);setPlayoffResult(null);setElimInPlayoffs(false);
-    getTopPicks().then(setTopPicks);
-  };
+const startSeason = async () => {
+  if(!full) return;
+  const teams=generateLeague(myLineup,playerPool),simmed=simLeagueGames(teams,teamRoster);
+  setAiTeams(simmed);setInSeason(true);setSeason(emptySeason());setGameNum(1);setSchedIdx(0);
+  setResult(null);setPhase("game");setBracket(null);setPlayoffResult(null);setElimInPlayoffs(false);
+  await Promise.all(myLineup.map(({player})=>incrementPick(player.name)));
+  getTopPicks().then(setTopPicks);
+};
 
   const playGame=()=>{
     if(!full||schedIdx>=aiTeams.length)return;
