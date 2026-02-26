@@ -1,5 +1,5 @@
 import "./index.css";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const POSITIONS = ["PG","SG","SF","PF","C"];
 const BUDGET = 140;
@@ -63,7 +63,6 @@ function chemBoost(lineup,teamRoster){
 const ADJ={PG:["SG"],SG:["PG","SF"],SF:["SG","PF"],PF:["SF","C"],C:["PF"]};
 function posMult(player,slot){
   if(player.pos===slot)return 1.0;
-  // Bigs can't play guard spots
   if((getArchetype(player).id==="pmBig"||getArchetype(player).id==="stretch"||getArchetype(player).id==="rimProt"||getArchetype(player).id==="paint"||getArchetype(player).id==="glass")&&(slot==="PG"||slot==="SG"))return 0.45;
   if(ADJ[player.pos]?.includes(slot))return 0.82;
   return 0.65;
@@ -235,7 +234,7 @@ function getArchetype(p){
   const isBig=p.pos==="PF"||p.pos==="C";
   const isSwiss=p.pts>32&&p.ast>7&&p.reb>9&&p.fg>48;
   const isPmBig=isBig&&p.ast>6&&p.reb>10&&p.pts<42;
-  const isRimProt=isBig&&(p.blk>2.2&&p.reb>10)||(isBig&&p.blk>3.0&&p.reb>8);
+  const isRimProt=isBig&&((p.blk>2.2&&p.reb>10)||(p.blk>3.0&&p.reb>8));
   const isPaint=isBig&&p.reb>16&&p.tR<0.05;
   const isLockdown=p.stl>2.5&&(p.blk>1.0||p.pts<14);
   const is3D=p.tpPct>36&&p.tR>0.38&&(p.stl>1.5||p.blk>1.0)&&p.pts<24;
@@ -534,6 +533,56 @@ export default function App(){
   const [showStandings,setShowStandings]=useState(false);
   const [elimInPlayoffs,setElimInPlayoffs]=useState(false);
 
+
+const audioRef = useRef(null);
+const trackIndex = useRef(0);
+const hasStarted = useRef(false);
+
+const TRACKS = ['cold.mp3', 'outstanding.mp3', 'amazing.mp3'];
+
+const playTrack = useRef((index) => {
+  const audio = audioRef.current;
+  if(!audio) return;
+  audio.src = TRACKS[index];
+  audio.play().catch(() => {});
+});
+
+useEffect(() => {
+  const audio = new Audio();
+  audio.volume = 0.3;
+  audioRef.current = audio;
+
+  audio.addEventListener('ended', () => {
+    trackIndex.current = (trackIndex.current + 1) % TRACKS.length;
+    playTrack.current(trackIndex.current);
+  });
+
+  return () => { audio.pause(); audio.src = ''; };
+}, []);
+
+const skipSong = (e) => {
+  e?.stopPropagation();
+  e?.preventDefault();
+  trackIndex.current = (trackIndex.current + 1) % TRACKS.length;
+  playTrack.current(trackIndex.current);
+};
+
+const handleFirstClick = useCallback(() => {
+  if(hasStarted.current) return;
+  hasStarted.current = true;
+  playTrack.current(trackIndex.current);
+}, []);
+
+const skipBtn = (
+  <button
+    onMouseDown={(e) => { e.stopPropagation(); }}
+    onClick={(e) => { e.stopPropagation(); e.preventDefault(); skipSong(e); }}
+    style={{position:"fixed",bottom:16,right:16,zIndex:9999,background:"#1e293b",border:"1px solid #334155",borderRadius:"50%",width:36,height:36,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
+    ⏭
+  </button>
+);
+
+
   const myIds=new Set(Object.values(roster).filter(Boolean).map(p=>p.id));
   const spent=Object.values(roster).reduce((s,p)=>s+(p?.cost||0),0);
   const rem=BUDGET-spent,filled=POSITIONS.filter(p=>roster[p]).length,full=filled===5;
@@ -550,7 +599,6 @@ export default function App(){
     ]).then(([allText,curText])=>{
       const combined=[allText,curText].filter(Boolean).join("\n");
       if(!combined)throw new Error("No CSV files found — place all_nba_filtered.csv and/or current_nba_filtered.csv in /public");
-      // Remove duplicate headers from second file
       const lines=combined.split("\n");
       const header=lines[0];
       const deduped=[header,...lines.slice(1).filter(l=>l.trim()&&!l.startsWith(header.split(",")[0]+","+header.split(",")[1]))];
@@ -585,7 +633,6 @@ export default function App(){
     const won=res.myScore>res.oppScore;
     const uniqueStats=[...new Map(res.myStats.map(s=>[s.name,s])).values()];
     setSeason(s=>addToSeason(s,uniqueStats,won,res.myScore,res.oppScore));
-    // Update opponent's record with result of game vs player
     setAiTeams(teams=>teams.map((t,i)=>i===schedIdx?{...t,playerResult:won?'L':'W'}:t));
     setResult(res);
   };
@@ -611,8 +658,7 @@ export default function App(){
       matchId==="pi1"?b.playIn[0]:matchId==="pi2"?b.playIn[1]:matchId==="pi3"?b.playIn[2]:
       matchId==="fr1"?b.firstRound[0]:matchId==="fr2"?b.firstRound[1]:matchId==="fr3"?b.firstRound[2]:matchId==="fr4"?b.firstRound[3]:
       matchId==="sf1"?b.semis[0]:matchId==="sf2"?b.semis[1]:b.finals;
-    if(!matchup){console.log('no matchup');return;}
-    if(matchup.winner){console.log('already has winner',matchup.winner);return;}
+    if(!matchup||matchup.winner)return;
     const topIsPlayer=matchup.top?.isPlayer,botIsPlayer=matchup.bot?.isPlayer;
     let res=null,winnerIdx;
     if(topIsPlayer||botIsPlayer){
@@ -629,14 +675,10 @@ export default function App(){
       const w=matchup.winner;
       const pElim=(topIsPlayer&&wBot===1)||(botIsPlayer&&wTop===1);
       if(pElim)setElimInPlayoffs(true);
-      if(matchId==="pi1"){
-        b.firstRound[1].bot=w;
-        b.playIn[2].top=wTop===1?b.playIn[0].bot:b.playIn[0].top;
-      } else if(matchId==="pi2"){
-        b.playIn[2].bot=w;
-      } else if(matchId==="pi3"){
-        b.firstRound[0].bot=w;
-      } else if(matchId==="fr1")b.semis[0].top=w;
+      if(matchId==="pi1"){b.firstRound[1].bot=w;b.playIn[2].top=wTop===1?b.playIn[0].bot:b.playIn[0].top;}
+      else if(matchId==="pi2")b.playIn[2].bot=w;
+      else if(matchId==="pi3")b.firstRound[0].bot=w;
+      else if(matchId==="fr1")b.semis[0].top=w;
       else if(matchId==="fr2")b.semis[0].bot=w;
       else if(matchId==="fr3")b.semis[1].top=w;
       else if(matchId==="fr4")b.semis[1].bot=w;
@@ -658,6 +700,7 @@ export default function App(){
 
   if(phase==="import") return(
     <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+
       <div style={{maxWidth:400,width:"100%",textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:12}}>💰</div>
         <h1 style={{margin:"0 0 6px",fontSize:28,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>NBA BUDGET BALL</h1>
@@ -672,7 +715,7 @@ export default function App(){
           <div style={{background:"#1a0a0a",borderRadius:14,padding:24,border:"1px solid #ef4444"}}>
             <div style={{fontSize:28,marginBottom:10}}>❌</div>
             <div style={{fontSize:12,color:"#f87171",fontWeight:700,marginBottom:12}}>{importErr}</div>
-            <div style={{fontSize:11,color:"#64748b",lineHeight:1.6}}>Place <code style={{color:"#a78bfa"}}>nba_filtered.csv</code> in your <code style={{color:"#a78bfa"}}>public/</code> folder and refresh.</div>
+            <div style={{fontSize:11,color:"#64748b",lineHeight:1.6}}>Place <code style={{color:"#a78bfa"}}>all_nba_filtered.csv</code> or <code style={{color:"#a78bfa"}}>current_nba_filtered.csv</code> in your <code style={{color:"#a78bfa"}}>public/</code> folder and refresh.</div>
           </div>
         )}
       </div>
@@ -682,14 +725,13 @@ export default function App(){
   if(phase==="playoffs"&&bracket){
     const champion=bracket.champion,playerWon=champion?.isPlayer;
     const finalAiRec=aiTeams.map(t=>{
-    const gW=t.gameLog.filter(x=>x===1).length;
-    const gL=t.gameLog.length-gW;
-    const pW=t.playerResult==='W'?1:0;
-    const pL=t.playerResult==='L'?1:0;
-  return{...t,w:gW+pW,l:gL+pL};
-  });
+      const gW=t.gameLog.filter(x=>x===1).length,gL=t.gameLog.length-gW;
+      const pW=t.playerResult==='W'?1:0,pL=t.playerResult==='L'?1:0;
+      return{...t,w:gW+pW,l:gL+pL};
+    });
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
+        
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
             <h2 style={{margin:0,fontSize:18,fontWeight:900,color:"#f59e0b"}}>🏆 PLAYOFFS</h2>
@@ -730,13 +772,13 @@ export default function App(){
                   {!done&&!pInv&&<button onClick={()=>playPlayoffGame(activeMatchId)} style={{marginTop:8,background:"linear-gradient(135deg,#475569,#334155)",color:"white",border:"none",borderRadius:8,padding:"9px 24px",fontSize:13,fontWeight:800,cursor:"pointer"}}>⚡ Sim Game {matchup.games.length+1}</button>}
                   {done&&<div style={{marginTop:8,fontSize:12,color:"#22c55e",fontWeight:700}}>✓ {matchup.winner?.name} advance</div>}
                 </div>
-{playoffResult&&!playoffResult.aiOnly&&playoffResult.matchId===activeMatchId&&(()=>{
-  const pr=playoffResult,pTop=pr.playerIsTop;
-  const myS=pr.myStats,oppS=pr.oppStats;
-  const myScore=pr.myScore,oppScore=pr.oppScore,won=myScore>oppScore;
-  return(<>
-    <div style={{textAlign:"center",padding:"12px",background:"#0f172a",borderRadius:12,border:`1px solid ${won?"#22c55e":"#ef4444"}`,marginBottom:10}}>
-      <div style={{fontSize:20,fontWeight:900,color:won?"#22c55e":"#ef4444"}}>{won?"✓ WIN":"✗ LOSS"}{pr.ot>0?` (${pr.ot}OT)`:""}</div>
+                {playoffResult&&!playoffResult.aiOnly&&playoffResult.matchId===activeMatchId&&(()=>{
+                  const pr=playoffResult,pTop=pr.playerIsTop;
+                  const myS=pr.myStats,oppS=pr.oppStats;
+                  const myScore=pr.myScore,oppScore=pr.oppScore,won=myScore>oppScore;
+                  return(<>
+                    <div style={{textAlign:"center",padding:"12px",background:"#0f172a",borderRadius:12,border:`1px solid ${won?"#22c55e":"#ef4444"}`,marginBottom:10}}>
+                      <div style={{fontSize:20,fontWeight:900,color:won?"#22c55e":"#ef4444"}}>{won?"✓ WIN":"✗ LOSS"}{pr.ot>0?` (${pr.ot}OT)`:""}</div>
                       <div style={{display:"flex",justifyContent:"center",gap:24,marginTop:6}}>
                         <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#60a5fa",fontWeight:700}}>YOUR TEAM</div><div style={{fontSize:34,fontWeight:900,color:"#60a5fa"}}>{myScore}</div></div>
                         <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#f87171",fontWeight:700}}>{pTop?pr.botName:pr.topName}</div><div style={{fontSize:34,fontWeight:900,color:"#f87171"}}>{oppScore}</div></div>
@@ -762,12 +804,10 @@ export default function App(){
 
   if(phase==="seasonEnd"){
     const finalAi=aiTeams.map(t=>{
-    const gW=t.gameLog.filter(x=>x===1).length;
-    const gL=t.gameLog.length-gW;
-    const pW=t.playerResult==='W'?1:0;
-    const pL=t.playerResult==='L'?1:0;
-  return{...t,w:gW+pW,l:gL+pL};
-  });
+      const gW=t.gameLog.filter(x=>x===1).length,gL=t.gameLog.length-gW;
+      const pW=t.playerResult==='W'?1:0,pL=t.playerResult==='L'?1:0;
+      return{...t,w:gW+pW,l:gL+pL};
+    });
     const ppg=season.gp>0?rf(season.ptsFor/season.gp):0,papg=season.gp>0?rf(season.ptsAgainst/season.gp):0;
     const playerRows=Object.entries(season.players).map(([name,s])=>({
       name,gp:s.gp,ppg:rf(s.pts/s.gp),apg:rf(s.ast/s.gp),rpg:rf(s.reb/s.gp),spg:rf(s.stl/s.gp),bpg:rf(s.blk/s.gp),
@@ -781,6 +821,7 @@ export default function App(){
     const mySeed=all.findIndex(t=>t.isPlayer)+1,playoff=mySeed<=10,playIn=mySeed>=7&&mySeed<=10;
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
+      
         <div style={{maxWidth:800,margin:"0 auto"}}>
           <div style={{textAlign:"center",padding:"16px",background:"#0f172a",borderRadius:16,border:`2px solid ${mySeed<=6?"#22c55e":playoff?"#f59e0b":"#ef4444"}`,marginBottom:14}}>
             <div style={{fontSize:36}}>{mySeed<=6?"🏆":playoff?"🎟":"💀"}</div>
@@ -840,6 +881,7 @@ export default function App(){
     const curAi=getAiRecordsAtGame(aiTeams,gp),won=result?result.myScore>result.oppScore:false;
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
+        
         <div style={{maxWidth:1040,margin:"0 auto"}}>
           <div style={{background:"#0f172a",borderRadius:10,padding:"10px 14px",marginBottom:10,border:"1px solid #1e293b",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
             <div style={{fontSize:11,fontWeight:800,color:"#64748b"}}>GAME {gameNum} / {SEASON_LENGTH}</div>
@@ -896,7 +938,8 @@ export default function App(){
     .sort((a,b)=>sortBy==="rating"?b.rating-a.rating:sortBy==="cost"?b.cost-a.cost:a.name.localeCompare(b.name));
 
   return(
-    <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:14}}>
+    <div onClick={handleFirstClick} style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:14}}>
+      {skipBtn}
       <div style={{maxWidth:1200,margin:"0 auto"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
           <div>
