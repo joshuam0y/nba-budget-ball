@@ -288,6 +288,7 @@ export default function App(){
   const [myTeamName, setMyTeamName] = useState("Your Team");
   const [difficulty, setDifficulty] = useState("standard"); // casual | standard | hardcore
   const [inspectPlayer, setInspectPlayer] = useState(null);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
@@ -300,16 +301,37 @@ export default function App(){
     return () => window.removeEventListener("resize", handler);
   }, []);
 
-  // Load saved team name and roster from localStorage once players are loaded
+  // Load saved team name and roster from localStorage or URL once players are loaded
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !playerPool.length) return;
     try {
+      const params = new URLSearchParams(window.location.search);
+      const rosterParam = params.get("roster");
+      if (rosterParam) {
+        const parts = rosterParam.split("-");
+        if (parts.length === POSITIONS.length) {
+          const next = { PG: null, SG: null, SF: null, PF: null, C: null };
+          let ok = true;
+          for (let i = 0; i < POSITIONS.length; i++) {
+            const id = parseInt(parts[i], 10);
+            if (!id) continue;
+            const p = playerPool.find((pl) => pl.id === id);
+            if (!p) { ok = false; break; }
+            next[POSITIONS[i]] = p;
+          }
+          if (ok) {
+            setRoster(next);
+            setPhase("draft");
+            return;
+          }
+        }
+      }
       const raw = window.localStorage.getItem("nba-budget-ball-state");
       if (!raw) return;
       const saved = JSON.parse(raw);
       if (saved.teamName) setMyTeamName(saved.teamName);
       if (saved.difficulty) setDifficulty(saved.difficulty);
-      if (saved.roster && playerPool.length) {
+      if (saved.roster) {
         const next = { PG: null, SG: null, SF: null, PF: null, C: null };
         POSITIONS.forEach((pos) => {
           const id = saved.roster[pos];
@@ -321,7 +343,7 @@ export default function App(){
         setRoster(next);
       }
     } catch {
-      // ignore localStorage issues
+      // ignore
     }
   }, [playerPool]);
 
@@ -346,6 +368,18 @@ export default function App(){
       // ignore localStorage issues
     }
   }, [roster, myTeamName, difficulty]);
+
+  // First-time tutorial: show when entering draft if never seen
+  useEffect(() => {
+    if (typeof window === "undefined" || phase !== "draft") return;
+    const seen = window.localStorage.getItem("nba-budget-ball-tutorial-seen");
+    if (!seen) setShowTutorial(true);
+  }, [phase]);
+
+  const dismissTutorial = useCallback(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("nba-budget-ball-tutorial-seen", "1");
+    setShowTutorial(false);
+  }, []);
 
   const handleCopyTeamCode = useCallback(() => {
     if (inSeason) return;
@@ -385,6 +419,21 @@ export default function App(){
     }
     setRoster(next);
   }, [playerPool, inSeason]);
+
+  const handleCopyShareLink = useCallback(() => {
+    if (inSeason) return;
+    const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
+    const code = ids.join("-");
+    const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
+    if (!url) return;
+    url.searchParams.set("roster", code);
+    const link = url.toString();
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(link).catch(() => window.prompt("Copy link:", link));
+    } else {
+      window.prompt("Copy share link:", link);
+    }
+  }, [roster, inSeason]);
 
 const audioRef = useRef(null);
 const trackIndex = useRef(0);
@@ -526,51 +575,88 @@ const startSeason = async () => {
     setPhase("playoffs");setPlayoffResult(null);setActiveMatchId(null);setElimInPlayoffs(false);
   };
 
-  const playPlayoffGame=(matchId)=>{
-    if(!bracket)return;
-    const b=JSON.parse(JSON.stringify(bracket));
-    let matchup=
-      matchId==="pi1"?b.playIn[0]:matchId==="pi2"?b.playIn[1]:matchId==="pi3"?b.playIn[2]:
+  function runOnePlayoffGame(b, matchId, tr, lineup, diff) {
+    let matchup = matchId==="pi1"?b.playIn[0]:matchId==="pi2"?b.playIn[1]:matchId==="pi3"?b.playIn[2]:
       matchId==="fr1"?b.firstRound[0]:matchId==="fr2"?b.firstRound[1]:matchId==="fr3"?b.firstRound[2]:matchId==="fr4"?b.firstRound[3]:
       matchId==="sf1"?b.semis[0]:matchId==="sf2"?b.semis[1]:b.finals;
-    if(!matchup||matchup.winner)return;
-    const topIsPlayer=matchup.top?.isPlayer,botIsPlayer=matchup.bot?.isPlayer;
-    let res=null,winnerIdx;
-      if(topIsPlayer||botIsPlayer){
-        const pTop=topIsPlayer;
-        res=simulate(
-          myLineup,
-          pTop?matchup.bot.lineup:matchup.top.lineup,
-          {...teamRoster,_playoff:true},
-          {difficulty}
-        );
+    if(!matchup||matchup.winner) return { bracket: b, result: null, playerEliminated: false };
+    const topIsPlayer=matchup.top?.isPlayer, botIsPlayer=matchup.bot?.isPlayer;
+    let res=null, winnerIdx;
+    if(topIsPlayer||botIsPlayer){
+      const pTop=topIsPlayer;
+      res=simulate(lineup, pTop?matchup.bot.lineup:matchup.top.lineup, {...tr,_playoff:true}, {difficulty: diff});
       winnerIdx=(res.myScore>res.oppScore)?(pTop?0:1):(pTop?1:0);
     } else {
-      winnerIdx=quickSim(matchup.top.lineup,matchup.bot.lineup,teamRoster);
+      winnerIdx=quickSim(matchup.top.lineup,matchup.bot.lineup,tr);
     }
     matchup.games.push({winnerIdx,myScore:res?.myScore,oppScore:res?.oppScore,res});
-    const wTop=matchup.games.filter(g=>g.winnerIdx===0).length,wBot=matchup.games.filter(g=>g.winnerIdx===1).length;
+    const wTop=matchup.games.filter(g=>g.winnerIdx===0).length, wBot=matchup.games.filter(g=>g.winnerIdx===1).length;
+    let playerEliminated = false;
     if(wTop===1||wBot===1){
       matchup.winner=wTop===1?matchup.top:matchup.bot;
       const w=matchup.winner;
-      const pElim=(topIsPlayer&&wBot===1)||(botIsPlayer&&wTop===1);
-      if(pElim)setElimInPlayoffs(true);
-      if(matchId==="pi1"){b.firstRound[1].bot=w;b.playIn[2].top=wTop===1?b.playIn[0].bot:b.playIn[0].top;}
-      else if(matchId==="pi2")b.playIn[2].bot=w;
-      else if(matchId==="pi3")b.firstRound[0].bot=w;
-      else if(matchId==="fr1")b.semis[0].top=w;
-      else if(matchId==="fr2")b.semis[0].bot=w;
-      else if(matchId==="fr3")b.semis[1].top=w;
-      else if(matchId==="fr4")b.semis[1].bot=w;
-      else if(matchId==="sf1")b.finals.top=w;
-      else if(matchId==="sf2")b.finals.bot=w;
-      else if(matchId==="f1"){b.finals.winner=w;b.champion=w;}
+      playerEliminated=(topIsPlayer&&wBot===1)||(botIsPlayer&&wTop===1);
+      if(matchId==="pi1"){ b.firstRound[1].bot=w; b.playIn[2].top=wTop===1?b.playIn[0].bot:b.playIn[0].top; }
+      else if(matchId==="pi2") b.playIn[2].bot=w;
+      else if(matchId==="pi3") b.firstRound[0].bot=w;
+      else if(matchId==="fr1") b.semis[0].top=w;
+      else if(matchId==="fr2") b.semis[0].bot=w;
+      else if(matchId==="fr3") b.semis[1].top=w;
+      else if(matchId==="fr4") b.semis[1].bot=w;
+      else if(matchId==="sf1") b.finals.top=w;
+      else if(matchId==="sf2") b.finals.bot=w;
+      else if(matchId==="f1"){ b.finals.winner=w; b.champion=w; }
+    }
+    const result = res
+      ? { ...res, playerIsTop: topIsPlayer, matchId, seriesOver: !!matchup.winner, winner: matchup.winner, topName: matchup.top.name, botName: matchup.bot.name }
+      : { aiOnly: true, matchId, seriesOver: !!matchup.winner, winner: matchup.winner, topName: matchup.top?.name, botName: matchup.bot?.name };
+    return { bracket: b, result, playerEliminated };
+  }
+
+  function getNextAIMatchId(b) {
+    const order = ["pi1","pi2","pi3","fr1","fr2","fr3","fr4","sf1","sf2","f1"];
+    for (const id of order) {
+      const m = id==="pi1"?b.playIn[0]:id==="pi2"?b.playIn[1]:id==="pi3"?b.playIn[2]:
+        id==="fr1"?b.firstRound[0]:id==="fr2"?b.firstRound[1]:id==="fr3"?b.firstRound[2]:id==="fr4"?b.firstRound[3]:
+        id==="sf1"?b.semis[0]:id==="sf2"?b.semis[1]:b.finals;
+      if (m && !m.winner && !m.top?.isPlayer && !m.bot?.isPlayer) return id;
+    }
+    return null;
+  }
+
+  function getNextPlayerMatchId(b) {
+    const order = ["pi1","pi2","pi3","fr1","fr2","fr3","fr4","sf1","sf2","f1"];
+    for (const id of order) {
+      const m = id==="pi1"?b.playIn[0]:id==="pi2"?b.playIn[1]:id==="pi3"?b.playIn[2]:
+        id==="fr1"?b.firstRound[0]:id==="fr2"?b.firstRound[1]:id==="fr3"?b.firstRound[2]:id==="fr4"?b.firstRound[3]:
+        id==="sf1"?b.semis[0]:id==="sf2"?b.semis[1]:b.finals;
+      if (m && !m.winner && (m.top?.isPlayer || m.bot?.isPlayer)) return id;
+    }
+    return null;
+  }
+
+  const playPlayoffGame=(matchId)=>{
+    if(!bracket) return;
+    const b = JSON.parse(JSON.stringify(bracket));
+    const out = runOnePlayoffGame(b, matchId, teamRoster, myLineup, difficulty);
+    if (out.playerEliminated) setElimInPlayoffs(true);
+    setBracket(out.bracket);
+    setPlayoffResult(out.result);
+  };
+
+  const simAllAIGames = useCallback(() => {
+    if (!bracket) return;
+    let b = JSON.parse(JSON.stringify(bracket));
+    let id;
+    while ((id = getNextAIMatchId(b)) !== null) {
+      const out = runOnePlayoffGame(b, id, teamRoster, myLineup, difficulty);
+      b = out.bracket;
+      if (out.playerEliminated) setElimInPlayoffs(true);
     }
     setBracket(b);
-    setPlayoffResult(res
-      ?{...res,playerIsTop:topIsPlayer,matchId,seriesOver:!!matchup.winner,winner:matchup.winner,topName:matchup.top.name,botName:matchup.bot.name}
-      :{aiOnly:true,matchId,seriesOver:!!matchup.winner,winner:matchup.winner,topName:matchup.top?.name,botName:matchup.bot?.name});
-  };
+    setPlayoffResult(null);
+    setActiveMatchId(getNextPlayerMatchId(b) || null);
+  }, [bracket, teamRoster, myLineup, difficulty]);
 
 const newSeason=()=>{
   setInSeason(false);setSeason(emptySeason());setGameNum(1);setSchedIdx(0);
@@ -644,11 +730,23 @@ if(phase==="teamSetup") return(
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
             <h2 style={{margin:0,fontSize:18,fontWeight:900,color:"#f59e0b"}}>🏆 PLAYOFFS</h2>
-            <div style={{display:"flex",gap:6}}>
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
               <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
+              {getNextAIMatchId(bracket)&&<button onClick={simAllAIGames} style={{background:"#475569",color:"#e2e8f0",border:"1px solid #64748b",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>⚡ Sim all AI games</button>}
               {champion&&<button onClick={newSeason} style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"white",border:"none",borderRadius:7,padding:"5px 14px",fontSize:11,fontWeight:800,cursor:"pointer"}}>🔄 New Season</button>}
+              <button onClick={()=>setShowHelp(h=>!h)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
             </div>
           </div>
+          {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:12}}>
+            <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
+            <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
+            <div style={{marginBottom:2}}>• 12-team league — AI teams have real records</div>
+            <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
+            <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
+            <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
+            <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
+            <div>Adjacent ×0.82 · Wrong ×0.65</div>
+          </div>}
           {showStandings&&<div style={{marginBottom:12}}><StandingsTable aiTeams={finalAiRec} myRecord={myRecord} myName={myTeamName} highlight/></div>}
           {champion&&(
             <div style={{textAlign:"center",padding:16,background:playerWon?"linear-gradient(135deg,#78350f,#92400e)":"#0f172a",borderRadius:16,border:`2px solid ${playerWon?"#fbbf24":"#475569"}`,marginBottom:12}}>
@@ -731,7 +829,19 @@ if(phase==="teamSetup") return(
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
         {volumeSlider}{skipBtn}
-      
+        <div style={{position:"absolute",top:16,right:16,zIndex:10}}>
+          <button onClick={()=>setShowHelp(h=>!h)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
+        </div>
+        {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:14,maxWidth:800,marginLeft:"auto",marginRight:"auto"}}>
+          <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
+          <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
+          <div style={{marginBottom:2}}>• 12-team league — AI teams have real records</div>
+          <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
+          <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
+          <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
+          <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
+          <div>Adjacent ×0.82 · Wrong ×0.65</div>
+        </div>}
         <div style={{maxWidth:800,margin:"0 auto"}}>
           <div style={{textAlign:"center",padding:"16px",background:"#0f172a",borderRadius:16,border:`2px solid ${mySeed<=6?"#22c55e":playoff?"#f59e0b":"#ef4444"}`,marginBottom:14}}>
             <div style={{fontSize:36}}>{mySeed<=6?"🏆":playoff?"🎟":"💀"}</div>
@@ -811,7 +921,18 @@ if(phase==="teamSetup") return(
   return <div style={{fontSize:10,fontWeight:800,color:last?"#f59e0b":"#60a5fa"}}>{emoji}{streak}</div>;
 })()}
             <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
+            <button onClick={()=>setShowHelp(h=>!h)} style={{width:26,height:26,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:12,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
           </div>
+          {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:10}}>
+            <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
+            <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
+            <div style={{marginBottom:2}}>• 12-team league — AI teams have real records</div>
+            <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
+            <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
+            <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
+            <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
+            <div>Adjacent ×0.82 · Wrong ×0.65</div>
+          </div>}
           {showStandings&&<div style={{marginBottom:10}}><StandingsTable aiTeams={curAi} myRecord={myRecord} myName={myTeamName} highlight/></div>}
           {!result?(
             <div style={{background:"#0f172a",borderRadius:16,padding:24,border:"1px solid #1e293b",textAlign:"center",marginBottom:10}}>
@@ -881,6 +1002,20 @@ if(phase==="teamSetup") return(
 
   return(
     <div onClick={handleFirstClick} style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:isMobile ? "14px 10px" : 14}}>
+      {showTutorial&&(
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+          <div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:400,padding:24,color:"#e2e8f0"}}>
+            <div style={{fontSize:28,fontWeight:900,marginBottom:12,color:"#f59e0b"}}>How to play</div>
+            <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.6,marginBottom:20}}>
+              <div style={{marginBottom:8}}>1. <strong style={{color:"#e2e8f0"}}>Name your team</strong> and tap Let&apos;s Build.</div>
+              <div style={{marginBottom:8}}>2. <strong style={{color:"#e2e8f0"}}>Draft 5 players</strong> (one per position) within your <strong style={{color:"#fbbf24"}}>${BUDGET}</strong> budget.</div>
+              <div style={{marginBottom:8}}>3. Play an <strong style={{color:"#e2e8f0"}}>11-game season</strong> vs AI teams — win to climb the standings.</div>
+              <div>4. <strong style={{color:"#e2e8f0"}}>Playoffs</strong>: top 6 go straight in; seeds 7–10 enter the play-in. Win to become champion!</div>
+            </div>
+            <button onClick={dismissTutorial} style={{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"white",border:"none",borderRadius:8,padding:12,fontSize:14,fontWeight:800,cursor:"pointer"}}>Got it</button>
+          </div>
+        </div>
+      )}
       <Analytics />
       <SpeedInsights />
       {volumeSlider}{skipBtn}
@@ -936,6 +1071,22 @@ if(phase==="teamSetup") return(
                 }}
               >
                 🔗 Copy Code
+              </button>
+              <button
+                onClick={handleCopyShareLink}
+                disabled={inSeason}
+                style={{
+                  background:"#0f172a",
+                  color:"#e2e8f0",
+                  border:"1px solid #1e293b",
+                  borderRadius:6,
+                  padding:"4px 8px",
+                  fontSize:10,
+                  fontWeight:700,
+                  cursor:inSeason?"not-allowed":"pointer",
+                }}
+              >
+                📤 Share link
               </button>
               <button
                 onClick={handleLoadTeamCode}
