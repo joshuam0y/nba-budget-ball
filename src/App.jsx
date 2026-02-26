@@ -968,7 +968,28 @@ const newSeason=()=>{
                 <div style={{fontSize:22,color:"#334155"}}>VS</div>
                 <div style={{textAlign:"center"}}><div style={{fontSize:12,color:"#f87171",fontWeight:800,marginBottom:4}}>{opp?.name}</div><div style={{fontSize:30,fontWeight:900,color:"#f87171"}}>{opp?rf(opp.eff,0):"-"}</div><div style={{fontSize:10,color:"#475569"}}>RTG</div></div>
               </div>
-              {opp&&<div style={{fontSize:11,color:"#475569",marginBottom:14}}>{opp.lineup.map(({player,slot})=>`${slot}: ${player.name}`).join(" · ")}</div>}
+              {opp&&(
+  <div style={{marginBottom:14}}>
+    <div style={{fontSize:10,color:"#475569",letterSpacing:1,fontWeight:700,marginBottom:6}}>OPPONENT LINEUP</div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"center"}}>
+      {opp.lineup.map(({player,slot})=>(
+        <div key={slot} style={{background:"#0a1221",borderRadius:8,padding:"6px 10px",border:"1px solid #1e293b",textAlign:"center",minWidth:80}}>
+          <div style={{fontSize:9,color:"#475569",fontWeight:700,marginBottom:2}}>{slot}</div>
+          <div style={{fontSize:10,fontWeight:800,color:"#f87171",whiteSpace:"nowrap"}}>{player.name}</div>
+          <div style={{fontSize:9,color:getArchetype(player).color,marginTop:2}}>{getArchetype(player).label}</div>
+          <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:4}}>
+            {[["PTS",player.pts],["REB",player.reb],["AST",player.ast]].map(([l,v])=>(
+              <div key={l} style={{textAlign:"center"}}>
+                <div style={{fontSize:8,color:"#475569"}}>{l}</div>
+                <div style={{fontSize:10,fontWeight:700,color:"#e2e8f0"}}>{rf(v,1)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
               <button onClick={playGame} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding:"11px 32px",fontSize:14,fontWeight:800,cursor:"pointer"}}>▶ PLAY GAME {gameNum}</button>
             </div>
           ):(
