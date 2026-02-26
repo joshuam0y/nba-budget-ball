@@ -198,10 +198,11 @@ function simulate(myLineup,oppLineup,teamRoster){
 }
 
 function addToSeason(season,gameStats,won,myScore,oppScore){
-  const next={...season,players:{}};
+  const next={...season,players:{},gameLog:[...(season.gameLog||[])]};
   Object.entries(season.players).forEach(([k,v])=>next.players[k]={...v});
   next.gp++;if(won)next.w++;else next.l++;
   next.ptsFor+=myScore;next.ptsAgainst+=oppScore;
+  next.gameLog.push({gp:next.gp,won,myScore,oppScore});
   gameStats.slice(0,5).forEach(s=>{
     if(!next.players[s.name])next.players[s.name]={pts:0,ast:0,reb:0,stl:0,blk:0,tov:0,fgm:0,fga:0,tpm:0,tpa:0,ftm:0,fta:0,gp:0};
     const p=next.players[s.name];
@@ -210,7 +211,7 @@ function addToSeason(season,gameStats,won,myScore,oppScore){
   });
   return next;
 }
-function emptySeason(){return{gp:0,w:0,l:0,ptsFor:0,ptsAgainst:0,players:{}};}
+function emptySeason(){return{gp:0,w:0,l:0,ptsFor:0,ptsAgainst:0,players:{},gameLog:[],highs:{}};}
 
 function simLeagueGames(aiTeams,tr){
   const records=aiTeams.map(t=>({...t,w:0,l:0,gameLog:[]}));
