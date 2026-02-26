@@ -963,7 +963,7 @@ const skipBtn = (
         <div style={{background:"#1e293b",borderRadius:4,height:5,marginBottom:12,overflow:"hidden"}}>
           <div style={{height:"100%",width:`${Math.min((spent/BUDGET)*100,100)}%`,background:"linear-gradient(90deg,#3b82f6,#8b5cf6,#ec4899)",transition:"width 0.3s",borderRadius:4}}/>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"270px 1fr",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"270px minmax(0,1fr)",gap:12}}>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #1e293b"}}>
               <div style={{fontWeight:800,fontSize:10,letterSpacing:2,color:"#60a5fa",marginBottom:8}}>YOUR STARTING 5</div>
@@ -1057,7 +1057,7 @@ const skipBtn = (
                 <div style={{fontSize:10,color:"#475569",marginLeft:"auto"}}>{display.length} players</div>
               </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:6}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:6,minWidth:0}}>
               {display.map(p=>{
                 const inR=myIds.has(p.id),targetSlot=slotSel||p.pos,prev=roster[targetSlot];
                 const delta=p.cost-(prev?.cost||0),afford=delta<=rem,tier=getTier(p.cost);
