@@ -514,20 +514,11 @@ export default function App(){
       const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
       if (url) url.searchParams.set("roster", code);
       const shareUrl = url ? url.toString() : null;
-      const shareText = "Try my lineup — paste this code: " + code + "\nPlay: " + shareUrl;
       const blob = await generateLineupImageBlob(roster, myTeamName, shareUrl, code);
       const nav = typeof navigator !== "undefined" ? navigator : null;
-      const file = new File([blob], "nba-budget-ball-lineup.png", { type: "image/png" });
-      const shareData = { title: "NBA Budget Ball lineup", text: shareText, url: shareUrl };
-      if (nav?.share && nav.canShare?.({ ...shareData, files: [file] })) {
-        await nav.share({ ...shareData, files: [file] });
-        setShareImageStatus("Shared!");
-      } else if (nav?.share && nav.canShare?.(shareData)) {
-        await nav.share(shareData);
-        setShareImageStatus("Shared!");
-      } else if (nav?.clipboard?.write) {
+      if (nav?.clipboard?.write) {
         await nav.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setShareImageStatus("Image copied — paste to share (code & link on image)");
+        setShareImageStatus("Copied! Paste to share");
       } else {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
@@ -537,10 +528,6 @@ export default function App(){
         setShareImageStatus("Downloaded");
       }
     } catch (e) {
-      if (e?.name === "AbortError") {
-        setShareImageStatus(null);
-        return;
-      }
       try {
         const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
         const code = ids.join("-");
@@ -548,9 +535,9 @@ export default function App(){
         if (u) u.searchParams.set("roster", code);
         const blob = await generateLineupImageBlob(roster, myTeamName, u?.toString(), code);
         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setShareImageStatus("Image copied — paste to share");
+        setShareImageStatus("Copied! Paste to share");
       } catch {
-        setShareImageStatus("Couldn’t share");
+        setShareImageStatus("Couldn’t copy");
       }
     }
     setTimeout(() => setShareImageStatus(null), 2500);
