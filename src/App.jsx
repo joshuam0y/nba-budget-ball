@@ -256,7 +256,7 @@ const isMidrange=(isBig||isWing||isGuard)&&p.pts>18&&p.tR<0.28&&p.fg>44&&p.ratin
 const isGlass=isBig&&p.reb>11&&p.pts<28&&p.fg>48&&p.rating>40;
 
 // Wings/Forwards
-const isPointForward=(p.pos==="SF"||p.pos==="PF"||p.pos==="PG")&&p.ast>5&&p.reb>6&&p.pts<27&&p.rating>45;
+const isPointForward=(p.pos==="SF"||p.pos==="PF")&&p.ast>5&&p.reb>6&&p.pts<27&&p.rating>45;
 const isWingScorer=isWing&&p.pts>20&&p.ast>=3&&p.reb>=3&&p.rating>45;
 
 // Guards
