@@ -654,6 +654,7 @@ const volumeSlider = (
     if(inSeason)return;
     const targetSlot=slotSel||player.pos,prev=roster[targetSlot];
     if((player.cost-(prev?.cost||0))>rem)return;
+    if(prev?.id===player.id){setRoster(r=>({...r,[targetSlot]:null}));setSlotSel(null);return;}
     setRoster(r=>({...r,[targetSlot]:player}));setSlotSel(null);
   },[roster,rem,slotSel,inSeason]);
 
