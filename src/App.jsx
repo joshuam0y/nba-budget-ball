@@ -947,6 +947,15 @@ const newSeason=()=>{
               <div style={{height:"100%",width:`${((result?gameNum:gameNum-1)/SEASON_LENGTH)*100}%`,background:"linear-gradient(90deg,#3b82f6,#8b5cf6)",borderRadius:4,transition:"width 0.3s"}}/>
             </div>
             <div style={{fontSize:11,fontWeight:800,color:season.w>=season.l?"#22c55e":"#f87171"}}>{season.w}W–{season.l}L</div>
+{(()=>{
+  const log=season.gameLog||[];
+  if(log.length===0)return null;
+  let streak=1;
+  const last=log[log.length-1].won;
+  for(let i=log.length-2;i>=0;i--){if(log[i].won===last)streak++;else break;}
+  const emoji=last?"🔥":"❄️";
+  return <div style={{fontSize:10,fontWeight:800,color:last?"#f59e0b":"#60a5fa"}}>{emoji}{streak}</div>;
+})()}
             <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
           </div>
           {showStandings&&<div style={{marginBottom:10}}><StandingsTable aiTeams={curAi} myRecord={myRecord} myName="Your Team" highlight/></div>}
