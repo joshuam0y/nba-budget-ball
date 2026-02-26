@@ -555,8 +555,8 @@ useEffect(() => {
   audioRef.current = audio;
 
   audio.addEventListener('ended', () => {
-    trackIndex.current = (trackIndex.current + 1) % TRACKS.length;
-    playTrack(trackIndex.current)
+    trackIndex.current = Math.floor(Math.random() * TRACKS.length);
+    playTrack(trackIndex.current);
   });
 
   return () => { audio.pause(); audio.src = ''; };
@@ -565,8 +565,8 @@ useEffect(() => {
 const skipSong = (e) => {
   e?.stopPropagation();
   e?.preventDefault();
-  trackIndex.current = (trackIndex.current + 1) % TRACKS.length;
-  playTrack(trackIndex.current)
+  trackIndex.current = Math.floor(Math.random() * TRACKS.length);
+  playTrack(trackIndex.current);
 };
 
 const handleFirstClick = useCallback(() => {
