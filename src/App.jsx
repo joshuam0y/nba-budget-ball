@@ -1057,7 +1057,7 @@ const skipBtn = (
                 <div style={{fontSize:10,color:"#475569",marginLeft:"auto"}}>{display.length} players</div>
               </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:6,minWidth:0}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:6,minWidth:0}}>
               {display.map(p=>{
                 const inR=myIds.has(p.id),targetSlot=slotSel||p.pos,prev=roster[targetSlot];
                 const delta=p.cost-(prev?.cost||0),afford=delta<=rem,tier=getTier(p.cost);
