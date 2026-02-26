@@ -2,6 +2,15 @@ import "./index.css";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from "@vercel/speed-insights/react"
+import { supabase } from './supabase';
+
+async function incrementPick(playerName) {
+  await supabase.rpc('increment_pick', { player_name: playerName });
+}
+async function getTopPicks(limit = 5) {
+  const { data } = await supabase.from('player_picks').select('*').order('picks', { ascending: false }).limit(limit);
+  return data || [];
+}
 
 const POSITIONS = ["PG","SG","SF","PF","C"];
 const BUDGET = 140;
@@ -535,6 +544,7 @@ export default function App(){
   const [showStandings,setShowStandings]=useState(false);
   const [elimInPlayoffs,setElimInPlayoffs]=useState(false);
   const [showHelp,setShowHelp]=useState(false);
+  const [topPicks, setTopPicks] = useState([]);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 useEffect(() => {
@@ -548,7 +558,7 @@ const audioRef = useRef(null);
 const trackIndex = useRef(0);
 const hasStarted = useRef(false);
 
-const TRACKS = ['weonit.mp3','lovenwantiti.mp3','poppin.mp3','onepunch.mp3', 'photograph.mp3', 'ateam.mp3', 'cold.mp3','lemonade.mp3', 'outstanding.mp3', 'amazing.mp3', 'bestfriend.mp3', 'baddecisions.mp3'];
+const TRACKS = ['weonit.mp3','lovenwantiti.mp3','poppin.mp3','onepunch.mp3', 'photograph.mp3', 'ateam.mp3', 'cold.mp3','lemonade.mp3', 'outstanding.mp3', 'amazing.mp3', 'bestfriend.mp3', 'baddecisions.mp3', 'lightsplease.mp3', 'loveletter.mp3'];
 
 const playTrack = (index) => {
   const audio = audioRef.current;
@@ -638,11 +648,14 @@ const volumeSlider = (
     }).catch(err=>{setImportErr(err.message);setImportInfo("");});
   },[]);
 
+  useEffect(() => { getTopPicks().then(setTopPicks); }, []);
+
   const pickPlayer=useCallback((player)=>{
     if(inSeason)return;
     const targetSlot=slotSel||player.pos,prev=roster[targetSlot];
     if((player.cost-(prev?.cost||0))>rem)return;
     setRoster(r=>({...r,[targetSlot]:player}));setSlotSel(null);
+    incrementPick(player.name);
   },[roster,rem,slotSel,inSeason]);
 
   const drop=slot=>{if(inSeason)return;setRoster(r=>({...r,[slot]:null}));if(slotSel===slot)setSlotSel(null);};
@@ -1092,6 +1105,16 @@ const volumeSlider = (
                 <div style={{fontSize:10,color:"#475569",marginLeft:"auto"}}>{display.length} players</div>
               </div>
             </div>
+            {topPicks.length > 0 && (
+  <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
+    <span style={{fontSize:9,color:"#f59e0b",fontWeight:800,letterSpacing:1}}>🔥 MOST DRAFTED</span>
+    {topPicks.map(p => (
+      <span key={p.name} style={{fontSize:9,background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"3px 8px",color:"#e2e8f0",whiteSpace:"nowrap"}}>
+        {p.name} <span style={{color:"#f59e0b",fontWeight:700}}>{p.picks}</span>
+      </span>
+    ))}
+  </div>
+)}
             <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fill,minmax(180px,1fr))",gap:6,minWidth:0}}>
               {display.map(p=>{
                 const inR=myIds.has(p.id),targetSlot=slotSel||p.pos,prev=roster[targetSlot];
