@@ -513,9 +513,9 @@ export default function App(){
     const code = ids.join("-");
     const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
     if (url) url.searchParams.set("roster", code);
-    const shareUrl = url ? url.toString() : null;
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
     const name = (myTeamName && myTeamName.trim()) ? myTeamName.trim() : "my";
-    const shareText = "Here's " + name + "'s lineup — paste the code to try it or build your own!\nCode: " + code + "\nPlay: " + shareUrl;
+    const shareText = "Here's " + name + "'s lineup — paste the code to try it or build your own!\nCode: " + code + "\nPlay: " + baseUrl;
     const nav = typeof navigator !== "undefined" ? navigator : null;
     try {
       await nav?.clipboard?.writeText(shareText);
