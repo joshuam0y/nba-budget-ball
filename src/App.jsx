@@ -101,12 +101,14 @@ function generateLineupImageBlob(roster, teamName, shareUrl, teamCode) {
   });
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  ctx.fillStyle = "#475569";
+  const name = (teamName && teamName.trim()) ? teamName.trim() : "my";
+  ctx.fillStyle = "#94a3b8";
   ctx.font = "9px system-ui, sans-serif";
   ctx.textAlign = "center";
+  ctx.fillText("Here's " + name + "'s lineup — paste the code to try it or build your own!", W / 2, H - 42);
   if (teamCode) {
     ctx.fillStyle = "#64748b";
-    ctx.fillText("Try my lineup — paste this code: " + teamCode, W / 2, H - 34);
+    ctx.fillText("Code: " + teamCode, W / 2, H - 30);
   }
   ctx.fillStyle = "#475569";
   const linkText = shareUrl || origin;
@@ -117,7 +119,7 @@ function generateLineupImageBlob(roster, teamName, shareUrl, teamCode) {
       if (ctx.measureText(t).width <= W - 24) { drawUrl = t; break; }
     }
   }
-  ctx.fillText(shareUrl ? "Play this lineup: " + drawUrl : "Play at " + origin, W / 2, H - 18);
+  ctx.fillText(shareUrl ? "Play: " + drawUrl : "Play at " + origin, W / 2, H - 16);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))), "image/png");
@@ -507,7 +509,38 @@ export default function App(){
       setTimeout(() => setShareImageStatus(null), 2000);
       return;
     }
-    setShareImageStatus("Creating…");
+    const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
+    const code = ids.join("-");
+    const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
+    if (url) url.searchParams.set("roster", code);
+    const shareUrl = url ? url.toString() : null;
+    const name = (myTeamName && myTeamName.trim()) ? myTeamName.trim() : "my";
+    const shareText = "Here's " + name + "'s lineup — paste the code to try it or build your own!\nCode: " + code + "\nPlay: " + shareUrl;
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    try {
+      if (nav?.clipboard?.writeText) {
+        await nav.clipboard.writeText(shareText);
+        setShareImageStatus("Message copied! Paste anywhere.");
+      } else {
+        window.prompt("Copy this message:", shareText);
+        setShareImageStatus("Copy the message above");
+      }
+    } catch {
+      window.prompt("Copy this message:", shareText);
+      setShareImageStatus("Copy the message above");
+    }
+    setTimeout(() => setShareImageStatus(null), 3000);
+  }, [roster, myTeamName, inSeason]);
+
+  const handleCopyLineupImage = useCallback(async () => {
+    if (inSeason) return;
+    const filled = POSITIONS.every((pos) => roster[pos]);
+    if (!filled) {
+      setShareImageStatus("Complete your lineup first");
+      setTimeout(() => setShareImageStatus(null), 2000);
+      return;
+    }
+    setShareImageStatus("Creating image…");
     try {
       const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
       const code = ids.join("-");
@@ -515,10 +548,9 @@ export default function App(){
       if (url) url.searchParams.set("roster", code);
       const shareUrl = url ? url.toString() : null;
       const blob = await generateLineupImageBlob(roster, myTeamName, shareUrl, code);
-      const nav = typeof navigator !== "undefined" ? navigator : null;
-      if (nav?.clipboard?.write) {
-        await nav.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setShareImageStatus("Copied! Paste to share");
+      if (navigator?.clipboard?.write) {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        setShareImageStatus("Image copied! Paste to add the card.");
       } else {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
@@ -527,18 +559,8 @@ export default function App(){
         URL.revokeObjectURL(a.href);
         setShareImageStatus("Downloaded");
       }
-    } catch (e) {
-      try {
-        const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
-        const code = ids.join("-");
-        const u = typeof window !== "undefined" ? new URL(window.location.href) : null;
-        if (u) u.searchParams.set("roster", code);
-        const blob = await generateLineupImageBlob(roster, myTeamName, u?.toString(), code);
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setShareImageStatus("Copied! Paste to share");
-      } catch {
-        setShareImageStatus("Couldn’t copy");
-      }
+    } catch {
+      setShareImageStatus("Couldn’t copy image");
     }
     setTimeout(() => setShareImageStatus(null), 2500);
   }, [roster, myTeamName, inSeason]);
@@ -1196,6 +1218,22 @@ if(phase==="teamSetup") return(
               >
                 📤 Share
               </button>
+              <button
+                onClick={handleCopyLineupImage}
+                disabled={inSeason}
+                style={{
+                  background:"#0f172a",
+                  color:"#e2e8f0",
+                  border:"1px solid #1e293b",
+                  borderRadius:6,
+                  padding:"4px 8px",
+                  fontSize:10,
+                  fontWeight:700,
+                  cursor:inSeason?"not-allowed":"pointer",
+                }}
+              >
+                🖼️ Copy image
+              </button>
               {shareImageStatus&&<span style={{fontSize:10,color:"#94a3b8",alignSelf:"center"}}>{shareImageStatus}</span>}
               <button
                 onClick={handleLoadTeamCode}
@@ -1215,13 +1253,17 @@ if(phase==="teamSetup") return(
               </button>
             </div>
           </div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
             {[["BUDGET",`$${rem}`,rem<15?"#ef4444":rem<30?"#f59e0b":"#22c55e"],["SPENT",`$${spent}`,"#94a3b8"],["CHEM",myCh>0?`+${myCh}`:"-","#f472b6"]].map(([l,v,c])=>(
               <div key={l} style={{textAlign:"center",background:"#0f172a",borderRadius:7,padding:"4px 10px",border:"1px solid #1e293b"}}>
                 <div style={{fontSize:9,color:"#475569",letterSpacing:1}}>{l}</div>
                 <div style={{fontSize:15,fontWeight:900,color:c}}>{v}</div>
               </div>
             ))}
+            <div style={{background:"#0f172a",borderRadius:7,padding:"4px 10px",border:"1px solid #1e293b",minWidth:0}}>
+              <div style={{fontSize:9,color:"#475569",letterSpacing:1,marginBottom:1}}>TEAM CODE</div>
+              <div style={{fontSize:11,fontWeight:800,color:"#a78bfa",fontFamily:"monospace",wordBreak:"break-all"}}>{filled===5?POSITIONS.map(pos=>roster[pos]?.id??"").join("-"):"—"}</div>
+            </div>
           </div>
         </div>
         <div style={{background:"#1e293b",borderRadius:4,height:5,marginBottom:12,overflow:"hidden"}}>
