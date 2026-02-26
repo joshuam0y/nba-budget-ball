@@ -1,6 +1,6 @@
 import "./index.css";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from '@vercel/analytics/react'
 
 const POSITIONS = ["PG","SG","SF","PF","C"];
 const BUDGET = 140;
