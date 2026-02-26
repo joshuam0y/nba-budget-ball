@@ -1151,6 +1151,14 @@ const newSeason=()=>{
                       <span style={{fontSize:10,fontWeight:800,background:"#1e293b",color:getArchetype(p).color,borderRadius:5,padding:"2px 8px",letterSpacing:1}}>{getArchetype(p).label}</span>
                     </div>
                     {p.tm&&p.season&&<div style={{marginTop:3,fontSize:8,color:"#334155",textAlign:"center"}}>{p.tm} · {p.season}</div>}
+<div style={{display:"flex",justifyContent:"center",gap:8,marginTop:4}}>
+  {[["PTS",p.pts],["REB",p.reb],["AST",p.ast]].map(([l,v])=>(
+    <div key={l} style={{textAlign:"center"}}>
+      <div style={{fontSize:9,color:"#475569"}}>{l}</div>
+      <div style={{fontSize:11,fontWeight:800,color:"#e2e8f0"}}>{rf(v,1)}</div>
+    </div>
+  ))}
+</div>
                     {inR&&<div style={{marginTop:4,fontSize:9,color:"#22c55e",fontWeight:700,textAlign:"center"}}>✓ IN LINEUP</div>}
                     {!afford&&!inR&&<div style={{marginTop:4,fontSize:9,color:"#ef4444",textAlign:"center"}}>+${delta-rem} over</div>}
                   </div>
