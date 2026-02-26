@@ -540,7 +540,7 @@ const audioRef = useRef(null);
 const trackIndex = useRef(0);
 const hasStarted = useRef(false);
 
-const TRACKS = ['cold.mp3', 'outstanding.mp3', 'amazing.mp3', 'bestfriend.mp3', 'baddecisions.mp3'];
+const TRACKS = ['cold.mp3','lemonade', 'outstanding.mp3', 'amazing.mp3', 'bestfriend.mp3', 'baddecisions.mp3'];
 
 const playTrack = (index) => {
   const audio = audioRef.current;
@@ -732,6 +732,7 @@ const skipBtn = (
     });
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
+        {skipBtn}
         
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
@@ -822,6 +823,7 @@ const skipBtn = (
     const mySeed=all.findIndex(t=>t.isPlayer)+1,playoff=mySeed<=10,playIn=mySeed>=7&&mySeed<=10;
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
+        {skipBtn}
       
         <div style={{maxWidth:800,margin:"0 auto"}}>
           <div style={{textAlign:"center",padding:"16px",background:"#0f172a",borderRadius:16,border:`2px solid ${mySeed<=6?"#22c55e":playoff?"#f59e0b":"#ef4444"}`,marginBottom:14}}>
@@ -882,7 +884,7 @@ const skipBtn = (
     const curAi=getAiRecordsAtGame(aiTeams,gp),won=result?result.myScore>result.oppScore:false;
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
-        
+        {skipBtn}
         <div style={{maxWidth:1040,margin:"0 auto"}}>
           <div style={{background:"#0f172a",borderRadius:10,padding:"10px 14px",marginBottom:10,border:"1px solid #1e293b",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
             <div style={{fontSize:11,fontWeight:800,color:"#64748b"}}>GAME {gameNum} / {SEASON_LENGTH}</div>
