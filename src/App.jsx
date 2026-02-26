@@ -285,6 +285,8 @@ export default function App(){
   const [showHelp,setShowHelp]=useState(false);
   const [topPicks, setTopPicks] = useState([]);
   const [myTeamName, setMyTeamName] = useState("Your Team");
+  const [difficulty, setDifficulty] = useState("standard"); // casual | standard | hardcore
+  const [inspectPlayer, setInspectPlayer] = useState(null);
 
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
@@ -305,6 +307,7 @@ export default function App(){
       if (!raw) return;
       const saved = JSON.parse(raw);
       if (saved.teamName) setMyTeamName(saved.teamName);
+      if (saved.difficulty) setDifficulty(saved.difficulty);
       if (saved.roster && playerPool.length) {
         const next = { PG: null, SG: null, SF: null, PF: null, C: null };
         POSITIONS.forEach((pos) => {
@@ -332,6 +335,7 @@ export default function App(){
       const payload = {
         teamName: myTeamName,
         roster: rosterIds,
+        difficulty,
       };
       window.localStorage.setItem(
         "nba-budget-ball-state",
@@ -340,7 +344,46 @@ export default function App(){
     } catch {
       // ignore localStorage issues
     }
-  }, [roster, myTeamName]);
+  }, [roster, myTeamName, difficulty]);
+
+  const handleCopyTeamCode = useCallback(() => {
+    if (inSeason) return;
+    const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
+    const code = ids.join("-");
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(code).catch(() => {
+        window.prompt("Copy your team code:", code);
+      });
+    } else {
+      window.prompt("Copy your team code:", code);
+    }
+  }, [roster, inSeason]);
+
+  const handleLoadTeamCode = useCallback(() => {
+    if (inSeason) return;
+    const input =
+      typeof window !== "undefined"
+        ? window.prompt("Paste a team code to load:")
+        : null;
+    if (!input) return;
+    const parts = input.split("-");
+    if (parts.length !== POSITIONS.length) {
+      window.alert("Invalid team code.");
+      return;
+    }
+    const next = { PG: null, SG: null, SF: null, PF: null, C: null };
+    for (let i = 0; i < POSITIONS.length; i++) {
+      const id = parseInt(parts[i], 10);
+      if (!id) continue;
+      const p = playerPool.find((pl) => pl.id === id);
+      if (!p) {
+        window.alert("This team code does not match the current player pool.");
+        return;
+      }
+      next[POSITIONS[i]] = p;
+    }
+    setRoster(next);
+  }, [playerPool, inSeason]);
 
 const audioRef = useRef(null);
 const trackIndex = useRef(0);
@@ -460,7 +503,7 @@ const startSeason = async () => {
   const playGame=()=>{
     if(!full||schedIdx>=aiTeams.length)return;
     const opp=aiTeams[schedIdx];
-    const res=simulate(myLineup,opp.lineup,teamRoster);
+    const res=simulate(myLineup,opp.lineup,teamRoster,{difficulty});
     const won=res.myScore>res.oppScore;
     const uniqueStats=[...new Map(res.myStats.map(s=>[s.name,s])).values()];
     setSeason(s=>addToSeason(s,uniqueStats,won,res.myScore,res.oppScore));
@@ -492,9 +535,14 @@ const startSeason = async () => {
     if(!matchup||matchup.winner)return;
     const topIsPlayer=matchup.top?.isPlayer,botIsPlayer=matchup.bot?.isPlayer;
     let res=null,winnerIdx;
-    if(topIsPlayer||botIsPlayer){
-      const pTop=topIsPlayer;
-      res=simulate(myLineup,pTop?matchup.bot.lineup:matchup.top.lineup,{...teamRoster,_playoff:true});
+      if(topIsPlayer||botIsPlayer){
+        const pTop=topIsPlayer;
+        res=simulate(
+          myLineup,
+          pTop?matchup.bot.lineup:matchup.top.lineup,
+          {...teamRoster,_playoff:true},
+          {difficulty}
+        );
       winnerIdx=(res.myScore>res.oppScore)?(pTop?0:1):(pTop?1:0);
     } else {
       winnerIdx=quickSim(matchup.top.lineup,matchup.bot.lineup,teamRoster);
@@ -903,19 +951,98 @@ if(phase==="teamSetup") return(
               </button>
             </div>
 
-            <div style={{display:"flex",justifyContent:"flex-end"}}>
-  <button onClick={()=>setShowHelp(o=>!o)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
-</div>
-{showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b"}}>
-  <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
-  <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
-  <div style={{marginBottom:2}}>• 12-team league — AI teams have real records</div>
-  <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
-  <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
-  <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
-  <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
-  <div>Adjacent ×0.82 · Wrong ×0.65</div>
-</div>}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}>
+              <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                <span style={{fontSize:9,color:"#475569",fontWeight:700,letterSpacing:1}}>DIFFICULTY</span>
+                <div style={{display:"flex",gap:3}}>
+                  {[
+                    ["casual","CASUAL"],
+                    ["standard","STANDARD"],
+                    ["hardcore","HARDCORE"],
+                  ].map(([val,label])=>(
+                    <button
+                      key={val}
+                      onClick={()=>!inSeason&&setDifficulty(val)}
+                      style={{
+                        background:difficulty===val?"#4b5563":"#111827",
+                        color:difficulty===val?"#fef3c7":"#9ca3af",
+                        border:"1px solid #374151",
+                        borderRadius:999,
+                        padding:"3px 8px",
+                        fontSize:9,
+                        fontWeight:700,
+                        cursor:inSeason?"not-allowed":"pointer",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:4}}>
+                <button
+                  onClick={handleCopyTeamCode}
+                  disabled={inSeason}
+                  style={{
+                    background:"#1e293b",
+                    color:"#e2e8f0",
+                    border:"1px solid #334155",
+                    borderRadius:6,
+                    padding:"4px 8px",
+                    fontSize:10,
+                    fontWeight:700,
+                    cursor:inSeason?"not-allowed":"pointer",
+                  }}
+                >
+                  🔗 Copy Code
+                </button>
+                <button
+                  onClick={handleLoadTeamCode}
+                  disabled={inSeason}
+                  style={{
+                    background:"#1e293b",
+                    color:"#60a5fa",
+                    border:"1px solid #334155",
+                    borderRadius:6,
+                    padding:"4px 8px",
+                    fontSize:10,
+                    fontWeight:700,
+                    cursor:inSeason?"not-allowed":"pointer",
+                  }}
+                >
+                  📥 Load Code
+                </button>
+                <button
+                  onClick={()=>setShowHelp(o=>!o)}
+                  style={{
+                    width:28,
+                    height:28,
+                    borderRadius:"50%",
+                    background:"#1e293b",
+                    border:"1px solid #334155",
+                    color:"#60a5fa",
+                    fontSize:14,
+                    fontWeight:900,
+                    cursor:"pointer",
+                    display:"flex",
+                    alignItems:"center",
+                    justifyContent:"center",
+                  }}
+                >
+                  ?
+                </button>
+              </div>
+            </div>
+            {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginTop:6}}>
+              <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
+              <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
+              <div style={{marginBottom:2}}>• 12-team league — AI teams have real records</div>
+              <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
+              <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
+              <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
+              <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
+              <div>Adjacent ×0.82 · Wrong ×0.65</div>
+            </div>}
 
           </div>
           <div>

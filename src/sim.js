@@ -290,11 +290,26 @@ export function quickSim(lineupA, lineupB, tr) {
   return Math.random() < clamp(eA / (eA + eB), 0.4, 0.6) ? 0 : 1;
 }
 
-export function simulate(myLineup, oppLineup, teamRoster) {
+export function simulate(
+  myLineup,
+  oppLineup,
+  teamRoster,
+  options = {}
+) {
+  const { difficulty = "standard" } = options;
   const isPlayoffGame = !!teamRoster?._playoff;
-  const myE = teamEff(myLineup, teamRoster);
-  const oppE =
-    teamEff(oppLineup, teamRoster) * (isPlayoffGame ? 1.08 : 1.0);
+
+  // Difficulty tuning: tilt effective ratings slightly.
+  let myE = teamEff(myLineup, teamRoster);
+  let oppE = teamEff(oppLineup, teamRoster);
+  if (difficulty === "casual") {
+    myE *= 1.06;
+    oppE *= 0.96;
+  } else if (difficulty === "hardcore") {
+    myE *= 0.96;
+    oppE *= 1.06;
+  }
+  oppE *= isPlayoffGame ? 1.08 : 1.0;
   const isPlayoff = !!teamRoster?._playoff;
   const myOff = clamp(
     myE / (myE + oppE),
