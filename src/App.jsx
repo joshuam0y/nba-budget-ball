@@ -589,7 +589,7 @@ const skipBtn = (
 );
 
 const volumeSlider = (
-  <div style={{position:"fixed",bottom:60,right:10,zIndex:9999,display:"flex",alignItems:"center",gap:6,background:"#1e293b",border:"1px solid #334155",borderRadius:20,padding:"4px 10px",boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
+  <div style={{position:"fixed",bottom:16,left:16,zIndex:9999,display:"flex",alignItems:"center",gap:6,background:"#1e293b",border:"1px solid #334155",borderRadius:20,padding:"4px 10px",boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
     <span style={{fontSize:11}}>🔊</span>
     <input
       type="range"
@@ -983,7 +983,7 @@ const volumeSlider = (
         <div style={{background:"#1e293b",borderRadius:4,height:5,marginBottom:12,overflow:"hidden"}}>
           <div style={{height:"100%",width:`${Math.min((spent/BUDGET)*100,100)}%`,background:"linear-gradient(90deg,#3b82f6,#8b5cf6,#ec4899)",transition:"width 0.3s",borderRadius:4}}/>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"270px minmax(0,1fr)",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"270px minmax(0,1fr)",gap:12}}>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #1e293b"}}>
               <div style={{fontWeight:800,fontSize:10,letterSpacing:2,color:"#60a5fa",marginBottom:8}}>YOUR STARTING 5</div>
@@ -1055,7 +1055,7 @@ const volumeSlider = (
                   ))}
                 </div>
               </div>
-              <div style={{display:"flex",gap:3,flexWrap:"nowrap",overflowX:"auto",paddingBottom:4}}>
+              <div style={{display:"flex",gap:3,flexWrap:"wrap",paddingBottom:4}}>
                 {["ALL",...allArchetypes].map(f=>{
                   const arch=f==="ALL"?null:playerPool.find(p=>getArchetype(p).label===f);
                   const col=arch?getArchetype(arch).color:"#94a3b8";
@@ -1077,7 +1077,7 @@ const volumeSlider = (
                 <div style={{fontSize:10,color:"#475569",marginLeft:"auto"}}>{display.length} players</div>
               </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:6,minWidth:0}}>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fill,minmax(180px,1fr))",gap:6,minWidth:0}}>
               {display.map(p=>{
                 const inR=myIds.has(p.id),targetSlot=slotSel||p.pos,prev=roster[targetSlot];
                 const delta=p.cost-(prev?.cost||0),afford=delta<=rem,tier=getTier(p.cost);
