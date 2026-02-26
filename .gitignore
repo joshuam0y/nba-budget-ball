@@ -23,6 +23,3 @@ dist-ssr
 *.sln
 *.sw?
 
-public/all_nba_filtered.csv
-public/current_nba_filtered.csv
-public/nba_filtered.csv
