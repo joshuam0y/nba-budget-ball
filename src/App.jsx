@@ -655,7 +655,6 @@ const volumeSlider = (
     const targetSlot=slotSel||player.pos,prev=roster[targetSlot];
     if((player.cost-(prev?.cost||0))>rem)return;
     setRoster(r=>({...r,[targetSlot]:player}));setSlotSel(null);
-    incrementPick(player.name);
   },[roster,rem,slotSel,inSeason]);
 
   const drop=slot=>{if(inSeason)return;setRoster(r=>({...r,[slot]:null}));if(slotSel===slot)setSlotSel(null);};
@@ -664,7 +663,9 @@ const volumeSlider = (
     if(!full)return;
     const teams=generateLeague(myLineup,playerPool),simmed=simLeagueGames(teams,teamRoster);
     setAiTeams(simmed);setInSeason(true);setSeason(emptySeason());setGameNum(1);setSchedIdx(0);
-    setResult(null);setPhase("game");setBracket(null);setPlayoffResult(null);setElimInPlayoffs(false);
+    setResult(null);
+    myLineup.forEach(({player}) => incrementPick(player.name));
+    setPhase("game");setBracket(null);setPlayoffResult(null);setElimInPlayoffs(false);
   };
 
   const playGame=()=>{
