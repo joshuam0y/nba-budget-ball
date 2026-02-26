@@ -509,6 +509,7 @@ export default function App(){
       setTimeout(() => setShareImageStatus(null), 2000);
       return;
     }
+    setShareImageStatus("Creating…");
     const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
     const code = ids.join("-");
     const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
@@ -518,18 +519,27 @@ export default function App(){
     const shareText = "Here's " + name + "'s lineup — paste the code to try it or build your own!\nCode: " + code + "\nPlay: " + shareUrl;
     const nav = typeof navigator !== "undefined" ? navigator : null;
     try {
-      if (nav?.clipboard?.writeText) {
-        await nav.clipboard.writeText(shareText);
-        setShareImageStatus("Message copied! Paste anywhere.");
+      const imageBlob = await generateLineupImageBlob(roster, myTeamName, shareUrl, code);
+      const textBlob = new Blob([shareText], { type: "text/plain" });
+      if (nav?.clipboard?.write) {
+        await nav.clipboard.write([
+          new ClipboardItem({ "text/plain": textBlob, "image/png": imageBlob })
+        ]);
+        setShareImageStatus("Copied! Paste in chat for message, or in image area for the card.");
       } else {
+        await nav.clipboard.writeText(shareText);
+        setShareImageStatus("message_copied");
+      }
+    } catch {
+      try {
+        await nav?.clipboard?.writeText(shareText);
+        setShareImageStatus("message_copied");
+      } catch {
         window.prompt("Copy this message:", shareText);
         setShareImageStatus("Copy the message above");
       }
-    } catch {
-      window.prompt("Copy this message:", shareText);
-      setShareImageStatus("Copy the message above");
     }
-    setTimeout(() => setShareImageStatus(null), 3000);
+    setTimeout(() => setShareImageStatus(null), 5000);
   }, [roster, myTeamName, inSeason]);
 
   const handleCopyLineupImage = useCallback(async () => {
@@ -550,7 +560,7 @@ export default function App(){
       const blob = await generateLineupImageBlob(roster, myTeamName, shareUrl, code);
       if (navigator?.clipboard?.write) {
         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setShareImageStatus("Image copied! Paste to add the card.");
+        setShareImageStatus("Image copied!");
       } else {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
@@ -1218,23 +1228,8 @@ if(phase==="teamSetup") return(
               >
                 📤 Share
               </button>
-              <button
-                onClick={handleCopyLineupImage}
-                disabled={inSeason}
-                style={{
-                  background:"#0f172a",
-                  color:"#e2e8f0",
-                  border:"1px solid #1e293b",
-                  borderRadius:6,
-                  padding:"4px 8px",
-                  fontSize:10,
-                  fontWeight:700,
-                  cursor:inSeason?"not-allowed":"pointer",
-                }}
-              >
-                🖼️ Copy image
-              </button>
-              {shareImageStatus&&<span style={{fontSize:10,color:"#94a3b8",alignSelf:"center"}}>{shareImageStatus}</span>}
+              {shareImageStatus=== "message_copied"&&<span style={{fontSize:10,color:"#94a3b8",alignSelf:"center",display:"flex",alignItems:"center",gap:6}}>Message copied! <button type="button" onClick={handleCopyLineupImage} style={{background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,cursor:"pointer"}}>Copy image</button></span>}
+              {shareImageStatus&&shareImageStatus!=="message_copied"&&<span style={{fontSize:10,color:"#94a3b8",alignSelf:"center"}}>{shareImageStatus}</span>}
               <button
                 onClick={handleLoadTeamCode}
                 disabled={inSeason}
