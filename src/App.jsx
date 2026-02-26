@@ -556,7 +556,7 @@ useEffect(() => {
 
   audio.addEventListener('ended', () => {
     trackIndex.current = (trackIndex.current + 1) % TRACKS.length;
-    playTrack.current(trackIndex.current);
+    playTrack(trackIndex.current)
   });
 
   return () => { audio.pause(); audio.src = ''; };
@@ -566,13 +566,13 @@ const skipSong = (e) => {
   e?.stopPropagation();
   e?.preventDefault();
   trackIndex.current = (trackIndex.current + 1) % TRACKS.length;
-  playTrack.current(trackIndex.current);
+  playTrack(trackIndex.current)
 };
 
 const handleFirstClick = useCallback(() => {
   if(hasStarted.current) return;
   hasStarted.current = true;
-  playTrack.current(trackIndex.current);
+  playTrack(trackIndex.current)
 }, []);
 
 const skipBtn = (
@@ -702,7 +702,6 @@ const skipBtn = (
 
   if(phase==="import") return(
     <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-
       <div style={{maxWidth:400,width:"100%",textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:12}}>💰</div>
         <h1 style={{margin:"0 0 6px",fontSize:28,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>NBA BUDGET BALL</h1>
@@ -941,6 +940,8 @@ const skipBtn = (
 
   return(
     <div onClick={handleFirstClick} style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:14}}>
+      <Analytics />
+      <SpeedInsights />
       {skipBtn}
       <div style={{maxWidth:1200,margin:"0 auto"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
