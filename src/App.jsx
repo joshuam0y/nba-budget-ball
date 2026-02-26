@@ -16,7 +16,7 @@ const POSITIONS = ["PG","SG","SF","PF","C"];
 const BUDGET = 140;
 const SEASON_LENGTH = 11;
 const TEAM_NAMES = [
-  "Rim Wreckers","Bucket Getters","Paint Beasts","Corner Killers",
+  "The Big Bad Wolf","Bucket Getters","Paint Beasts","Corner Killers",
   "Iso Kings","Glass Eaters","Dime Dealers","Lock Legends",
   "Splash Bros","Hardwood Wolves","Night Shift",
 ];
@@ -99,11 +99,39 @@ function genLineup(excludeIds=new Set(),pool=[]){
   return team;
 }
 
+function generateRivalLineup(myLineup,pool,excludeIds){
+  const archs=myLineup.map(({player})=>getArchetype(player).id);
+  const hasScorers=archs.some(a=>["iso","bucket","scoringGuard","wing"].includes(a));
+  const hasPassers=archs.some(a=>["fg","pmBig","pointForward"].includes(a));
+  const hasBigs=archs.some(a=>["rimProt","paint","glass","stretch"].includes(a));
+  const used=new Set(excludeIds);const team=[];let rem=BUDGET;
+  for(const pos of POSITIONS){
+    const eligible=pool.filter(p=>p.pos===pos&&!used.has(p.id));
+    const cands=eligible.length>0?eligible:pool.filter(p=>!used.has(p.id));
+    if(!cands.length)continue;
+    const weights=cands.map(p=>{
+      const arch=getArchetype(p).id;
+      let w=p.rating*(p.cost<=rem?1:0.05);
+      if(hasScorers&&arch==="lockdown")w*=2.5;
+      if(hasScorers&&arch==="threeD")w*=2.0;
+      if(hasPassers&&arch==="lockdown")w*=2.0;
+      if(hasBigs&&arch==="stretch")w*=2.0;
+      if(hasBigs&&arch==="rimProt")w*=1.5;
+      return Math.max(0.1,w);
+    });
+    const tot=weights.reduce((a,b)=>a+b,0);
+    let r=Math.random()*tot,pick=cands[cands.length-1];
+    for(let k=0;k<cands.length;k++){r-=weights[k];if(r<=0){pick=cands[k];break;}}
+    team.push({player:pick,slot:pos});used.add(pick.id);rem-=pick.cost;
+  }
+  return team;
+}
+
 function generateLeague(myLineup,pool){
   const usedIds=new Set(myLineup.map(x=>x.player.id));
   const teams=[];
   for(let i=0;i<11;i++){
-    const lineup=genLineup(usedIds,pool);
+  const lineup=i===0?generateRivalLineup(myLineup,pool,usedIds):genLineup(usedIds,pool);
     lineup.forEach(x=>usedIds.add(x.player.id));
     teams.push({name:TEAM_NAMES[i],lineup,w:0,l:0,eff:rf(teamEff(lineup,null),1)});
   }
@@ -557,6 +585,7 @@ export default function App(){
   const [elimInPlayoffs,setElimInPlayoffs]=useState(false);
   const [showHelp,setShowHelp]=useState(false);
   const [topPicks, setTopPicks] = useState([]);
+  const [myTeamName, setMyTeamName] = useState("Your Team");
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 useEffect(() => {
@@ -699,7 +728,7 @@ const startSeason = async () => {
 
   const buildPlayoffBracket=(finalSeason,finalAi)=>{
     const all=[
-      {name:"Your Team",w:finalSeason.w,l:SEASON_LENGTH-finalSeason.w,eff:myEffVal||0,lineup:myLineup,isPlayer:true},
+      {name:myTeamName,w:finalSeason.w,l:SEASON_LENGTH-finalSeason.w,eff:myEffVal||0,lineup:myLineup,isPlayer:true},
       ...finalAi.map(t=>({...t,isPlayer:false}))
     ].sort((a,b)=>b.w-a.w||(b.eff-a.eff));
     setBracket(buildBracket(all.slice(0,10).map((t,i)=>({...t,seed:i+1}))));
@@ -796,7 +825,7 @@ const newSeason=()=>{
               {champion&&<button onClick={newSeason} style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"white",border:"none",borderRadius:7,padding:"5px 14px",fontSize:11,fontWeight:800,cursor:"pointer"}}>🔄 New Season</button>}
             </div>
           </div>
-          {showStandings&&<div style={{marginBottom:12}}><StandingsTable aiTeams={finalAiRec} myRecord={myRecord} myName="Your Team" highlight/></div>}
+          {showStandings&&<div style={{marginBottom:12}}><StandingsTable aiTeams={finalAiRec} myRecord={myRecord} myName={myTeamName} highlight/></div>}
           {champion&&(
             <div style={{textAlign:"center",padding:16,background:playerWon?"linear-gradient(135deg,#78350f,#92400e)":"#0f172a",borderRadius:16,border:`2px solid ${playerWon?"#fbbf24":"#475569"}`,marginBottom:12}}>
               <div style={{fontSize:36}}>{playerWon?"🏆":"👑"}</div>
@@ -871,7 +900,7 @@ const newSeason=()=>{
     })).sort((a,b)=>b.ppg-a.ppg);
     const mvp=playerRows[0];
     const all=[
-      {name:"Your Team",w:season.w,l:SEASON_LENGTH-season.w,eff:myEffVal||0,isPlayer:true},
+      {name:myTeamName,w:season.w,l:SEASON_LENGTH-season.w,eff:myEffVal||0,isPlayer:true},
       ...finalAi.map(t=>({...t,isPlayer:false}))
     ].sort((a,b)=>b.w-a.w||(b.eff-a.eff));
     const mySeed=all.findIndex(t=>t.isPlayer)+1,playoff=mySeed<=10,playIn=mySeed>=7&&mySeed<=10;
@@ -887,7 +916,7 @@ const newSeason=()=>{
             </div>
             <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>Final Record: {season.w}–{season.l} · PPG {ppg} · OPP {papg}</div>
           </div>
-          <div style={{marginBottom:14}}><StandingsTable aiTeams={finalAi} myRecord={myRecord} myName="Your Team" highlight/></div>
+          <div style={{marginBottom:14}}><StandingsTable aiTeams={finalAi} myRecord={myRecord} myName={myTeamName} highlight/></div>
           {mvp&&(
             <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #fbbf24",textAlign:"center"}}>
               <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:2,marginBottom:4}}>🏅 SEASON MVP</div>
@@ -959,7 +988,7 @@ const newSeason=()=>{
 })()}
             <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
           </div>
-          {showStandings&&<div style={{marginBottom:10}}><StandingsTable aiTeams={curAi} myRecord={myRecord} myName="Your Team" highlight/></div>}
+          {showStandings&&<div style={{marginBottom:10}}><StandingsTable aiTeams={curAi} myRecord={myRecord} myName={myTeamName} highlight/></div>}
           {!result?(
             <div style={{background:"#0f172a",borderRadius:16,padding:24,border:"1px solid #1e293b",textAlign:"center",marginBottom:10}}>
               <div style={{fontSize:13,color:"#64748b",marginBottom:14,fontWeight:700,letterSpacing:1}}>GAME {gameNum} vs {opp?.name}</div>
@@ -1055,6 +1084,13 @@ const newSeason=()=>{
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #1e293b"}}>
               <div style={{fontWeight:800,fontSize:10,letterSpacing:2,color:"#60a5fa",marginBottom:8}}>YOUR STARTING 5</div>
+<input
+  value={myTeamName}
+  onChange={e=>setMyTeamName(e.target.value)}
+  maxLength={20}
+  placeholder="Team name..."
+  style={{width:"100%",background:"#080f1e",border:"1px solid #334155",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#e2e8f0",outline:"none",marginBottom:8,boxSizing:"border-box"}}
+/>
               {POSITIONS.map(pos=>{
                 const p=roster[pos],m=p?posMult(p,pos):1,tier=p?getTier(p.cost):null,isActive=slotSel===pos;
                 return(
