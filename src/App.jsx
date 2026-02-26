@@ -498,23 +498,6 @@ export default function App(){
     setRoster(next);
   }, [playerPool, inSeason]);
 
-  const handleCopyShareLink = useCallback(() => {
-    if (inSeason) return;
-    const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
-    const code = ids.join("-");
-    const names = POSITIONS.map((pos) => roster[pos]?.name).filter(Boolean).join(" · ");
-    const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
-    if (!url) return;
-    url.searchParams.set("roster", code);
-    const link = url.toString();
-    const shareText = names ? `${names} — ${link}` : link;
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(shareText).catch(() => window.prompt("Copy:", shareText));
-    } else {
-      window.prompt("Copy share:", shareText);
-    }
-  }, [roster, inSeason]);
-
   const [shareImageStatus, setShareImageStatus] = useState(null);
   const handleShareLineup = useCallback(async () => {
     if (inSeason) return;
@@ -1209,22 +1192,6 @@ if(phase==="teamSetup") return(
                 }}
               >
                 🔗 Copy Code
-              </button>
-              <button
-                onClick={handleCopyShareLink}
-                disabled={inSeason}
-                style={{
-                  background:"#0f172a",
-                  color:"#e2e8f0",
-                  border:"1px solid #1e293b",
-                  borderRadius:6,
-                  padding:"4px 8px",
-                  fontSize:10,
-                  fontWeight:700,
-                  cursor:inSeason?"not-allowed":"pointer",
-                }}
-              >
-                📤 Share link
               </button>
               <button
                 onClick={handleShareLineup}
