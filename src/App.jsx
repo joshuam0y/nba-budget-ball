@@ -685,7 +685,7 @@ const volumeSlider = (
       if(!res||res.players.length===0)throw new Error("CSV parsed but no valid players found");
       setPlayerPool(res.players);setTeamRoster(res.teamRoster);
       setImportInfo(`✓ ${res.players.length} players loaded`);
-      setTimeout(()=>setPhase("draft"),600);
+      setTimeout(()=>setPhase("teamSetup"),600);
     }).catch(err=>{setImportErr(err.message);setImportInfo("");});
   },[]);
 
@@ -778,10 +778,12 @@ const startSeason = async () => {
 
 const newSeason=()=>{
   setInSeason(false);setSeason(emptySeason());setGameNum(1);setSchedIdx(0);
-  setResult(null);setPhase("draft");setBracket(null);setPlayoffResult(null);setAiTeams([]);setElimInPlayoffs(false);
+  setResult(null);setPhase("teamSetup");setBracket(null);setPlayoffResult(null);setAiTeams([]);setElimInPlayoffs(false);
   setRoster({PG:null,SG:null,SF:null,PF:null,C:null});setImportInfo("");setImportErr("");
   getTopPicks().then(setTopPicks);
 };
+
+
 
   if(phase==="import") return(
     <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
@@ -1084,6 +1086,13 @@ const newSeason=()=>{
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #1e293b"}}>
               <div style={{fontWeight:800,fontSize:10,letterSpacing:2,color:"#60a5fa",marginBottom:8}}>YOUR STARTING 5</div>
+<input
+  value={myTeamName}
+  onChange={e=>setMyTeamName(e.target.value)}
+  maxLength={20}
+  placeholder="Team name..."
+  style={{width:"100%",background:"#080f1e",border:"1px solid #334155",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#e2e8f0",outline:"none",marginBottom:8,boxSizing:"border-box"}}
+/>
 <input
   value={myTeamName}
   onChange={e=>setMyTeamName(e.target.value)}
