@@ -566,7 +566,7 @@ const audioRef = useRef(null);
 const trackIndex = useRef(0);
 const hasStarted = useRef(false);
 
-const TRACKS = ['weonit.mp3','lovenwantiti.mp3','poppin.mp3','onepunch.mp3', 'photograph.mp3', 'ateam.mp3', 'cold.mp3','lemonade.mp3', 'outstanding.mp3', 'amazing.mp3', 'bestfriend.mp3', 'baddecisions.mp3', 'lightsplease.mp3', 'loveletter.mp3', 'didntchaknow.mp3', 'familyties.mp3'];
+const TRACKS = ['weonit.mp3','lovenwantiti.mp3','poppin.mp3','onepunch.mp3', 'photograph.mp3', 'ateam.mp3', 'cold.mp3','lemonade.mp3', 'outstanding.mp3', 'amazing.mp3', 'bestfriend.mp3', 'baddecisions.mp3', 'lightsplease.mp3', 'loveletter.mp3', 'didntchaknow.mp3', 'familyties.mp3', 'letmeknow.mp3', 'imdope.mp3', 'digital.mp3', 'dior.mp3', 'kaceytalk.mp3'];
 
 const playTrack = (index) => {
   const audio = audioRef.current;
