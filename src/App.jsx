@@ -266,9 +266,10 @@ const isScoringGuard=isGuard&&p.pts>20&&p.ast>=2&&p.rating>48;
 const isBucketGetter=(isGuard||isWing)&&p.pts>22&&p.ast<7&&p.reb>=3&&p.fg>=48&&p.tov<=2.5&&p.rating>48;
 
 // Defense/Shooting
-const isLockdown=p.stl>2.5&&(p.blk>1.0||p.pts<14);
+const isLockdown=p.stl>2.5&&(p.blk>1.2||p.pts<14)&&p.rating>45;
 const is3D=p.tpPct>37&&p.tR>0.38&&(p.stl>1.5||p.blk>1.0)&&p.pts<24&&p.rating>40;
 const isSpotUp=p.tR>0.45&&p.tpPct>37&&p.pts<26&&(p.stl>1.0||p.reb>3)&&p.rating>38;
+
   if(isSwiss)return{label:"SWISS ARMY KNIFE",color:"#f472b6",id:"swiss"};
   if(isPmBig)return{label:"PLAYMAKING BIG",color:"#a78bfa",id:"pmBig"};
   if(isRimProt)return{label:"RIM PROTECTOR",color:"#60a5fa",id:"rimProt"};
