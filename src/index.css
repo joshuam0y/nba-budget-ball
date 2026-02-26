@@ -52,3 +52,12 @@ input:focus {
   background: #1e293b;
   border-radius: 3px;
 }
+
+.player-card:hover {
+  background: #131a2e !important;
+  border-color: #6366f1 !important;
+}
+.player-card.in-roster:hover {
+  background: #1a0a0a !important;
+  border-color: #ef4444 !important;
+}

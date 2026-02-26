@@ -1124,7 +1124,7 @@ const newSeason=()=>{
                 const delta=p.cost-(prev?.cost||0),afford=delta<=rem,tier=getTier(p.cost);
                 const wouldOop=slotSel&&slotSel!==p.pos,mult=slotSel?posMult(p,slotSel):1;
                 return(
-                  <div key={p.id} onClick={()=>!inSeason&&(inR?drop(Object.keys(roster).find(pos=>roster[pos]?.id===p.id)):afford&&pickPlayer(p))} style={{background:inR?"#0d2a0d":slotSel&&afford?"#131a2e":"#0f172a",border:`1px solid ${inR?"#22c55e":slotSel&&afford?"#6366f1":"#1e293b"}`,borderRadius:9,padding:9,cursor:inR||!afford||inSeason?"not-allowed":"pointer",opacity:(!afford&&!inR)||inSeason?0.45:1,transition:"all 0.12s"}}>
+                  <div key={p.id} className={`player-card${inR?" in-roster":""}`} onClick={()=>!inSeason&&(inR?drop(Object.keys(roster).find(pos=>roster[pos]?.id===p.id)):afford&&pickPlayer(p))} style={{background:inR?"#0d2a0d":slotSel&&afford?"#131a2e":"#0f172a",border:`1px solid ${inR?"#22c55e":slotSel&&afford?"#6366f1":"#1e293b"}`,borderRadius:9,padding:9,cursor:inR||!afford||inSeason?"not-allowed":"pointer",opacity:(!afford&&!inR)||inSeason?0.45:1,transition:"all 0.12s"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:11,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
