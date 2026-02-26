@@ -648,7 +648,7 @@ const volumeSlider = (
     }).catch(err=>{setImportErr(err.message);setImportInfo("");});
   },[]);
 
-  useEffect(() => { getTopPicks().then(setTopPicks); }, []);
+ useEffect(()=>{ if(phase==="draft") getTopPicks().then(setTopPicks); },[phase]);
 
   const pickPlayer=useCallback((player)=>{
     if(inSeason)return;
@@ -735,11 +735,12 @@ const startSeason = async () => {
       :{aiOnly:true,matchId,seriesOver:!!matchup.winner,winner:matchup.winner,topName:matchup.top?.name,botName:matchup.bot?.name});
   };
 
-  const newSeason=()=>{
-    setInSeason(false);setSeason(emptySeason());setGameNum(1);setSchedIdx(0);
-    setResult(null);setPhase("draft");setBracket(null);setPlayoffResult(null);setAiTeams([]);setElimInPlayoffs(false);
-    setRoster({PG:null,SG:null,SF:null,PF:null,C:null});setImportInfo("");setImportErr("");
-  };
+const newSeason=()=>{
+  setInSeason(false);setSeason(emptySeason());setGameNum(1);setSchedIdx(0);
+  setResult(null);setPhase("draft");setBracket(null);setPlayoffResult(null);setAiTeams([]);setElimInPlayoffs(false);
+  setRoster({PG:null,SG:null,SF:null,PF:null,C:null});setImportInfo("");setImportErr("");
+  getTopPicks().then(setTopPicks);
+};
 
   if(phase==="import") return(
     <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
@@ -1123,7 +1124,7 @@ const startSeason = async () => {
                 const delta=p.cost-(prev?.cost||0),afford=delta<=rem,tier=getTier(p.cost);
                 const wouldOop=slotSel&&slotSel!==p.pos,mult=slotSel?posMult(p,slotSel):1;
                 return(
-                  <div key={p.id} onClick={()=>!inR&&afford&&!inSeason&&pickPlayer(p)} style={{background:inR?"#0d2a0d":slotSel&&afford?"#131a2e":"#0f172a",border:`1px solid ${inR?"#22c55e":slotSel&&afford?"#6366f1":"#1e293b"}`,borderRadius:9,padding:9,cursor:inR||!afford||inSeason?"not-allowed":"pointer",opacity:(!afford&&!inR)||inSeason?0.45:1,transition:"all 0.12s"}}>
+                  <div key={p.id} onClick={()=>!inSeason&&(inR?drop(Object.keys(roster).find(pos=>roster[pos]?.id===p.id)):afford&&pickPlayer(p))} style={{background:inR?"#0d2a0d":slotSel&&afford?"#131a2e":"#0f172a",border:`1px solid ${inR?"#22c55e":slotSel&&afford?"#6366f1":"#1e293b"}`,borderRadius:9,padding:9,cursor:inR||!afford||inSeason?"not-allowed":"pointer",opacity:(!afford&&!inR)||inSeason?0.45:1,transition:"all 0.12s"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:11,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
