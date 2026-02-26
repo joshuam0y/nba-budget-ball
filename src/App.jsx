@@ -266,11 +266,11 @@ function getArchetype(p){
   if(isLockdown)return{label:"LOCKDOWN",color:"#f87171",id:"lockdown"};
   if(is3D)return{label:"3&D",color:"#34d399",id:"threeD"};
   if(isFloorGeneral)return{label:"FLOOR GENERAL",color:"#fbbf24",id:"fg"};
-  if(isIsoScorer)return{label:"ISO SCORER",color:"#fb923c",id:"iso"};
-  if(isBucketGetter)return{label:"BUCKET GETTER",color:"#f97316",id:"bucket"};
-  if(isStretchBig)return{label:"STRETCH BIG",color:"#67e8f9",id:"stretch"};
-  if(isWingScorer)return{label:"WING SCORER",color:"#e879f9",id:"wing"};
-  if(isScoringGuard)return{label:"SCORING GUARD",color:"#a78bfa",id:"scoringGuard"};
+ if(isIsoScorer)return{label:"ISO SCORER",color:"#fb923c",id:"iso"};
+if(isScoringGuard)return{label:"SCORING GUARD",color:"#a78bfa",id:"scoringGuard"};
+if(isBucketGetter)return{label:"BUCKET GETTER",color:"#f97316",id:"bucket"};
+if(isStretchBig)return{label:"STRETCH BIG",color:"#67e8f9",id:"stretch"};
+if(isWingScorer)return{label:"WING SCORER",color:"#e879f9",id:"wing"};
   if(isSpotUp)return{label:"SPOT UP SHOOTER",color:"#38bdf8",id:"spotUp"};
   if(isMidrange)return{label:"MIDRANGE ARTIST",color:"#c084fc",id:"midrange"};
   if(isGlass)return{label:"GLASS CLEANER",color:"#86efac",id:"glass"};
