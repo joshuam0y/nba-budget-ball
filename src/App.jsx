@@ -46,8 +46,8 @@ async function getTopPicks(limit = 5) {
   }
 }
 
-function generateLineupImageBlob(roster, teamName) {
-  const W = 600, H = 400;
+function generateLineupImageBlob(roster, teamName, shareUrl, teamCode) {
+  const W = 600, H = 420;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -102,9 +102,22 @@ function generateLineupImageBlob(roster, teamName) {
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   ctx.fillStyle = "#475569";
-  ctx.font = "11px system-ui, sans-serif";
+  ctx.font = "9px system-ui, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("Play at " + origin, W / 2, H - 22);
+  if (teamCode) {
+    ctx.fillStyle = "#64748b";
+    ctx.fillText("Try my lineup — paste this code: " + teamCode, W / 2, H - 34);
+  }
+  ctx.fillStyle = "#475569";
+  const linkText = shareUrl || origin;
+  let drawUrl = linkText;
+  if (shareUrl && ctx.measureText(linkText).width > W - 24) {
+    for (let i = linkText.length; i > 0; i--) {
+      const t = linkText.slice(0, i) + "…";
+      if (ctx.measureText(t).width <= W - 24) { drawUrl = t; break; }
+    }
+  }
+  ctx.fillText(shareUrl ? "Play this lineup: " + drawUrl : "Play at " + origin, W / 2, H - 18);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))), "image/png");
@@ -511,18 +524,34 @@ export default function App(){
       setTimeout(() => setShareImageStatus(null), 2000);
       return;
     }
-    setShareImageStatus("Creating image…");
+    setShareImageStatus("Creating…");
     try {
-      const blob = await generateLineupImageBlob(roster, myTeamName);
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "nba-budget-ball-lineup.png";
-      a.click();
-      URL.revokeObjectURL(a.href);
+      const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
+      const code = ids.join("-");
+      const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
+      if (url) url.searchParams.set("roster", code);
+      const shareUrl = url ? url.toString() : null;
+      const blob = await generateLineupImageBlob(roster, myTeamName, shareUrl, code);
       if (typeof navigator !== "undefined" && navigator.clipboard?.write) {
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          setShareImageStatus("Copied! Paste to share");
+        } catch {
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "nba-budget-ball-lineup.png";
+          a.click();
+          URL.revokeObjectURL(a.href);
+          setShareImageStatus("Downloaded");
+        }
+      } else {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "nba-budget-ball-lineup.png";
+        a.click();
+        URL.revokeObjectURL(a.href);
+        setShareImageStatus("Downloaded");
       }
-      setShareImageStatus("Saved & copied!");
     } catch (e) {
       setShareImageStatus("Couldn’t create image");
     }
