@@ -534,6 +534,13 @@ export default function App(){
   const [activeMatchId,setActiveMatchId]=useState(null);
   const [showStandings,setShowStandings]=useState(false);
   const [elimInPlayoffs,setElimInPlayoffs]=useState(false);
+  
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+useEffect(() => {
+  const handler = () => setIsMobile(window.innerWidth < 768);
+  window.addEventListener('resize', handler);
+  return () => window.removeEventListener('resize', handler);
+}, []);
 
 
 const audioRef = useRef(null);
