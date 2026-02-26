@@ -744,6 +744,10 @@ export function getArchetype(p) {
     return { label: "PAINT MONSTER", color: "#4ade80", id: "paint" };
   if (isRimProt)
     return { label: "RIM PROTECTOR", color: "#60a5fa", id: "rimProt" };
+  if (isStretchBig)
+    return { label: "STRETCH BIG", color: "#67e8f9", id: "stretch" };
+  if (isGlass)
+    return { label: "GLASS CLEANER", color: "#86efac", id: "glass" };
   if (isLockdown)
     return { label: "LOCKDOWN", color: "#f87171", id: "lockdown" };
   if (is3D) return { label: "3&D", color: "#34d399", id: "threeD" };
@@ -757,16 +761,12 @@ export function getArchetype(p) {
     return { label: "SCORING GUARD", color: "#a78bfa", id: "scoringGuard" };
   if (isBucketGetter)
     return { label: "BUCKET GETTER", color: "#f97316", id: "bucket" };
-  if (isStretchBig)
-    return { label: "STRETCH BIG", color: "#67e8f9", id: "stretch" };
   if (isWingScorer)
     return { label: "WING SCORER", color: "#e879f9", id: "wing" };
   if (isSpotUp)
     return { label: "SPOT UP SHOOTER", color: "#38bdf8", id: "spotUp" };
   if (isMidrange)
     return { label: "MIDRANGE ARTIST", color: "#c084fc", id: "midrange" };
-  if (isGlass)
-    return { label: "GLASS CLEANER", color: "#86efac", id: "glass" };
   return { label: "ROLE PLAYER", color: "#94a3b8", id: "role" };
 }
 
