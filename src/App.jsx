@@ -46,6 +46,71 @@ async function getTopPicks(limit = 5) {
   }
 }
 
+function generateLineupImageBlob(roster, teamName) {
+  const W = 600, H = 400;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return Promise.reject(new Error("Canvas not supported"));
+
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "#334155";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, W - 2, H - 2);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#f59e0b";
+  ctx.font = "bold 26px system-ui, sans-serif";
+  ctx.fillText("NBA BUDGET BALL", W / 2, 44);
+  if (teamName && teamName.trim()) {
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "15px system-ui, sans-serif";
+    ctx.fillText(teamName.trim(), W / 2, 72);
+  }
+  ctx.fillStyle = "#64748b";
+  ctx.font = "10px system-ui, sans-serif";
+  ctx.fillText("STARTING 5", W / 2, 96);
+
+  const y0 = 118;
+  const lineH = 50;
+  POSITIONS.forEach((pos, i) => {
+    const p = roster[pos];
+    const y = y0 + i * lineH;
+    const pillX = 32;
+    ctx.fillStyle = "#1e293b";
+    ctx.fillRect(pillX, y - 14, 40, 28);
+    ctx.strokeStyle = "#475569";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pillX, y - 14, 40, 28);
+    ctx.fillStyle = "#60a5fa";
+    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(pos, pillX + 10, y + 5);
+    ctx.fillStyle = "#e2e8f0";
+    ctx.font = "bold 19px system-ui, sans-serif";
+    ctx.fillText(p ? p.name : "—", 88, y + 5);
+    if (p) {
+      ctx.fillStyle = "#fbbf24";
+      ctx.font = "15px system-ui, sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("$" + p.cost, W - 36, y + 5);
+    }
+    ctx.textAlign = "left";
+  });
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  ctx.fillStyle = "#475569";
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("Play at " + origin, W / 2, H - 22);
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))), "image/png");
+  });
+}
+
 const Tag = ({ label, color, bg }) => (
   <span
     style={{
@@ -424,16 +489,45 @@ export default function App(){
     if (inSeason) return;
     const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
     const code = ids.join("-");
+    const names = POSITIONS.map((pos) => roster[pos]?.name).filter(Boolean).join(" · ");
     const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
     if (!url) return;
     url.searchParams.set("roster", code);
     const link = url.toString();
+    const shareText = names ? `${names} — ${link}` : link;
     if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(link).catch(() => window.prompt("Copy link:", link));
+      navigator.clipboard.writeText(shareText).catch(() => window.prompt("Copy:", shareText));
     } else {
-      window.prompt("Copy share link:", link);
+      window.prompt("Copy share:", shareText);
     }
   }, [roster, inSeason]);
+
+  const [shareImageStatus, setShareImageStatus] = useState(null);
+  const handleShareLineupImage = useCallback(async () => {
+    if (inSeason) return;
+    const filled = POSITIONS.every((pos) => roster[pos]);
+    if (!filled) {
+      setShareImageStatus("Complete your lineup first");
+      setTimeout(() => setShareImageStatus(null), 2000);
+      return;
+    }
+    setShareImageStatus("Creating image…");
+    try {
+      const blob = await generateLineupImageBlob(roster, myTeamName);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "nba-budget-ball-lineup.png";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      if (typeof navigator !== "undefined" && navigator.clipboard?.write) {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      }
+      setShareImageStatus("Saved & copied!");
+    } catch (e) {
+      setShareImageStatus("Couldn’t create image");
+    }
+    setTimeout(() => setShareImageStatus(null), 2500);
+  }, [roster, myTeamName, inSeason]);
 
 const audioRef = useRef(null);
 const trackIndex = useRef(0);
@@ -787,12 +881,12 @@ if(phase==="teamSetup") return(
                     <div style={{textAlign:"center",padding:"12px",background:"#0f172a",borderRadius:12,border:`1px solid ${won?"#22c55e":"#ef4444"}`,marginBottom:10}}>
                       <div style={{fontSize:20,fontWeight:900,color:won?"#22c55e":"#ef4444"}}>{won?"✓ WIN":"✗ LOSS"}{pr.ot>0?` (${pr.ot}OT)`:""}</div>
                       <div style={{display:"flex",justifyContent:"center",gap:24,marginTop:6}}>
-                        <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#60a5fa",fontWeight:700}}>YOUR TEAM</div><div style={{fontSize:34,fontWeight:900,color:"#60a5fa"}}>{myScore}</div></div>
+                        <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#60a5fa",fontWeight:700}}>{myTeamName}</div><div style={{fontSize:34,fontWeight:900,color:"#60a5fa"}}>{myScore}</div></div>
                         <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#f87171",fontWeight:700}}>{pTop?pr.botName:pr.topName}</div><div style={{fontSize:34,fontWeight:900,color:"#f87171"}}>{oppScore}</div></div>
                       </div>
                       {pr.seriesOver&&<div style={{marginTop:6,fontSize:11,color:"#f59e0b",fontWeight:700}}>Series: {pr.winner?.name} win!</div>}
                     </div>
-                    <BoxScore stats={myS} acc="#60a5fa" label="YOUR TEAM"/>
+                    <BoxScore stats={myS} acc="#60a5fa" label={myTeamName}/>
                     <BoxScore stats={oppS} acc="#f87171" label={pTop?pr.botName:pr.topName}/>
                   </>);
                 })()}
@@ -938,7 +1032,7 @@ if(phase==="teamSetup") return(
             <div style={{background:"#0f172a",borderRadius:16,padding:24,border:"1px solid #1e293b",textAlign:"center",marginBottom:10}}>
               <div style={{fontSize:13,color:"#64748b",marginBottom:14,fontWeight:700,letterSpacing:1}}>GAME {gameNum} vs {opp?.name}</div>
               <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:32,marginBottom:18}}>
-                <div style={{textAlign:"center"}}><div style={{fontSize:12,color:"#60a5fa",fontWeight:800,marginBottom:4}}>YOUR TEAM</div><div style={{fontSize:30,fontWeight:900,color:"#60a5fa"}}>{rf(teamEff(myLineup,teamRoster),0)}</div><div style={{fontSize:10,color:"#475569"}}>RTG</div></div>
+                <div style={{textAlign:"center"}}><div style={{fontSize:12,color:"#60a5fa",fontWeight:800,marginBottom:4}}>{myTeamName}</div><div style={{fontSize:30,fontWeight:900,color:"#60a5fa"}}>{rf(teamEff(myLineup,teamRoster),0)}</div><div style={{fontSize:10,color:"#475569"}}>RTG</div></div>
                 <div style={{fontSize:22,color:"#334155"}}>VS</div>
                 <div style={{textAlign:"center"}}><div style={{fontSize:12,color:"#f87171",fontWeight:800,marginBottom:4}}>{opp?.name}</div><div style={{fontSize:30,fontWeight:900,color:"#f87171"}}>{opp?rf(opp.eff,0):"-"}</div><div style={{fontSize:10,color:"#475569"}}>RTG</div></div>
               </div>
@@ -972,14 +1066,14 @@ if(phase==="teamSetup") return(
                 <div style={{fontSize:24}}>{won?"🏆":"💀"}</div>
                 <div style={{fontSize:20,fontWeight:900,color:won?"#22c55e":"#ef4444",letterSpacing:2}}>{won?"VICTORY":"DEFEAT"}{result.ot>0?` (${result.ot}OT)`:""}</div>
                 <div style={{display:"flex",justifyContent:"center",gap:20,marginTop:6}}>
-                  {[["YOUR TEAM",result.myScore,"#60a5fa",result.myEff],["OPPONENT",result.oppScore,"#f87171",result.oppEff]].map(([l,sc,col,eff],i)=>(
+                  {[[myTeamName,result.myScore,"#60a5fa",result.myEff],[opp?.name||"Opponent",result.oppScore,"#f87171",result.oppEff]].map(([l,sc,col,eff],i)=>(
                     <div key={i} style={{textAlign:"center"}}><div style={{fontSize:10,color:col,fontWeight:700}}>{l}</div><div style={{fontSize:38,fontWeight:900,color:col,lineHeight:1}}>{sc}</div><div style={{fontSize:9,color:"#475569"}}>RTG {eff}</div></div>
                   ))}
                 </div>
                 <div style={{marginTop:6,fontSize:10,color:"#f59e0b",fontWeight:700}}>🏅 {[...result.myStats].sort((a,b)=>b.pts-a.pts)[0]?.name} — {[...result.myStats].sort((a,b)=>b.pts-a.pts)[0]?.pts}pts</div>
               </div>
-              <BoxScore stats={result.myStats} acc="#60a5fa" label="YOUR TEAM"/>
-              <BoxScore stats={result.oppStats} acc="#f87171" label={opp?.name||"OPPONENT"}/>
+              <BoxScore stats={result.myStats} acc="#60a5fa" label={myTeamName}/>
+              <BoxScore stats={result.oppStats} acc="#f87171" label={opp?.name||"Opponent"}/>
               <div style={{display:"flex",gap:8,justifyContent:"center",paddingBottom:16}}>
                 {gameNum<SEASON_LENGTH
                   ?<button onClick={nextGame} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding:"11px 28px",fontSize:13,fontWeight:800,cursor:"pointer"}}>▶ NEXT GAME ({gameNum+1}/{SEASON_LENGTH})</button>
@@ -1088,6 +1182,23 @@ if(phase==="teamSetup") return(
               >
                 📤 Share link
               </button>
+              <button
+                onClick={handleShareLineupImage}
+                disabled={inSeason}
+                style={{
+                  background:"#0f172a",
+                  color:"#e2e8f0",
+                  border:"1px solid #1e293b",
+                  borderRadius:6,
+                  padding:"4px 8px",
+                  fontSize:10,
+                  fontWeight:700,
+                  cursor:inSeason?"not-allowed":"pointer",
+                }}
+              >
+                🖼️ Share image
+              </button>
+              {shareImageStatus&&<span style={{fontSize:10,color:"#94a3b8",alignSelf:"center"}}>{shareImageStatus}</span>}
               <button
                 onClick={handleLoadTeamCode}
                 disabled={inSeason}
