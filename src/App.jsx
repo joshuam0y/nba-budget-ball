@@ -509,7 +509,6 @@ export default function App(){
       setTimeout(() => setShareImageStatus(null), 2000);
       return;
     }
-    setShareImageStatus("Creating…");
     const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
     const code = ids.join("-");
     const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
@@ -519,25 +518,13 @@ export default function App(){
     const shareText = "Here's " + name + "'s lineup — paste the code to try it or build your own!\nCode: " + code + "\nPlay: " + shareUrl;
     const nav = typeof navigator !== "undefined" ? navigator : null;
     try {
-      const imageBlob = await generateLineupImageBlob(roster, myTeamName, shareUrl, code);
-      const textBlob = new Blob([shareText], { type: "text/plain" });
-      if (nav?.clipboard?.write) {
-        await nav.clipboard.write([
-          new ClipboardItem({ "text/plain": textBlob, "image/png": imageBlob })
-        ]);
-        setShareImageStatus("Copied! Paste in chat for message, or in image area for the card.");
-      } else {
-        await nav.clipboard.writeText(shareText);
-        setShareImageStatus("message_copied");
-      }
+      await nav?.clipboard?.writeText(shareText);
+      setShareImageStatus("message_copied");
     } catch {
-      try {
-        await nav?.clipboard?.writeText(shareText);
-        setShareImageStatus("message_copied");
-      } catch {
-        window.prompt("Copy this message:", shareText);
-        setShareImageStatus("Copy the message above");
-      }
+      window.prompt("Copy this message:", shareText);
+      setShareImageStatus("Copy the message above");
+      setTimeout(() => setShareImageStatus(null), 3000);
+      return;
     }
     setTimeout(() => setShareImageStatus(null), 5000);
   }, [roster, myTeamName, inSeason]);
