@@ -584,6 +584,20 @@ const skipBtn = (
   </button>
 );
 
+const volumeSlider = (
+  <div style={{position:"fixed",bottom:60,right:10,zIndex:9999,display:"flex",alignItems:"center",gap:6,background:"#1e293b",border:"1px solid #334155",borderRadius:20,padding:"4px 10px",boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
+    <span style={{fontSize:11}}>🔊</span>
+    <input
+      type="range"
+      min="0"
+      max="1"
+      step="0.05"
+      defaultValue="0.3"
+      onChange={(e) => { if(audioRef.current) audioRef.current.volume = parseFloat(e.target.value); }}
+      style={{width:60,accentColor:"#6366f1",cursor:"pointer"}}
+    />
+  </div>
+);
 
   const myIds=new Set(Object.values(roster).filter(Boolean).map(p=>p.id));
   const spent=Object.values(roster).reduce((s,p)=>s+(p?.cost||0),0);
@@ -732,7 +746,7 @@ const skipBtn = (
     });
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
-        {skipBtn}
+        {volumeSlider}{skipBtn}
         
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
@@ -823,7 +837,7 @@ const skipBtn = (
     const mySeed=all.findIndex(t=>t.isPlayer)+1,playoff=mySeed<=10,playIn=mySeed>=7&&mySeed<=10;
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
-        {skipBtn}
+        {volumeSlider}{skipBtn}
       
         <div style={{maxWidth:800,margin:"0 auto"}}>
           <div style={{textAlign:"center",padding:"16px",background:"#0f172a",borderRadius:16,border:`2px solid ${mySeed<=6?"#22c55e":playoff?"#f59e0b":"#ef4444"}`,marginBottom:14}}>
@@ -884,7 +898,7 @@ const skipBtn = (
     const curAi=getAiRecordsAtGame(aiTeams,gp),won=result?result.myScore>result.oppScore:false;
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
-        {skipBtn}
+        {volumeSlider}{skipBtn}
         <div style={{maxWidth:1040,margin:"0 auto"}}>
           <div style={{background:"#0f172a",borderRadius:10,padding:"10px 14px",marginBottom:10,border:"1px solid #1e293b",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
             <div style={{fontSize:11,fontWeight:800,color:"#64748b"}}>GAME {gameNum} / {SEASON_LENGTH}</div>
@@ -944,7 +958,7 @@ const skipBtn = (
     <div onClick={handleFirstClick} style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:14}}>
       <Analytics />
       <SpeedInsights />
-      {skipBtn}
+      {volumeSlider}{skipBtn}
       <div style={{maxWidth:1200,margin:"0 auto",overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
           <div>
