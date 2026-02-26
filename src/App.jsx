@@ -666,6 +666,7 @@ const volumeSlider = (
     setResult(null);
     myLineup.forEach(({player}) => incrementPick(player.name));
     setPhase("game");setBracket(null);setPlayoffResult(null);setElimInPlayoffs(false);
+    getTopPicks().then(setTopPicks);
   };
 
   const playGame=()=>{
