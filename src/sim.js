@@ -196,7 +196,7 @@ export function genLineup(excludeIds = new Set(), pool = []) {
 export function generateRivalLineup(myLineup, pool, excludeIds) {
   const archs = myLineup.map(({ player }) => getArchetype(player).id);
   const hasScorers = archs.some((a) =>
-    ["iso", "bucket", "scoringGuard", "wing"].includes(a)
+    ["bucket", "scoringGuard", "wing"].includes(a)
   );
   const hasPassers = archs.some((a) =>
     ["fg", "pmBig", "pointForward"].includes(a)
@@ -670,7 +670,7 @@ export function getArchetype(p) {
 
   const isSwiss = p.pts > 32 && p.ast > 7 && p.reb > 9 && p.fg > 48;
 
-  const isPmBig = isBig && p.ast > 6 && p.reb > 9 && p.pts < 38 && p.rating > 56;
+  const isPmBig = isBig && p.ast > 5 && p.reb > 9 && p.pts < 42 && p.rating > 53;
   const isRimProt =
     isBig && p.blk > 2.7 && p.reb > 10 && p.pts < 24;
   const isPaint = isBig && p.reb > 16 && p.tR < 0.05;
@@ -688,7 +688,7 @@ export function getArchetype(p) {
     p.fg > 44 &&
     p.rating > 46;
   const isGlass =
-    isBig && p.reb > 10 && p.pts < 30 && p.fg > 46 && p.rating > 38;
+    isBig && p.reb > 12 && p.pts < 26 && p.fg > 46 && p.rating > 42;
 
   const isPointForward =
     (p.pos === "SF" || p.pos === "PF") &&
@@ -704,25 +704,16 @@ export function getArchetype(p) {
     p.pts < 50 &&
     (p.pos === "PG" || p.pos === "SG") &&
     p.rating > 50;
-  const isIsoScorer =
-    (isGuard || isWing || isBig) &&
-    p.pts > 26 &&
-    p.ast < 6 &&
-    p.tov > 2.0 &&
-    p.rating > 52;
-  const isScoringGuard =
-    isGuard && p.pts > 20 && p.ast >= 2 && p.rating > 45;
   const isBucketGetter =
-    (isGuard || isWing || p.pos === "PF") &&
-    p.pts > 20 &&
-    p.ast < 7 &&
-    p.reb >= 2 &&
-    p.fg >= 46 &&
-    p.tov <= 2.6 &&
-    p.rating > 46;
+    (isGuard || isWing || isBig) &&
+    p.pts > 22 &&
+    p.ast < 6 &&
+    p.rating > 47;
+  const isScoringGuard =
+    isGuard && p.pts > 24 && p.ast >= 3 && p.rating > 48;
 
   const isLockdown =
-    p.stl > 2.5 && (p.blk > 1.2 || p.pts < 14) && p.rating > 45;
+    p.stl > 2.0 && (p.blk > 1.0 || p.pts < 16) && p.rating > 42;
   const is3D =
     p.tpPct > 37 &&
     p.tR > 0.38 &&
@@ -755,12 +746,10 @@ export function getArchetype(p) {
     return { label: "POINT FORWARD", color: "#34d399", id: "pointForward" };
   if (isFloorGeneral)
     return { label: "FLOOR GENERAL", color: "#fbbf24", id: "fg" };
-  if (isIsoScorer)
-    return { label: "ISO SCORER", color: "#fb923c", id: "iso" };
-  if (isScoringGuard)
-    return { label: "SCORING GUARD", color: "#a78bfa", id: "scoringGuard" };
   if (isBucketGetter)
     return { label: "BUCKET GETTER", color: "#f97316", id: "bucket" };
+  if (isScoringGuard)
+    return { label: "SCORING GUARD", color: "#a78bfa", id: "scoringGuard" };
   if (isWingScorer)
     return { label: "WING SCORER", color: "#e879f9", id: "wing" };
   if (isSpotUp)
@@ -773,14 +762,13 @@ export function getArchetype(p) {
 export function archetypeMatchupFactor(defArch, offArch) {
   const b = {
     lockdown: {
-      iso: 0.87,
-      bucket: 0.88,
+      bucket: 0.87,
       wing: 0.9,
       swiss: 0.91,
       scoringGuard: 0.89,
     },
     rimProt: { paint: 0.84, glass: 0.82, pmBig: 0.87, stretch: 0.88 },
-    threeD: { spotUp: 0.9, iso: 0.92, wing: 0.92, scoringGuard: 0.91 },
+    threeD: { spotUp: 0.9, bucket: 0.92, wing: 0.92, scoringGuard: 0.91 },
     fg: { playmaker: 0.9, swiss: 0.93 },
   };
   return b[defArch.id]?.[offArch.id] || 1.0;
@@ -792,9 +780,7 @@ export function archetypeChemBonus(lineup) {
   if (archs.includes("fg") && archs.includes("spotUp")) bonus += 3;
   if (
     archs.includes("fg") &&
-    (archs.includes("iso") ||
-      archs.includes("bucket") ||
-      archs.includes("scoringGuard"))
+    (archs.includes("bucket") || archs.includes("scoringGuard"))
   )
     bonus += 2;
   if (archs.includes("rimProt") && archs.includes("lockdown")) bonus += 3;
@@ -806,9 +792,7 @@ export function archetypeChemBonus(lineup) {
     bonus += 2;
   if (
     archs.includes("threeD") &&
-    (archs.includes("iso") ||
-      archs.includes("bucket") ||
-      archs.includes("scoringGuard"))
+    (archs.includes("bucket") || archs.includes("scoringGuard"))
   )
     bonus += 2;
   if (
@@ -817,11 +801,11 @@ export function archetypeChemBonus(lineup) {
   )
     bonus += 2;
   if (archs.includes("fg") && archs.includes("wing")) bonus += 2;
-  const isoCount = archs.filter((a) =>
-    ["iso", "bucket", "scoringGuard"].includes(a)
+  const bucketCount = archs.filter((a) =>
+    ["bucket", "scoringGuard"].includes(a)
   ).length;
-  if (isoCount >= 3) bonus -= 4;
-  else if (isoCount >= 2) bonus -= 1;
+  if (bucketCount >= 3) bonus -= 4;
+  else if (bucketCount >= 2) bonus -= 1;
   return bonus;
 }
 
@@ -844,7 +828,6 @@ export function getTeamBalance(lineup) {
   );
   const hasScoring = archs.some((a) =>
     [
-      "iso",
       "bucket",
       "wing",
       "spotUp",
@@ -854,8 +837,8 @@ export function getTeamBalance(lineup) {
       "scoringGuard",
     ].includes(a)
   );
-  const isoCount = archs.filter((a) =>
-    ["iso", "bucket", "scoringGuard"].includes(a)
+  const bucketCount = archs.filter((a) =>
+    ["bucket", "scoringGuard"].includes(a)
   ).length;
   let score = 0;
   if (unique >= 4) score += 2;
@@ -864,8 +847,8 @@ export function getTeamBalance(lineup) {
   if (hasPlaymaker) score += 1;
   if (hasDefense) score += 1;
   if (hasScoring) score += 1;
-  if (isoCount >= 3) score -= 3;
-  else if (isoCount >= 2) score -= 1;
+  if (bucketCount >= 3) score -= 3;
+  else if (bucketCount >= 2) score -= 1;
   const grade =
     score >= 6 ? "A+" : score >= 5 ? "A" : score >= 4 ? "B+" : score >= 3 ? "B" : score >= 2 ? "C" : "D";
   const color =
