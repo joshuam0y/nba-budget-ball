@@ -251,7 +251,7 @@ const isSwiss=p.pts>32&&p.ast>7&&p.reb>9&&p.fg>48;
 const isPmBig=isBig&&p.ast>5&&p.reb>9&&p.pts<48&&p.rating>55;
 const isRimProt=isBig&&((p.blk>2.5&&p.reb>10)||(p.blk>3.2&&p.reb>9));
 const isPaint=isBig&&p.reb>16&&p.tR<0.05;
-const isStretchBig=(isBig||isWing||isGuard)&&p.tR>0.30&&p.tpPct>33&&p.reb>5&&p.pts>17&&p.rating>44;
+const isStretchBig=(isBig||isWing)&&p.tR>0.30&&p.tpPct>33&&p.reb>5&&p.pts>17&&p.rating>44;
 const isMidrange=(isBig||isWing||isGuard)&&p.pts>18&&p.tR<0.28&&p.fg>44&&p.rating>46;
 const isGlass=isBig&&p.reb>11&&p.pts<28&&p.fg>48&&p.rating>40;
 
@@ -1114,7 +1114,7 @@ const newSeason=()=>{
                   {allTeams.map(t=><option key={t} value={t}>{t}</option>)}
                 </select>
                 {(archF!=="ALL"||yearF!=="ALL"||teamF!=="ALL")&&(
-                  <button onClick={()=>{setArchF("ALL");setYearF("ALL");setTeamF("ALL");}} style={{background:"#7f1d1d",color:"#fca5a5",border:"none",borderRadius:6,padding:"5px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}}>✕ Clear</button>
+                  <button onClick={()=>{setArchF("ALL");setYearF("ALL");setTeamF("ALL");setSearch("");}} style={{background:"#7f1d1d",color:"#fca5a5",border:"none",borderRadius:6,padding:"5px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}}>✕ Clear</button>
                 )}
                 <div style={{fontSize:10,color:"#475569",marginLeft:"auto"}}>{display.length} players</div>
               </div>
