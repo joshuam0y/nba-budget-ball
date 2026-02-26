@@ -14,6 +14,7 @@ import {
   teamEff,
   generateLeague,
   simulate,
+  quickSim,
   simLeagueGames,
   getAiRecordsAtGame,
   getTier,
