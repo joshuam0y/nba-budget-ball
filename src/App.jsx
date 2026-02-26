@@ -534,6 +534,7 @@ export default function App(){
   const [activeMatchId,setActiveMatchId]=useState(null);
   const [showStandings,setShowStandings]=useState(false);
   const [elimInPlayoffs,setElimInPlayoffs]=useState(false);
+  const [showHelp,setShowHelp]=useState(false);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 useEffect(() => {
@@ -1038,16 +1039,21 @@ const volumeSlider = (
                 {full?"🏀 START SEASON":`${5-filled} SLOT${5-filled!==1?"S":""} REMAINING`}
               </button>
             </div>
-            <div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #1e293b",fontSize:10,color:"#64748b"}}>
-              <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
-              <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
-              <div style={{marginBottom:2}}>• 12-team league — AI teams have real records</div>
-              <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
-              <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
-              <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
-              <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
-              <div>Adjacent ×0.82 · Wrong ×0.65</div>
-            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+  <button onClick={()=>setShowHelp(o=>!o)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
+</div>
+{showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b"}}>
+  <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
+  <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
+  <div style={{marginBottom:2}}>• 12-team league — AI teams have real records</div>
+  <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
+  <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
+  <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
+  <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
+  <div>Adjacent ×0.82 · Wrong ×0.65</div>
+</div>}
+
           </div>
           <div>
             <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
