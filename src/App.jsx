@@ -1086,20 +1086,7 @@ const newSeason=()=>{
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #1e293b"}}>
               <div style={{fontWeight:800,fontSize:10,letterSpacing:2,color:"#60a5fa",marginBottom:8}}>YOUR STARTING 5</div>
-<input
-  value={myTeamName}
-  onChange={e=>setMyTeamName(e.target.value)}
-  maxLength={20}
-  placeholder="Team name..."
-  style={{width:"100%",background:"#080f1e",border:"1px solid #334155",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#e2e8f0",outline:"none",marginBottom:8,boxSizing:"border-box"}}
-/>
-<input
-  value={myTeamName}
-  onChange={e=>setMyTeamName(e.target.value)}
-  maxLength={20}
-  placeholder="Team name..."
-  style={{width:"100%",background:"#080f1e",border:"1px solid #334155",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#e2e8f0",outline:"none",marginBottom:8,boxSizing:"border-box"}}
-/>
+
               {POSITIONS.map(pos=>{
                 const p=roster[pos],m=p?posMult(p,pos):1,tier=p?getTier(p.cost):null,isActive=slotSel===pos;
                 return(
