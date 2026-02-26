@@ -534,7 +534,7 @@ export default function App(){
   const [activeMatchId,setActiveMatchId]=useState(null);
   const [showStandings,setShowStandings]=useState(false);
   const [elimInPlayoffs,setElimInPlayoffs]=useState(false);
-  
+
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 useEffect(() => {
   const handler = () => setIsMobile(window.innerWidth < 768);
@@ -966,11 +966,11 @@ const volumeSlider = (
     .sort((a,b)=>sortBy==="rating"?b.rating-a.rating:sortBy==="cost"?b.cost-a.cost:a.name.localeCompare(b.name));
 
   return(
-    <div onClick={handleFirstClick} style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:14}}>
+    <div onClick={handleFirstClick} style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:isMobile ? "14px 10px" : 14}}>
       <Analytics />
       <SpeedInsights />
       {volumeSlider}{skipBtn}
-      <div style={{maxWidth:1200,margin:"0 auto",overflow:"hidden"}}>
+      <div style={{maxWidth:1200,margin:"0 auto",overflow:"visible",paddingBottom:80}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
           <div>
             <h1 style={{margin:0,fontSize:20,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
