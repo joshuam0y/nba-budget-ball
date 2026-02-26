@@ -516,7 +516,7 @@ export default function App(){
   }, [roster, inSeason]);
 
   const [shareImageStatus, setShareImageStatus] = useState(null);
-  const handleShareLineupImage = useCallback(async () => {
+  const handleShareLineup = useCallback(async () => {
     if (inSeason) return;
     const filled = POSITIONS.every((pos) => roster[pos]);
     if (!filled) {
@@ -531,19 +531,20 @@ export default function App(){
       const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
       if (url) url.searchParams.set("roster", code);
       const shareUrl = url ? url.toString() : null;
+      const shareText = "Try my lineup — paste this code: " + code + "\nPlay: " + shareUrl;
       const blob = await generateLineupImageBlob(roster, myTeamName, shareUrl, code);
-      if (typeof navigator !== "undefined" && navigator.clipboard?.write) {
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-          setShareImageStatus("Copied! Paste to share");
-        } catch {
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = "nba-budget-ball-lineup.png";
-          a.click();
-          URL.revokeObjectURL(a.href);
-          setShareImageStatus("Downloaded");
-        }
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      const file = new File([blob], "nba-budget-ball-lineup.png", { type: "image/png" });
+      const shareData = { title: "NBA Budget Ball lineup", text: shareText, url: shareUrl };
+      if (nav?.share && nav.canShare?.({ ...shareData, files: [file] })) {
+        await nav.share({ ...shareData, files: [file] });
+        setShareImageStatus("Shared!");
+      } else if (nav?.share && nav.canShare?.(shareData)) {
+        await nav.share(shareData);
+        setShareImageStatus("Shared!");
+      } else if (nav?.clipboard?.write) {
+        await nav.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        setShareImageStatus("Image copied — paste to share (code & link on image)");
       } else {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
@@ -553,7 +554,21 @@ export default function App(){
         setShareImageStatus("Downloaded");
       }
     } catch (e) {
-      setShareImageStatus("Couldn’t create image");
+      if (e?.name === "AbortError") {
+        setShareImageStatus(null);
+        return;
+      }
+      try {
+        const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
+        const code = ids.join("-");
+        const u = typeof window !== "undefined" ? new URL(window.location.href) : null;
+        if (u) u.searchParams.set("roster", code);
+        const blob = await generateLineupImageBlob(roster, myTeamName, u?.toString(), code);
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        setShareImageStatus("Image copied — paste to share");
+      } catch {
+        setShareImageStatus("Couldn’t share");
+      }
     }
     setTimeout(() => setShareImageStatus(null), 2500);
   }, [roster, myTeamName, inSeason]);
@@ -1212,7 +1227,7 @@ if(phase==="teamSetup") return(
                 📤 Share link
               </button>
               <button
-                onClick={handleShareLineupImage}
+                onClick={handleShareLineup}
                 disabled={inSeason}
                 style={{
                   background:"#0f172a",
@@ -1225,7 +1240,7 @@ if(phase==="teamSetup") return(
                   cursor:inSeason?"not-allowed":"pointer",
                 }}
               >
-                🖼️ Share image
+                📤 Share
               </button>
               {shareImageStatus&&<span style={{fontSize:10,color:"#94a3b8",alignSelf:"center"}}>{shareImageStatus}</span>}
               <button
