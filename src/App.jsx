@@ -254,11 +254,11 @@ function getArchetype(p){
   const isPointForward=(p.pos==="SF"||p.pos==="PF")&&p.ast>6&&p.reb>6&&p.pts<22;
 const isBucketGetter=(isGuard||isWing)&&p.pts>22&&p.ast<7&&p.reb>=3&&p.fg>=48&&p.tov<=2.5;
 const isStretchBig=isBig&&p.tR>0.32&&p.tpPct>34&&p.reb>9&&p.pts>22;
-const isWingScorer=isWing&&p.pts>22&&p.ast>=4&&p.reb>=4;
-const isScoringGuard=isGuard&&p.pts>26&&p.ast>=4;
-const isSpotUp=p.tR>0.45&&p.tpPct>37&&p.pts<32;
-const isMidrange=isBig&&p.pts>20&&p.tR<0.18&&p.fg>50;
-const isGlass=isBig&&p.reb>13&&p.blk<2.5&&p.pts<38;
+const isWingScorer=isWing&&p.pts>18&&p.ast>=3&&p.reb>=3;
+const isScoringGuard=isGuard&&p.pts>20&&p.ast>=3;
+const isSpotUp=p.tR>0.40&&p.tpPct>34&&p.pts<28;
+const isMidrange=isBig&&p.pts>16&&p.tR<0.20&&p.fg>48;
+const isGlass=isBig&&p.reb>10&&p.blk<2.5&&p.pts<28;
   if(isSwiss)return{label:"SWISS ARMY KNIFE",color:"#f472b6",id:"swiss"};
   if(isPmBig)return{label:"PLAYMAKING BIG",color:"#a78bfa",id:"pmBig"};
   if(isRimProt)return{label:"RIM PROTECTOR",color:"#60a5fa",id:"rimProt"};
