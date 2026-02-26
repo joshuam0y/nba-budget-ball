@@ -891,6 +891,69 @@ if(phase==="teamSetup") return(
             </h1>
             <div style={{fontSize:10,color:"#475569",marginTop:1}}>{playerPool.length} players · Budget ${BUDGET} · {SEASON_LENGTH}-game season · Play-in + Playoffs</div>
           </div>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"flex-end",flex:1}}>
+            <div style={{display:"flex",gap:4,alignItems:"center"}}>
+              <span style={{fontSize:9,color:"#475569",fontWeight:700,letterSpacing:1}}>DIFFICULTY</span>
+              <div style={{display:"flex",gap:3}}>
+                {[
+                  ["casual","CASUAL"],
+                  ["standard","STANDARD"],
+                  ["hardcore","HARDCORE"],
+                ].map(([val,label])=>(
+                  <button
+                    key={val}
+                    onClick={()=>!inSeason&&setDifficulty(val)}
+                    style={{
+                      background:difficulty===val?"#4b5563":"#111827",
+                      color:difficulty===val?"#fef3c7":"#9ca3af",
+                      border:"1px solid #374151",
+                      borderRadius:999,
+                      padding:"3px 8px",
+                      fontSize:9,
+                      fontWeight:700,
+                      cursor:inSeason?"not-allowed":"pointer",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:4}}>
+              <button
+                onClick={handleCopyTeamCode}
+                disabled={inSeason}
+                style={{
+                  background:"#0f172a",
+                  color:"#e2e8f0",
+                  border:"1px solid #1e293b",
+                  borderRadius:6,
+                  padding:"4px 8px",
+                  fontSize:10,
+                  fontWeight:700,
+                  cursor:inSeason?"not-allowed":"pointer",
+                }}
+              >
+                🔗 Copy Code
+              </button>
+              <button
+                onClick={handleLoadTeamCode}
+                disabled={inSeason}
+                style={{
+                  background:"#0f172a",
+                  color:"#60a5fa",
+                  border:"1px solid #1e293b",
+                  borderRadius:6,
+                  padding:"4px 8px",
+                  fontSize:10,
+                  fontWeight:700,
+                  cursor:inSeason?"not-allowed":"pointer",
+                }}
+              >
+                📥 Load Code
+              </button>
+            </div>
+          </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {[["BUDGET",`$${rem}`,rem<15?"#ef4444":rem<30?"#f59e0b":"#22c55e"],["SPENT",`$${spent}`,"#94a3b8"],["CHEM",myCh>0?`+${myCh}`:"-","#f472b6"]].map(([l,v,c])=>(
               <div key={l} style={{textAlign:"center",background:"#0f172a",borderRadius:7,padding:"4px 10px",border:"1px solid #1e293b"}}>
@@ -951,87 +1014,26 @@ if(phase==="teamSetup") return(
               </button>
             </div>
 
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}>
-              <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                <span style={{fontSize:9,color:"#475569",fontWeight:700,letterSpacing:1}}>DIFFICULTY</span>
-                <div style={{display:"flex",gap:3}}>
-                  {[
-                    ["casual","CASUAL"],
-                    ["standard","STANDARD"],
-                    ["hardcore","HARDCORE"],
-                  ].map(([val,label])=>(
-                    <button
-                      key={val}
-                      onClick={()=>!inSeason&&setDifficulty(val)}
-                      style={{
-                        background:difficulty===val?"#4b5563":"#111827",
-                        color:difficulty===val?"#fef3c7":"#9ca3af",
-                        border:"1px solid #374151",
-                        borderRadius:999,
-                        padding:"3px 8px",
-                        fontSize:9,
-                        fontWeight:700,
-                        cursor:inSeason?"not-allowed":"pointer",
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div style={{display:"flex",gap:4}}>
-                <button
-                  onClick={handleCopyTeamCode}
-                  disabled={inSeason}
-                  style={{
-                    background:"#1e293b",
-                    color:"#e2e8f0",
-                    border:"1px solid #334155",
-                    borderRadius:6,
-                    padding:"4px 8px",
-                    fontSize:10,
-                    fontWeight:700,
-                    cursor:inSeason?"not-allowed":"pointer",
-                  }}
-                >
-                  🔗 Copy Code
-                </button>
-                <button
-                  onClick={handleLoadTeamCode}
-                  disabled={inSeason}
-                  style={{
-                    background:"#1e293b",
-                    color:"#60a5fa",
-                    border:"1px solid #334155",
-                    borderRadius:6,
-                    padding:"4px 8px",
-                    fontSize:10,
-                    fontWeight:700,
-                    cursor:inSeason?"not-allowed":"pointer",
-                  }}
-                >
-                  📥 Load Code
-                </button>
-                <button
-                  onClick={()=>setShowHelp(o=>!o)}
-                  style={{
-                    width:28,
-                    height:28,
-                    borderRadius:"50%",
-                    background:"#1e293b",
-                    border:"1px solid #334155",
-                    color:"#60a5fa",
-                    fontSize:14,
-                    fontWeight:900,
-                    cursor:"pointer",
-                    display:"flex",
-                    alignItems:"center",
-                    justifyContent:"center",
-                  }}
-                >
-                  ?
-                </button>
-              </div>
+            <div style={{display:"flex",justifyContent:"flex-end",marginTop:6}}>
+              <button
+                onClick={()=>setShowHelp(o=>!o)}
+                style={{
+                  width:28,
+                  height:28,
+                  borderRadius:"50%",
+                  background:"#1e293b",
+                  border:"1px solid #334155",
+                  color:"#60a5fa",
+                  fontSize:14,
+                  fontWeight:900,
+                  cursor:"pointer",
+                  display:"flex",
+                  alignItems:"center",
+                  justifyContent:"center",
+                }}
+              >
+                ?
+              </button>
             </div>
             {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginTop:6}}>
               <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
