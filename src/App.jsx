@@ -1109,7 +1109,7 @@ const volumeSlider = (
   <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
     <span style={{fontSize:9,color:"#f59e0b",fontWeight:800,letterSpacing:1}}>🔥 MOST DRAFTED</span>
     {topPicks.map((p,i) => (
-      <span key={p.name} onClick={()=>setSearch(p.name.split(" '")[0])} style={{fontSize:9,background:"#1e293b",border:"1px solid #f59e0b44",borderRadius:6,padding:"3px 8px",color:"#e2e8f0",whiteSpace:"nowrap",cursor:"pointer"}}>
+      <span key={p.name} onClick={()=>setSearch(p.name)} style={{fontSize:9,background:"#1e293b",border:"1px solid #f59e0b44",borderRadius:6,padding:"3px 8px",color:"#e2e8f0",whiteSpace:"nowrap",cursor:"pointer"}}>
         <span style={{color:"#475569",marginRight:3}}>#{i+1}</span>{p.name} <span style={{color:"#f59e0b",fontWeight:700}}>{p.picks}</span>
       </span>
     ))}
