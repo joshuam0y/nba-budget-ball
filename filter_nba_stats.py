@@ -6,7 +6,7 @@ INPUT_FILE  = "normalizedstats223.csv"
 OUTPUT_FILE = "all_nba_filtered.csv"
 
 MIN_GAMES   = 41
-MIN_MP      = 1200
+MIN_MP      = 1500
 MIN_SEASON  = 1950
 
 # ── LOAD ─────────────────────────────────────────────────
