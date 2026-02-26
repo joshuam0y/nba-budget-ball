@@ -731,7 +731,7 @@ const volumeSlider = (
       <div style={{maxWidth:400,width:"100%",textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:12}}>💰</div>
         <h1 style={{margin:"0 0 6px",fontSize:28,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>NBA BUDGET BALL</h1>
-        <div style={{fontSize:12,color:"#475569",marginBottom:32}}>v2.5 · All eras · CSV-powered</div>
+        <div style={{fontSize:12,color:"#475569",marginBottom:32}}>v1.0 · 1974-Present · CSV-powered</div>
         {!importErr?(
           <div style={{background:"#0f172a",borderRadius:14,padding:24,border:"1px solid #1e293b"}}>
             <div style={{fontSize:28,marginBottom:10}}>⏳</div>
@@ -977,7 +977,7 @@ const volumeSlider = (
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
           <div>
             <h1 style={{margin:0,fontSize:20,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
-              💰 NBA BUDGET BALL <span style={{fontSize:11,color:"#475569",WebkitTextFillColor:"#475569"}}>v2.5</span>
+              💰 NBA BUDGET BALL <span style={{fontSize:11,color:"#475569",WebkitTextFillColor:"#475569"}}>v1.0</span>
             </h1>
             <div style={{fontSize:10,color:"#475569",marginTop:1}}>{playerPool.length} players · Budget ${BUDGET} · {SEASON_LENGTH}-game season · Play-in + Playoffs</div>
           </div>
