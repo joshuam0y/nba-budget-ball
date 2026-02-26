@@ -943,7 +943,7 @@ const skipBtn = (
       <Analytics />
       <SpeedInsights />
       {skipBtn}
-      <div style={{maxWidth:1200,margin:"0 auto"}}>
+      <div style={{maxWidth:1200,margin:"0 auto",overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
           <div>
             <h1 style={{margin:0,fontSize:20,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
