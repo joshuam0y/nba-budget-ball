@@ -248,11 +248,11 @@ function getArchetype(p){
   const isRimProt=isBig&&((p.blk>2.2&&p.reb>10)||(p.blk>3.0&&p.reb>8));
   const isPaint=isBig&&p.reb>16&&p.tR<0.05;
   const isLockdown=p.stl>2.5&&(p.blk>1.0||p.pts<14);
-  const is3D=p.tpPct>36&&p.tR>0.38&&(p.stl>1.5||p.blk>1.0)&&p.pts<24;
-  const isFloorGeneral=p.ast>8&&p.pts<50&&(p.pos==="PG"||p.pos==="SG"||p.pos==="SF");
-  const isIsoScorer=isGuard&&p.pts>36&&p.ast<12;
+  const is3D=p.tpPct>35&&p.tR>0.35&&(p.stl>1.2||p.blk>0.8)&&p.pts<26;
+  const isFloorGeneral=p.ast>10&&p.pts<50&&(p.pos==="PG"||p.pos==="SG");
+  const isIsoScorer=(isGuard||isWing)&&p.pts>28&&p.ast<7&&p.tov>2;
   const isPointForward=(p.pos==="SF"||p.pos==="PF")&&p.ast>6&&p.reb>6&&p.pts<22;
-const isBucketGetter=isWing&&p.pts>24&&p.ast<6&&p.reb>=3;
+const isBucketGetter=(isGuard||isWing)&&p.pts>24&&p.ast<6&&p.reb>=3;
 const isStretchBig=isBig&&p.tR>0.32&&p.tpPct>34&&p.reb>9&&p.pts>22;
 const isWingScorer=isWing&&p.pts>22&&p.ast>=4&&p.reb>=4;
 const isScoringGuard=isGuard&&p.pts>26&&p.ast>=4;
