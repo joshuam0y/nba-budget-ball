@@ -249,8 +249,9 @@ function getArchetype(p){
   const isPaint=isBig&&p.reb>16&&p.tR<0.05;
   const isLockdown=p.stl>2.5&&(p.blk>1.0||p.pts<14);
   const is3D=p.tpPct>36&&p.tR>0.38&&(p.stl>1.5||p.blk>1.0)&&p.pts<24;
-  const isFloorGeneral=p.ast>11&&p.pts<50;
+  const isFloorGeneral=p.ast>8&&p.pts<50&&(p.pos==="PG"||p.pos==="SG"||p.pos==="SF");
   const isIsoScorer=isGuard&&p.pts>36&&p.ast<12;
+  const isPointForward=(p.pos==="SF"||p.pos==="PF")&&p.ast>6&&p.reb>6&&p.pts<22;
 const isBucketGetter=isWing&&p.pts>24&&p.ast<6&&p.reb>=3;
 const isStretchBig=isBig&&p.tR>0.32&&p.tpPct>34&&p.reb>9&&p.pts>22;
 const isWingScorer=isWing&&p.pts>22&&p.ast>=4&&p.reb>=4;
@@ -264,6 +265,7 @@ const isGlass=isBig&&p.reb>13&&p.blk<2.5&&p.pts<38;
   if(isPaint)return{label:"PAINT MONSTER",color:"#4ade80",id:"paint"};
   if(isLockdown)return{label:"LOCKDOWN",color:"#f87171",id:"lockdown"};
   if(is3D)return{label:"3&D",color:"#34d399",id:"threeD"};
+  if(isPointForward)return{label:"POINT FORWARD",color:"#34d399",id:"pointForward"};
   if(isFloorGeneral)return{label:"FLOOR GENERAL",color:"#fbbf24",id:"fg"};
  if(isIsoScorer)return{label:"ISO SCORER",color:"#fb923c",id:"iso"};
 if(isScoringGuard)return{label:"SCORING GUARD",color:"#a78bfa",id:"scoringGuard"};
