@@ -783,7 +783,33 @@ const newSeason=()=>{
   getTopPicks().then(setTopPicks);
 };
 
-
+if(phase==="teamSetup") return(
+  <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+    <div style={{maxWidth:400,width:"100%",textAlign:"center"}}>
+      <div style={{fontSize:48,marginBottom:12}}>🏀</div>
+      <h1 style={{margin:"0 0 6px",fontSize:28,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>NBA BUDGET BALL</h1>
+      <div style={{fontSize:12,color:"#475569",marginBottom:32}}>Name your franchise before hitting the court</div>
+      <div style={{background:"#0f172a",borderRadius:14,padding:24,border:"1px solid #1e293b"}}>
+        <div style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1,marginBottom:8}}>TEAM NAME</div>
+        <input
+          autoFocus
+          value={myTeamName}
+          onChange={e=>setMyTeamName(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&myTeamName.trim()&&setPhase("draft")}
+          maxLength={20}
+          placeholder="e.g. Hardwood Kings..."
+          style={{width:"100%",background:"#080f1e",border:"1px solid #334155",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#e2e8f0",outline:"none",boxSizing:"border-box",marginBottom:16,textAlign:"center"}}
+        />
+        <button
+          onClick={()=>myTeamName.trim()&&setPhase("draft")}
+          disabled={!myTeamName.trim()}
+          style={{width:"100%",background:myTeamName.trim()?"linear-gradient(135deg,#f59e0b,#d97706)":"#1e293b",color:myTeamName.trim()?"white":"#374151",border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:800,cursor:myTeamName.trim()?"pointer":"not-allowed"}}>
+          🏀 LET'S BUILD
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
   if(phase==="import") return(
     <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
