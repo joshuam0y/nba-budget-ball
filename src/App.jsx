@@ -619,7 +619,7 @@ const startSeason = async () => {
       const m = id==="pi1"?b.playIn[0]:id==="pi2"?b.playIn[1]:id==="pi3"?b.playIn[2]:
         id==="fr1"?b.firstRound[0]:id==="fr2"?b.firstRound[1]:id==="fr3"?b.firstRound[2]:id==="fr4"?b.firstRound[3]:
         id==="sf1"?b.semis[0]:id==="sf2"?b.semis[1]:b.finals;
-      if (m && !m.winner && !m.top?.isPlayer && !m.bot?.isPlayer) return id;
+      if (m && !m.winner && m.top && m.bot && !m.top.isPlayer && !m.bot.isPlayer) return id;
     }
     return null;
   }
