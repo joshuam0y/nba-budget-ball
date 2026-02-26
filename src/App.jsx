@@ -251,18 +251,18 @@ const isSwiss=p.pts>32&&p.ast>7&&p.reb>9&&p.fg>48;
 const isPmBig=isBig&&p.ast>5&&p.reb>9&&p.pts<48&&p.rating>55;
 const isRimProt=isBig&&((p.blk>2.5&&p.reb>10)||(p.blk>3.2&&p.reb>9));
 const isPaint=isBig&&p.reb>16&&p.tR<0.05;
-const isStretchBig=(isBig||isWing)&&p.tR>0.30&&p.tpPct>33&&p.reb>7&&p.pts>17&&p.rating>45;
+const isStretchBig=(isBig||isWing||isGuard)&&p.tR>0.30&&p.tpPct>33&&p.reb>5&&p.pts>17&&p.rating>44;
 const isMidrange=(isBig||isWing||isGuard)&&p.pts>18&&p.tR<0.28&&p.fg>44&&p.rating>46;
 const isGlass=isBig&&p.reb>11&&p.pts<28&&p.fg>48&&p.rating>40;
 
 // Wings/Forwards
-const isPointForward=(p.pos==="SF"||p.pos==="PF"||p.pos==="PG")&&p.ast>5&&p.reb>6&&p.pts<27&&p.rating>50;
+const isPointForward=(p.pos==="SF"||p.pos==="PF"||p.pos==="PG")&&p.ast>5&&p.reb>6&&p.pts<27&&p.rating>45;
 const isWingScorer=isWing&&p.pts>20&&p.ast>=3&&p.reb>=3&&p.rating>45;
 
 // Guards
 const isFloorGeneral=p.ast>11&&p.pts<50&&(p.pos==="PG"||p.pos==="SG")&&p.rating>50;
 const isIsoScorer=(isGuard||isWing||isBig)&&p.pts>26&&p.ast<6&&p.tov>2.0&&p.rating>52;
-const isScoringGuard=isGuard&&p.pts>20&&p.ast>=2&&p.rating>48;
+const isScoringGuard=isGuard&&p.pts>20&&p.ast>=2&&p.rating>45;
 const isBucketGetter=(isGuard||isWing)&&p.pts>22&&p.ast<7&&p.reb>=3&&p.fg>=48&&p.tov<=2.5&&p.rating>48;
 
 // Defense/Shooting
