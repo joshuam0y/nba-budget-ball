@@ -555,9 +555,11 @@ useEffect(() => {
   audioRef.current = audio;
 
   audio.addEventListener('ended', () => {
-    trackIndex.current = Math.floor(Math.random() * TRACKS.length);
-    playTrack(trackIndex.current);
-  });
+    let next;
+    do { next = Math.floor(Math.random() * TRACKS.length); } while(next === trackIndex.current);
+    trackIndex.current = next;
+    playTrack(next);
+});
 
   return () => { audio.pause(); audio.src = ''; };
 }, []);
@@ -565,8 +567,10 @@ useEffect(() => {
 const skipSong = (e) => {
   e?.stopPropagation();
   e?.preventDefault();
-  trackIndex.current = Math.floor(Math.random() * TRACKS.length);
-  playTrack(trackIndex.current);
+  let next;
+  do { next = Math.floor(Math.random() * TRACKS.length); } while(next === trackIndex.current);
+  trackIndex.current = next;
+  playTrack(next);
 };
 
 const handleFirstClick = useCallback(() => {
