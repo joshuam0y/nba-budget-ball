@@ -320,7 +320,7 @@ function BoxScore({stats,acc,label}){
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:700}}>
           <thead><tr style={{borderBottom:"1px solid #1e293b"}}>
-            {[["PLAYER","left"],["POS","c"],["PTS","c"],["AST","c"],["REB","c"],["STL","c"],["BLK","c"],["TOV","c"],["FGM-A","c"],["FG%","c"],["3PM-A","c"],["3P%","c"],["FTM-A","c"],["FT%","c"],["RTG","c"]].map(([h,a])=>(
+            {[["PLAYER","left"],["POS","c"],["PTS","c"],["REB","c"],["AST","c"],["STL","c"],["BLK","c"],["TOV","c"],["FGM-A","c"],["FG%","c"],["3PM-A","c"],["3P%","c"],["FTM-A","c"],["FT%","c"],["RTG","c"]].map(([h,a])=>(
               <th key={h} style={{padding:"5px 6px",textAlign:a==="c"?"center":"left",color:"#475569",fontWeight:700,fontSize:10,whiteSpace:"nowrap"}}>{h}</th>
             ))}
           </tr></thead>
@@ -330,8 +330,8 @@ function BoxScore({stats,acc,label}){
                 <td style={{padding:"5px 6px",fontWeight:700,whiteSpace:"nowrap"}}>{s.hotCold&&<span style={{marginRight:3}}>{s.hotCold}</span>}{s.name}{s.oop&&<span style={{marginLeft:4,fontSize:9,background:"#78350f",color:"#fbbf24",borderRadius:3,padding:"1px 3px"}}>OOP</span>}</td>
                 <td style={{textAlign:"center",color:"#64748b"}}>{s.pos}</td>
                 <td style={{textAlign:"center",background:cellBg("pts",s.pts),fontWeight:700,padding:"5px 4px"}}>{s.pts}</td>
-                <td style={{textAlign:"center",background:cellBg("ast",s.ast),padding:"5px 4px"}}>{s.ast}</td>
                 <td style={{textAlign:"center",background:cellBg("reb",s.reb),padding:"5px 4px"}}>{s.reb}</td>
+                <td style={{textAlign:"center",background:cellBg("ast",s.ast),padding:"5px 4px"}}>{s.ast}</td>
                 <td style={{textAlign:"center",background:cellBg("stl",s.stl),padding:"5px 4px"}}>{s.stl}</td>
                 <td style={{textAlign:"center",background:cellBg("blk",s.blk),padding:"5px 4px"}}>{s.blk}</td>
                 <td style={{textAlign:"center",background:cellBg("tov",s.tov),padding:"5px 4px"}}>{s.tov}</td>
@@ -540,7 +540,7 @@ const audioRef = useRef(null);
 const trackIndex = useRef(0);
 const hasStarted = useRef(false);
 
-const TRACKS = ['cold.mp3', 'outstanding.mp3', 'amazing.mp3'];
+const TRACKS = ['cold.mp3', 'outstanding.mp3', 'amazing.mp3', 'bestfriend.mp3', 'baddecisions.mp3'];
 
 const playTrack = useRef((index) => {
   const audio = audioRef.current;
@@ -844,7 +844,7 @@ const skipBtn = (
             <div style={{padding:"8px 12px",background:"#1e293b",fontWeight:800,fontSize:10,letterSpacing:2,color:"#60a5fa"}}>SEASON AVERAGES</div>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
               <thead><tr style={{borderBottom:"1px solid #1e293b"}}>
-                {[["PLAYER","left"],["GP","c"],["PPG","c"],["APG","c"],["RPG","c"],["SPG","c"],["BPG","c"],["TPG","c"],["FG%","c"],["3P%","c"],["FT%","c"]].map(([h,a])=>(
+                {[["PLAYER","left"],["GP","c"],["PPG","c"],["RPG","c"],["APG","c"],["SPG","c"],["BPG","c"],["TPG","c"],["FG%","c"],["3P%","c"],["FT%","c"]].map(([h,a])=>(
                   <th key={h} style={{padding:"6px 8px",textAlign:a==="c"?"center":"left",color:"#475569",fontSize:10}}>{h}</th>
                 ))}
               </tr></thead>
@@ -854,8 +854,8 @@ const skipBtn = (
                     <td style={{padding:"6px 8px",fontWeight:700}}>{i===0?"🏅 ":""}{s.name}</td>
                     <td style={{textAlign:"center",color:"#64748b"}}>{s.gp}</td>
                     <td style={{textAlign:"center",background:cellBg("pts",s.ppg*1.5),padding:"5px 4px",fontWeight:700}}>{s.ppg}</td>
-                    <td style={{textAlign:"center",background:cellBg("ast",s.apg*1.5),padding:"5px 4px"}}>{s.apg}</td>
                     <td style={{textAlign:"center",background:cellBg("reb",s.rpg*1.5),padding:"5px 4px"}}>{s.rpg}</td>
+                    <td style={{textAlign:"center",background:cellBg("ast",s.apg*1.5),padding:"5px 4px"}}>{s.apg}</td>
                     <td style={{textAlign:"center",background:cellBg("stl",s.spg*2),padding:"5px 4px"}}>{s.spg}</td>
                     <td style={{textAlign:"center",background:cellBg("blk",s.bpg*2),padding:"5px 4px"}}>{s.bpg}</td>
                     <td style={{textAlign:"center",background:cellBg("tov",s.tpg*1.5),padding:"5px 4px"}}>{s.tpg}</td>
