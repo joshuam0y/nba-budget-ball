@@ -270,31 +270,82 @@ const NBA_TEAMS_META = getNBATeamsWithMeta();
 
 function buildNBASchedule() {
   const n = NUM_TEAMS;
-  const schedule = Array.from({ length: n }, () => []);
-  const divTeams = {};
-  const confTeams = {};
+  const divTeamsMap = {};
+  const confTeamsMap = {};
   for (const t of NBA_TEAMS_META) {
-    if (!divTeams[t.division]) divTeams[t.division] = [];
-    divTeams[t.division].push(t.index);
-    if (!confTeams[t.conference]) confTeams[t.conference] = [];
-    confTeams[t.conference].push(t.index);
+    if (!divTeamsMap[t.division]) divTeamsMap[t.division] = [];
+    divTeamsMap[t.division].push(t.index);
+    if (!confTeamsMap[t.conference]) confTeamsMap[t.conference] = [];
+    confTeamsMap[t.conference].push(t.index);
   }
+
+  // Symmetric game-count matrix: gameCounts[i][j] = games team i plays vs team j
+  const gameCounts = Array.from({ length: n }, () => new Array(n).fill(0));
+
+  // Division rivals: 4 games each (symmetric)
+  for (const teams of Object.values(divTeamsMap)) {
+    for (let a = 0; a < teams.length; a++) {
+      for (let b = a + 1; b < teams.length; b++) {
+        gameCounts[teams[a]][teams[b]] = 4;
+        gameCounts[teams[b]][teams[a]] = 4;
+      }
+    }
+  }
+
+  // Opposite conference: 2 games each (symmetric)
   for (let i = 0; i < n; i++) {
-    const meta = NBA_TEAMS_META[i];
-    const sameDiv = divTeams[meta.division].filter((x) => x !== i);
-    const sameConfOther = confTeams[meta.conference].filter(
-      (x) => x !== i && !sameDiv.includes(x)
-    );
-    const otherConf = NBA_TEAMS_META.filter(
-      (t) => t.conference !== meta.conference
-    ).map((t) => t.index);
-    const fourGame = sameConfOther.slice(0, 6);
-    const threeGame = sameConfOther.slice(6, 10);
+    for (let j = i + 1; j < n; j++) {
+      if (NBA_TEAMS_META[i].conference !== NBA_TEAMS_META[j].conference) {
+        gameCounts[i][j] = 2;
+        gameCounts[j][i] = 2;
+      }
+    }
+  }
+
+  // Same conference, different division: 3 or 4 games (symmetric, guaranteed correct)
+  // Key insight: each team needs exactly 3 four-game opponents from EACH of the other 2 divisions
+  // (3+3=6 total four-game, 2+2=4 total three-game non-div conf opponents)
+  // Construct via a 3-regular bipartite assignment using a circular shift mod 5 on randomly
+  // permuted division teams — this guarantees exact counts with no greedy failures.
+  for (const confIdx of Object.values(confTeamsMap)) {
+    const divisions = [...new Set(confIdx.map((i) => NBA_TEAMS_META[i].division))];
+    for (let d1 = 0; d1 < divisions.length; d1++) {
+      for (let d2 = d1 + 1; d2 < divisions.length; d2++) {
+        // Randomly permute each division's team list independently
+        const teamsD1 = [...divTeamsMap[divisions[d1]]];
+        const teamsD2 = [...divTeamsMap[divisions[d2]]];
+        for (let k = teamsD1.length - 1; k > 0; k--) {
+          const r = Math.floor(Math.random() * (k + 1));
+          [teamsD1[k], teamsD1[r]] = [teamsD1[r], teamsD1[k]];
+        }
+        for (let k = teamsD2.length - 1; k > 0; k--) {
+          const r = Math.floor(Math.random() * (k + 1));
+          [teamsD2[k], teamsD2[r]] = [teamsD2[r], teamsD2[k]];
+        }
+        // teamsD1[i] plays 4 games vs teamsD2 at offsets 0,1,2 (mod 5) → 3 four-game opponents
+        // and 3 games vs teamsD2 at offsets 3,4 (mod 5) → 2 three-game opponents
+        const m = teamsD1.length; // always 5
+        for (let i = 0; i < m; i++) {
+          for (let j = 0; j < m; j++) {
+            const a = teamsD1[i], b = teamsD2[j];
+            const games = (j - i + m) % m < 3 ? 4 : 3;
+            gameCounts[a][b] = games;
+            gameCounts[b][a] = games;
+          }
+        }
+      }
+    }
+  }
+
+  // Build schedule arrays from the symmetric gameCounts matrix
+  const schedule = Array.from({ length: n }, () => []);
+  for (let i = 0; i < n; i++) {
     const opponents = [];
-    sameDiv.forEach((j) => { for (let k = 0; k < 4; k++) opponents.push(j); });
-    fourGame.forEach((j) => { for (let k = 0; k < 4; k++) opponents.push(j); });
-    threeGame.forEach((j) => { for (let k = 0; k < 3; k++) opponents.push(j); });
-    otherConf.forEach((j) => { for (let k = 0; k < 2; k++) opponents.push(j); });
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      for (let k = 0; k < gameCounts[i][j]; k++) opponents.push(j);
+    }
+    // Shuffle game order
     for (let k = opponents.length - 1; k > 0; k--) {
       const r = Math.floor(Math.random() * (k + 1));
       [opponents[k], opponents[r]] = [opponents[r], opponents[k]];
