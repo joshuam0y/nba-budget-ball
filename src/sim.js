@@ -3,7 +3,33 @@
 
 export const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 export const BUDGET = 140;
-export const SEASON_LENGTH = 11;
+export const SEASON_LENGTH = 82;
+export const POOL_SIZE = 150;
+export const NUM_TEAMS = 30;
+
+export const NBA_DIVISIONS = {
+  Atlantic: ["Boston Celtics", "Toronto Raptors", "Philadelphia 76ers", "Brooklyn Nets", "New York Knicks"],
+  Central: ["Milwaukee Bucks", "Cleveland Cavaliers", "Indiana Pacers", "Chicago Bulls", "Detroit Pistons"],
+  Southeast: ["Miami Heat", "Atlanta Hawks", "Washington Wizards", "Orlando Magic", "Charlotte Hornets"],
+  Northwest: ["Oklahoma City Thunder", "Denver Nuggets", "Minnesota Timberwolves", "Utah Jazz", "Portland Trail Blazers"],
+  Pacific: ["Los Angeles Lakers", "Phoenix Suns", "Sacramento Kings", "Golden State Warriors", "Los Angeles Clippers"],
+  Southwest: ["Dallas Mavericks", "Memphis Grizzlies", "New Orleans Pelicans", "San Antonio Spurs", "Houston Rockets"],
+};
+export const NBA_CONFERENCE_BY_DIVISION = {
+  Atlantic: "East", Central: "East", Southeast: "East",
+  Northwest: "West", Pacific: "West", Southwest: "West",
+};
+export function getNBATeamsWithMeta() {
+  const teams = [];
+  let idx = 0;
+  for (const [div, names] of Object.entries(NBA_DIVISIONS)) {
+    const conf = NBA_CONFERENCE_BY_DIVISION[div];
+    for (const name of names) {
+      teams.push({ name, division: div, conference: conf, index: idx++ });
+    }
+  }
+  return teams;
+}
 
 export function rf(n, d = 1) {
   return parseFloat((+n).toFixed(d));
@@ -90,10 +116,11 @@ export function processCSV(text) {
     console.error("No players parsed. Headers:", headers);
     return null;
   }
-  console.log(`✓ Parsed ${players.length} players. Sample:`, players[0]);
+  const sorted = [...players].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  // Full pool for drafting; league uses 150 unique (your 5 + 145 AI) at season start
+  console.log(`✓ Pool: ${sorted.length} players available for draft. League uses ${POOL_SIZE} unique.`);
 
-  // Precompute archetype on load so UI doesn't recompute it everywhere.
-  const withIdsAndArch = players.map((p, i) => {
+  const withIdsAndArch = sorted.map((p, i) => {
     const archetype = getArchetype(p);
     return { ...p, id: i + 1, archetype };
   });
@@ -239,37 +266,81 @@ export function generateRivalLineup(myLineup, pool, excludeIds) {
   return team;
 }
 
-const TEAM_NAMES = [
-  "The Big Bad Wolf",
-  "Bucket Getters",
-  "Paint Beasts",
-  "Corner Killers",
-  "Iso Kings",
-  "Glass Eaters",
-  "Dime Dealers",
-  "Lock Legends",
-  "Splash Bros",
-  "Hardwood Wolves",
-  "Night Shift",
-];
+const NBA_TEAMS_META = getNBATeamsWithMeta();
 
-export function generateLeague(myLineup, pool) {
+function buildNBASchedule() {
+  const n = NUM_TEAMS;
+  const schedule = Array.from({ length: n }, () => []);
+  const divTeams = {};
+  const confTeams = {};
+  for (const t of NBA_TEAMS_META) {
+    if (!divTeams[t.division]) divTeams[t.division] = [];
+    divTeams[t.division].push(t.index);
+    if (!confTeams[t.conference]) confTeams[t.conference] = [];
+    confTeams[t.conference].push(t.index);
+  }
+  for (let i = 0; i < n; i++) {
+    const meta = NBA_TEAMS_META[i];
+    const sameDiv = divTeams[meta.division].filter((x) => x !== i);
+    const sameConfOther = confTeams[meta.conference].filter(
+      (x) => x !== i && !sameDiv.includes(x)
+    );
+    const otherConf = NBA_TEAMS_META.filter(
+      (t) => t.conference !== meta.conference
+    ).map((t) => t.index);
+    const fourGame = sameConfOther.slice(0, 6);
+    const threeGame = sameConfOther.slice(6, 10);
+    const opponents = [];
+    sameDiv.forEach((j) => { for (let k = 0; k < 4; k++) opponents.push(j); });
+    fourGame.forEach((j) => { for (let k = 0; k < 4; k++) opponents.push(j); });
+    threeGame.forEach((j) => { for (let k = 0; k < 3; k++) opponents.push(j); });
+    otherConf.forEach((j) => { for (let k = 0; k < 2; k++) opponents.push(j); });
+    for (let k = opponents.length - 1; k > 0; k--) {
+      const r = Math.floor(Math.random() * (k + 1));
+      [opponents[k], opponents[r]] = [opponents[r], opponents[k]];
+    }
+    schedule[i] = opponents;
+  }
+  return schedule;
+}
+
+export function buildSeasonSchedule() {
+  return buildNBASchedule();
+}
+
+export function generateLeague(myLineup, pool, userTeamName) {
   const usedIds = new Set(myLineup.map((x) => x.player.id));
   const teams = [];
-  for (let i = 0; i < 11; i++) {
-    const lineup =
-      i === 0
-        ? generateRivalLineup(myLineup, pool, usedIds)
-        : genLineup(usedIds, pool);
+  for (let i = 0; i < NUM_TEAMS - 1; i++) {
+    const meta = NBA_TEAMS_META[i];
+    const lineup = genLineup(usedIds, pool);
     lineup.forEach((x) => usedIds.add(x.player.id));
     teams.push({
-      name: TEAM_NAMES[i],
+      name: meta.name,
+      division: meta.division,
+      conference: meta.conference,
+      index: meta.index,
       lineup,
       w: 0,
       l: 0,
       eff: rf(teamEff(lineup, null), 1),
+      gameLog: [],
+      isPlayer: false,
     });
   }
+  const userMeta = NBA_TEAMS_META[NUM_TEAMS - 1];
+  teams.push({
+    name: userTeamName || userMeta.name,
+    division: userMeta.division,
+    conference: userMeta.conference,
+    index: NUM_TEAMS - 1,
+    lineup: myLineup,
+    w: 0,
+    l: 0,
+    eff: rf(teamEff(myLineup, null), 1),
+    gameLog: [],
+    isPlayer: true,
+  });
   return teams;
 }
 
@@ -596,27 +667,38 @@ export function emptySeason() {
   };
 }
 
-export function simLeagueGames(aiTeams, tr) {
-  const records = aiTeams.map((t) => ({ ...t, w: 0, l: 0, gameLog: [] }));
-  const n = records.length;
-  const results = {};
-  for (let i = 0; i < n; i++)
-    for (let j = i + 1; j < n; j++)
-      results[`${i}-${j}`] = quickSim(
-        records[i].lineup,
-        records[j].lineup,
-        tr
-      );
+export function simLeagueGames(teams, schedule, tr) {
+  const n = teams.length;
+  const records = teams.map((t) => ({ ...t, w: 0, l: 0, gameLog: Array(SEASON_LENGTH).fill(null) }));
+  const USER_INDEX = NUM_TEAMS - 1;
+  const pairGames = {};
   for (let i = 0; i < n; i++) {
-    const opps = [...Array(n).keys()].filter((x) => x !== i);
-    for (let k = opps.length - 1; k > 0; k--) {
-      const r = Math.floor(Math.random() * (k + 1));
-      [opps[k], opps[r]] = [opps[r], opps[k]];
-    }
-    records[i].gameLog = opps.map((j) => {
+    for (let g = 0; g < SEASON_LENGTH; g++) {
+      const j = schedule[i][g];
+      if (i === USER_INDEX || j === USER_INDEX) continue;
       const key = i < j ? `${i}-${j}` : `${j}-${i}`;
-      return i < j ? (results[key] === 0 ? 1 : 0) : results[key] === 1 ? 1 : 0;
-    });
+      if (!pairGames[key]) pairGames[key] = { low: Math.min(i, j), high: Math.max(i, j), pairs: [] };
+      if (i < j) {
+        pairGames[key].pairs.push({ lowG: g, highG: -1 });
+      } else {
+        const first = pairGames[key].pairs.findIndex((p) => p.highG === -1);
+        if (first >= 0) pairGames[key].pairs[first].highG = g;
+      }
+    }
+  }
+  for (const key of Object.keys(pairGames)) {
+    const { low, high, pairs } = pairGames[key];
+    for (const { lowG, highG } of pairs) {
+      if (highG < 0) continue;
+      const result = quickSim(records[low].lineup, records[high].lineup, tr);
+      records[low].gameLog[lowG] = result === 0 ? 1 : 0;
+      records[high].gameLog[highG] = result === 1 ? 1 : 0;
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    if (i === USER_INDEX) continue;
+    records[i].w = records[i].gameLog.filter((x) => x === 1).length;
+    records[i].l = records[i].gameLog.filter((x) => x === 0).length;
   }
   return records;
 }

@@ -7,16 +7,18 @@ import {
   POSITIONS,
   BUDGET,
   SEASON_LENGTH,
+  NUM_TEAMS,
   rf,
   processCSV,
   chemBoost,
   posMult,
   teamEff,
+  buildSeasonSchedule,
   generateLeague,
+  getNBATeamsWithMeta,
   simulate,
   quickSim,
   simLeagueGames,
-  getAiRecordsAtGame,
   getTier,
   cellBg,
   getArchetype,
@@ -232,108 +234,151 @@ function StandingsTable({aiTeams,myRecord,myName,highlight}){
           })}
         </tbody>
       </table>
-      <div style={{padding:"6px 12px",borderTop:"2px dashed #1e293b",fontSize:9,color:"#22c55e"}}>▲ Top 6 direct · 7-10 play-in tournament</div>
+      <div style={{padding:"6px 12px",borderTop:"2px dashed #1e293b",fontSize:9,color:"#22c55e"}}>▲ Per conference: top 6 direct · 7-10 play-in</div>
     </div>
   );
 }
 
-function buildBracket(seeds){
-  return{
-    playIn:[
-      {id:"pi1",top:seeds[6],bot:seeds[7],winner:null,games:[],label:"7 vs 8 — winner gets 7 seed"},
-      {id:"pi2",top:seeds[8],bot:seeds[9],winner:null,games:[],label:"9 vs 10 — loser eliminated"},
-      {id:"pi3",top:null,bot:null,winner:null,games:[],label:"Loser(7v8) vs Winner(9v10) — 8 seed"},
+const EAST_DIVISIONS = ["Atlantic", "Central", "Southeast"];
+const WEST_DIVISIONS = ["Northwest", "Pacific", "Southwest"];
+
+function seedConference(teams, divisions) {
+  const byDiv = {};
+  divisions.forEach((d) => (byDiv[d] = teams.filter((t) => t.division === d)));
+  const divWinners = divisions.map((d) => {
+    const arr = byDiv[d].sort((a, b) => b.w - a.w || (b.eff - a.eff));
+    return arr[0];
+  }).filter(Boolean).sort((a, b) => b.w - a.w || (b.eff - a.eff));
+  const rest = teams.filter((t) => !divWinners.includes(t)).sort((a, b) => b.w - a.w || (b.eff - a.eff));
+  const seeds = [...divWinners, ...rest.slice(0, 7)];
+  return seeds.slice(0, 10);
+}
+
+function buildBracket(seeds) {
+  return {
+    playIn: [
+      { id: "pi1", top: seeds[6], bot: seeds[7], winner: null, games: [], label: "7 vs 8 — winner gets 7 seed" },
+      { id: "pi2", top: seeds[8], bot: seeds[9], winner: null, games: [], label: "9 vs 10 — loser eliminated" },
+      { id: "pi3", top: null, bot: null, winner: null, games: [], label: "Loser(7v8) vs Winner(9v10) — 8 seed" },
     ],
-    firstRound:[
-      {id:"fr1",top:seeds[0],bot:null,winner:null,games:[],label:"(1) vs (8)"},
-      {id:"fr2",top:seeds[1],bot:null,winner:null,games:[],label:"(2) vs (7)"},
-      {id:"fr3",top:seeds[2],bot:seeds[5],winner:null,games:[],label:"(3) vs (6)"},
-      {id:"fr4",top:seeds[3],bot:seeds[4],winner:null,games:[],label:"(4) vs (5)"},
+    firstRound: [
+      { id: "fr1", top: seeds[0], bot: null, winner: null, games: [], label: "(1) vs (8)" },
+      { id: "fr2", top: seeds[1], bot: null, winner: null, games: [], label: "(2) vs (7)" },
+      { id: "fr3", top: seeds[2], bot: seeds[5], winner: null, games: [], label: "(3) vs (6)" },
+      { id: "fr4", top: seeds[3], bot: seeds[4], winner: null, games: [], label: "(4) vs (5)" },
     ],
-    semis:[
-      {id:"sf1",top:null,bot:null,winner:null,games:[],label:"W(1v8) vs W(4v5)"},
-      {id:"sf2",top:null,bot:null,winner:null,games:[],label:"W(2v7) vs W(3v6)"},
+    semis: [
+      { id: "sf1", top: null, bot: null, winner: null, games: [], label: "W(1v8) vs W(4v5)" },
+      { id: "sf2", top: null, bot: null, winner: null, games: [], label: "W(2v7) vs W(3v6)" },
     ],
-    finals:{id:"f1",top:null,bot:null,winner:null,games:[],label:"FINALS"},
-    champion:null,
+    finals: { id: "f1", top: null, bot: null, winner: null, games: [], label: "CONFERENCE FINALS" },
+    champion: null,
   };
 }
 
-function BracketDisplay({bracket,onPlayMatch}){
-  const{playIn,firstRound,semis,finals,champion}=bracket;
-  const MatchupCard=({matchup,onPlay,isActive})=>{
-    const{top,bot,winner,games,label}=matchup;
-    const wA=games.filter(g=>g.winnerIdx===0).length,wB=games.filter(g=>g.winnerIdx===1).length,done=!!winner;
-    return(
-      <div style={{background:"#0f172a",border:`1px solid ${done?"#22c55e":isActive?"#6366f1":"#1e293b"}`,borderRadius:10,padding:10,minWidth:190}}>
-        <div style={{fontSize:9,color:"#475569",letterSpacing:1,marginBottom:6,fontWeight:700}}>{label}</div>
-        {[top,bot].map((team,ti)=>{
-          const isW=winner?.name===team?.name,wins=ti===0?wA:wB;
-          return team?(
-            <div key={ti} style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,padding:"5px 8px",borderRadius:6,background:isW?"#14532d":done&&!isW?"#1a0a0a":"#1e293b",border:`1px solid ${isW?"#22c55e":done&&!isW?"#3f0d0d":"#334155"}`}}>
-              <div style={{flex:1,fontSize:11,fontWeight:800,color:team.isPlayer?"#60a5fa":"#e2e8f0"}}>{team.isPlayer?"🌟 ":""}{team.name}</div>
-              {games.length>0&&<div style={{fontSize:12,fontWeight:900,color:isW?"#22c55e":"#94a3b8"}}>{wins}</div>}
-              {isW&&<span style={{fontSize:10}}>✓</span>}
-            </div>
-          ):(
-            <div key={ti} style={{marginBottom:4,padding:"5px 8px",borderRadius:6,background:"#0a0a0f",border:"1px dashed #1e293b"}}>
-              <div style={{fontSize:10,color:"#334155",fontStyle:"italic"}}>TBD</div>
-            </div>
-          );
-        })}
-        {isActive&&!done&&top&&bot&&(
-          <button onClick={onPlay} style={{width:"100%",marginTop:6,background:top?.isPlayer||bot?.isPlayer?"linear-gradient(135deg,#6366f1,#8b5cf6)":"linear-gradient(135deg,#475569,#334155)",color:"white",border:"none",borderRadius:6,padding:"6px",fontSize:11,fontWeight:800,cursor:"pointer"}}>
-            {top?.isPlayer||bot?.isPlayer?`▶ PLAY GAME ${games.length+1}`:`⚡ SIM GAME ${games.length+1}`}
-          </button>
-        )}
-        {done&&<div style={{textAlign:"center",fontSize:10,color:"#22c55e",marginTop:4,fontWeight:700}}>✓ DONE</div>}
-      </div>
-    );
-  };
-  const pi1done=!!playIn[0].winner,pi2done=!!playIn[1].winner,pi3done=!!playIn[2].winner,playInDone=pi1done&&pi2done&&pi3done;
-  const fr1done=!!firstRound[0].winner,fr2done=!!firstRound[1].winner,fr3done=!!firstRound[2].winner,fr4done=!!firstRound[3].winner;
-  const sf1done=!!semis[0].winner,sf2done=!!semis[1].winner,fdone=!!finals.winner;
-  const activeMatch=!pi1done?"pi1":!pi2done?"pi2":!pi3done?"pi3":!fdone?"f1":null;
-  return(
-    <div style={{background:"#080f1e",borderRadius:14,padding:14,border:"1px solid #1e293b"}}>
-      <div style={{fontWeight:900,fontSize:13,color:"#f59e0b",letterSpacing:2,marginBottom:12,textAlign:"center"}}>🏀 PLAYOFF BRACKET</div>
-      <div style={{marginBottom:12,background:"#0a0f1a",borderRadius:10,padding:10,border:"1px solid #f59e0b44"}}>
-        <div style={{fontSize:9,color:"#f59e0b",fontWeight:800,letterSpacing:2,marginBottom:8,textAlign:"center"}}>🎟 PLAY-IN TOURNAMENT</div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
-          <MatchupCard matchup={playIn[0]} isActive={activeMatch==="pi1"} onPlay={()=>onPlayMatch("pi1")}/>
-          <MatchupCard matchup={playIn[1]} isActive={activeMatch==="pi2"} onPlay={()=>onPlayMatch("pi2")}/>
-          <MatchupCard matchup={playIn[2]} isActive={activeMatch==="pi3"} onPlay={()=>onPlayMatch("pi3")}/>
+function MatchupCard({ matchup, onPlay, isActive, onPlayMatch }) {
+  const { top, bot, winner, games, label } = matchup;
+  const wA = games.filter((g) => g.winnerIdx === 0).length, wB = games.filter((g) => g.winnerIdx === 1).length, done = !!winner;
+  return (
+    <div style={{ background: "#0f172a", border: `1px solid ${done ? "#22c55e" : isActive ? "#6366f1" : "#1e293b"}`, borderRadius: 10, padding: 10, minWidth: 190 }}>
+      <div style={{ fontSize: 9, color: "#475569", letterSpacing: 1, marginBottom: 6, fontWeight: 700 }}>{label}</div>
+      {[top, bot].map((team, ti) => {
+        const isW = winner?.name === team?.name, wins = ti === 0 ? wA : wB;
+        return team ? (
+          <div key={ti} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, padding: "5px 8px", borderRadius: 6, background: isW ? "#14532d" : done && !isW ? "#1a0a0a" : "#1e293b", border: `1px solid ${isW ? "#22c55e" : done && !isW ? "#3f0d0d" : "#334155"}` }}>
+            <div style={{ flex: 1, fontSize: 11, fontWeight: 800, color: team.isPlayer ? "#60a5fa" : "#e2e8f0" }}>{team.isPlayer ? "🌟 " : ""}{team.name}</div>
+            {games.length > 0 && <div style={{ fontSize: 12, fontWeight: 900, color: isW ? "#22c55e" : "#94a3b8" }}>{wins}</div>}
+            {isW && <span style={{ fontSize: 10 }}>✓</span>}
+          </div>
+        ) : (
+          <div key={ti} style={{ marginBottom: 4, padding: "5px 8px", borderRadius: 6, background: "#0a0a0f", border: "1px dashed #1e293b" }}>
+            <div style={{ fontSize: 10, color: "#334155", fontStyle: "italic" }}>TBD</div>
+          </div>
+        );
+      })}
+      {isActive && !done && top && bot && onPlay && (
+        <button onClick={onPlay} style={{ width: "100%", marginTop: 6, background: top?.isPlayer || bot?.isPlayer ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "linear-gradient(135deg,#475569,#334155)", color: "white", border: "none", borderRadius: 6, padding: "6px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>
+          {top?.isPlayer || bot?.isPlayer ? `▶ PLAY GAME ${games.length + 1}` : `⚡ SIM GAME ${games.length + 1}`}
+        </button>
+      )}
+      {done && <div style={{ textAlign: "center", fontSize: 10, color: "#22c55e", marginTop: 4, fontWeight: 700 }}>✓ DONE</div>}
+    </div>
+  );
+}
+
+function ConfBracketSection({ sub, confLabel, prefix, onPlayMatch, activeMatchId }) {
+  if (!sub || !sub.playIn) return null;
+  const { playIn, firstRound, semis, finals } = sub;
+  const pi1done = !!playIn[0].winner, pi2done = !!playIn[1].winner, pi3done = !!playIn[2].winner, playInDone = pi1done && pi2done && pi3done;
+  const fr1done = !!firstRound[0].winner, fr2done = !!firstRound[1].winner, fr3done = !!firstRound[2].winner, fr4done = !!firstRound[3].winner;
+  const sf1done = !!semis[0].winner, sf2done = !!semis[1].winner, fdone = !!finals.winner;
+  const pre = (s) => (s === "f1" ? `${prefix}f` : `${prefix}${s}`);
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontWeight: 800, fontSize: 12, color: confLabel === "EAST" ? "#3b82f6" : "#f59e0b", letterSpacing: 2, marginBottom: 8, textAlign: "center" }}>{confLabel} CONFERENCE</div>
+      <div style={{ marginBottom: 10, background: "#0a0f1a", borderRadius: 10, padding: 10, border: "1px solid #1e293b" }}>
+        <div style={{ fontSize: 9, color: "#f59e0b", fontWeight: 800, letterSpacing: 2, marginBottom: 8, textAlign: "center" }}>🎟 PLAY-IN</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+          <MatchupCard matchup={playIn[0]} isActive={activeMatchId === pre("pi1")} onPlay={() => onPlayMatch(pre("pi1"))} />
+          <MatchupCard matchup={playIn[1]} isActive={activeMatchId === pre("pi2")} onPlay={() => onPlayMatch(pre("pi2"))} />
+          <MatchupCard matchup={playIn[2]} isActive={activeMatchId === pre("pi3")} onPlay={() => onPlayMatch(pre("pi3"))} />
         </div>
       </div>
-      {playInDone&&(
-        <div style={{display:"grid",gridTemplateColumns:"1fr 16px 1fr 16px 1fr",gap:4,alignItems:"start"}}>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            <div style={{fontSize:9,color:"#475569",letterSpacing:1,textAlign:"center",marginBottom:4}}>FIRST ROUND</div>
-            <MatchupCard matchup={firstRound[0]} isActive={!fr1done} onPlay={()=>onPlayMatch("fr1")}/>
-            <MatchupCard matchup={firstRound[1]} isActive={!fr2done} onPlay={()=>onPlayMatch("fr2")}/>
-            <MatchupCard matchup={firstRound[2]} isActive={!fr3done} onPlay={()=>onPlayMatch("fr3")}/>
-            <MatchupCard matchup={firstRound[3]} isActive={!fr4done} onPlay={()=>onPlayMatch("fr4")}/>
+      {playInDone && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 12px 1fr 12px 1fr", gap: 4, alignItems: "start" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontSize: 9, color: "#475569", letterSpacing: 1, textAlign: "center", marginBottom: 4 }}>FIRST ROUND</div>
+            <MatchupCard matchup={firstRound[0]} isActive={activeMatchId === pre("fr1")} onPlay={() => onPlayMatch(pre("fr1"))} />
+            <MatchupCard matchup={firstRound[1]} isActive={activeMatchId === pre("fr2")} onPlay={() => onPlayMatch(pre("fr2"))} />
+            <MatchupCard matchup={firstRound[2]} isActive={activeMatchId === pre("fr3")} onPlay={() => onPlayMatch(pre("fr3"))} />
+            <MatchupCard matchup={firstRound[3]} isActive={activeMatchId === pre("fr4")} onPlay={() => onPlayMatch(pre("fr4"))} />
           </div>
-          <div style={{textAlign:"center",color:"#1e293b",fontSize:16,paddingTop:40}}>→</div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            <div style={{fontSize:9,color:"#475569",letterSpacing:1,textAlign:"center",marginBottom:4}}>SEMIFINALS</div>
-            <MatchupCard matchup={semis[0]} isActive={!sf1done} onPlay={()=>onPlayMatch("sf1")}/>
-            <MatchupCard matchup={semis[1]} isActive={!sf2done} onPlay={()=>onPlayMatch("sf2")}/>
+          <div style={{ textAlign: "center", color: "#1e293b", fontSize: 14, paddingTop: 30 }}>→</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontSize: 9, color: "#475569", letterSpacing: 1, textAlign: "center", marginBottom: 4 }}>SEMIFINALS</div>
+            <MatchupCard matchup={semis[0]} isActive={activeMatchId === pre("sf1")} onPlay={() => onPlayMatch(pre("sf1"))} />
+            <MatchupCard matchup={semis[1]} isActive={activeMatchId === pre("sf2")} onPlay={() => onPlayMatch(pre("sf2"))} />
           </div>
-          <div style={{textAlign:"center",color:"#1e293b",fontSize:16,paddingTop:40}}>→</div>
+          <div style={{ textAlign: "center", color: "#1e293b", fontSize: 14, paddingTop: 30 }}>→</div>
           <div>
-            <div style={{fontSize:9,color:"#f59e0b",letterSpacing:1,textAlign:"center",marginBottom:4}}>🏆 FINALS</div>
-            <MatchupCard matchup={finals} isActive={!fdone} onPlay={()=>onPlayMatch("f1")}/>
-            {champion&&(
-              <div style={{marginTop:10,textAlign:"center",padding:"10px",background:"linear-gradient(135deg,#78350f,#92400e)",borderRadius:10,border:"2px solid #fbbf24"}}>
-                <div style={{fontSize:18}}>🏆</div>
-                <div style={{fontSize:11,color:"#fbbf24",fontWeight:900,letterSpacing:1}}>CHAMPION</div>
-                <div style={{fontSize:15,fontWeight:900,color:champion.isPlayer?"#60a5fa":"#e2e8f0"}}>{champion.isPlayer?"🌟 ":""}{champion.name}</div>
-              </div>
-            )}
+            <div style={{ fontSize: 9, color: "#f59e0b", letterSpacing: 1, textAlign: "center", marginBottom: 4 }}>CONF FINALS</div>
+            <MatchupCard matchup={finals} isActive={activeMatchId === pre("f")} onPlay={() => onPlayMatch(pre("f"))} />
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function BracketDisplay({ bracket, onPlayMatch, activeMatchId }) {
+  const champion = bracket.champion;
+  const hasConferences = bracket.east && bracket.west;
+  return (
+    <div style={{ background: "#080f1e", borderRadius: 14, padding: 14, border: "1px solid #1e293b" }}>
+      <div style={{ fontWeight: 900, fontSize: 13, color: "#f59e0b", letterSpacing: 2, marginBottom: 12, textAlign: "center" }}>🏀 PLAYOFF BRACKET</div>
+      {hasConferences ? (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+            <ConfBracketSection sub={bracket.east} confLabel="EAST" prefix="east-" onPlayMatch={onPlayMatch} activeMatchId={activeMatchId} />
+            <ConfBracketSection sub={bracket.west} confLabel="WEST" prefix="west-" onPlayMatch={onPlayMatch} activeMatchId={activeMatchId} />
+          </div>
+          {bracket.finals && (bracket.finals.top || bracket.finals.bot) && (
+            <div style={{ marginTop: 12, padding: 12, background: "#0a0f1a", borderRadius: 12, border: "2px solid #f59e0b" }}>
+              <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 800, letterSpacing: 2, marginBottom: 8, textAlign: "center" }}>🏆 FINALS</div>
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <MatchupCard matchup={bracket.finals} isActive={activeMatchId === "finals"} onPlay={() => onPlayMatch("finals")} />
+              </div>
+              {champion && (
+                <div style={{ marginTop: 10, textAlign: "center", padding: "10px", background: "linear-gradient(135deg,#78350f,#92400e)", borderRadius: 10, border: "2px solid #fbbf24" }}>
+                  <div style={{ fontSize: 18 }}>🏆</div>
+                  <div style={{ fontSize: 11, color: "#fbbf24", fontWeight: 900, letterSpacing: 1 }}>CHAMPION</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: champion.isPlayer ? "#60a5fa" : "#e2e8f0" }}>{champion.isPlayer ? "🌟 " : ""}{champion.name}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -347,7 +392,7 @@ export default function App(){
   const [roster,setRoster]=useState({PG:null,SG:null,SF:null,PF:null,C:null});
   const [slotSel,setSlotSel]=useState(null);
   const [aiTeams,setAiTeams]=useState([]);
-  const [schedIdx,setSchedIdx]=useState(0);
+  const [schedule,setSchedule]=useState(null);
   const [result,setResult]=useState(null);
   const [season,setSeason]=useState(emptySeason());
   const [gameNum,setGameNum]=useState(1);
@@ -670,69 +715,174 @@ const volumeSlider = (
 
 const startSeason = async () => {
   if(!full) return;
-  const teams=generateLeague(myLineup,playerPool),simmed=simLeagueGames(teams,teamRoster);
-  setAiTeams(simmed);setInSeason(true);setSeason(emptySeason());setGameNum(1);setSchedIdx(0);
-  setResult(null);setPhase("game");setBracket(null);setPlayoffResult(null);setElimInPlayoffs(false);
+  const sched = buildSeasonSchedule();
+  const teams = generateLeague(myLineup, playerPool, myTeamName);
+  const simmed = simLeagueGames(teams, sched, teamRoster);
+  setSchedule(sched);
+  setAiTeams(simmed.slice(0, NUM_TEAMS - 1));
+  setInSeason(true);
+  setSeason(emptySeason());
+  setGameNum(1);
+  setResult(null);
+  setPhase("game");
+  setBracket(null);
+  setPlayoffResult(null);
+  setElimInPlayoffs(false);
   await Promise.all(myLineup.map(({player})=>incrementPick(player.name)));
   getTopPicks().then(setTopPicks);
 };
 
-  const playGame=()=>{
-    if(!full||schedIdx>=aiTeams.length)return;
-    const opp=aiTeams[schedIdx];
-    const res=simulate(myLineup,opp.lineup,teamRoster,{difficulty});
-    const won=res.myScore>res.oppScore;
-    const uniqueStats=[...new Map(res.myStats.map(s=>[s.name,s])).values()];
-    setSeason(s=>addToSeason(s,uniqueStats,won,res.myScore,res.oppScore));
-    setAiTeams(teams=>teams.map((t,i)=>i===schedIdx?{...t,playerResult:won?'L':'W'}:t));
+  const getOppVsUserSlot = (oppIndex, userGameIndex) => {
+    if (!schedule) return -1;
+    const indices = [];
+    for (let g = 0; g < SEASON_LENGTH; g++) if (schedule[oppIndex][g] === NUM_TEAMS - 1) indices.push(g);
+    const count = schedule[29].slice(0, userGameIndex).filter((x) => x === oppIndex).length;
+    return indices[count] ?? -1;
+  };
+
+  const playGame = () => {
+    if (!full || !schedule || gameNum > SEASON_LENGTH) return;
+    const oppIndex = schedule[29][gameNum - 1];
+    const opp = aiTeams[oppIndex];
+    if (!opp) return;
+    const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty });
+    const won = res.myScore > res.oppScore;
+    const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
+    setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
+    const slot = getOppVsUserSlot(oppIndex, gameNum - 1);
+    setAiTeams((teams) =>
+      teams.map((t, i) => {
+        if (i !== oppIndex || slot < 0) return t;
+        const newLog = [...t.gameLog];
+        newLog[slot] = won ? 0 : 1;
+        const w = newLog.filter((x) => x === 1).length;
+        const l = newLog.filter((x) => x === 0).length;
+        return { ...t, gameLog: newLog, w, l };
+      })
+    );
     setResult(res);
   };
 
-  const nextGame=()=>{
-    if(gameNum>=SEASON_LENGTH){setPhase("seasonEnd");return;}
-    setGameNum(g=>g+1);setSchedIdx(i=>i+1);setResult(null);
+  const nextGame = () => {
+    if (gameNum >= SEASON_LENGTH) {
+      setPhase("seasonEnd");
+      return;
+    }
+    setGameNum((g) => g + 1);
+    setResult(null);
   };
 
-  const buildPlayoffBracket=(finalSeason,finalAi)=>{
-    const all=[
-      {name:myTeamName,w:finalSeason.w,l:SEASON_LENGTH-finalSeason.w,eff:myEffVal||0,lineup:myLineup,isPlayer:true},
-      ...finalAi.map(t=>({...t,isPlayer:false}))
-    ].sort((a,b)=>b.w-a.w||(b.eff-a.eff));
-    setBracket(buildBracket(all.slice(0,10).map((t,i)=>({...t,seed:i+1}))));
-    setPhase("playoffs");setPlayoffResult(null);setActiveMatchId(null);setElimInPlayoffs(false);
+  const simGames = (count) => {
+    if (!full || !schedule || gameNum > SEASON_LENGTH) return;
+    let newSeason = { ...season };
+    let newAi = aiTeams.map((t) => ({ ...t, gameLog: [...t.gameLog] }));
+    const toPlay = Math.min(count, SEASON_LENGTH - gameNum + 1);
+    for (let k = 0; k < toPlay; k++) {
+      const g = gameNum + k;
+      const oppIndex = schedule[29][g - 1];
+      const opp = newAi[oppIndex];
+      const result = quickSim(myLineup, opp.lineup, teamRoster);
+      const won = result === 0;
+      newSeason = addToSeason(newSeason, [], won, 0, 0);
+      const slot = (() => {
+        const indices = [];
+        for (let i = 0; i < SEASON_LENGTH; i++) if (schedule[oppIndex][i] === NUM_TEAMS - 1) indices.push(i);
+        const c = schedule[29].slice(0, g - 1).filter((x) => x === oppIndex).length;
+        return indices[c];
+      })();
+      if (slot != null) {
+        newAi[oppIndex].gameLog[slot] = won ? 0 : 1;
+        const gl = newAi[oppIndex].gameLog;
+        newAi[oppIndex].w = gl.filter((x) => x === 1).length;
+        newAi[oppIndex].l = gl.filter((x) => x === 0).length;
+      }
+    }
+    setSeason(newSeason);
+    setAiTeams(newAi);
+    const nextGameNum = Math.min(gameNum + toPlay, SEASON_LENGTH);
+    setGameNum(nextGameNum);
+    setResult(null);
+    if (gameNum + toPlay > SEASON_LENGTH) setPhase("seasonEnd");
   };
+
+  const buildPlayoffBracket = (finalSeason, finalAi) => {
+    const meta = getNBATeamsWithMeta();
+    const userMeta = meta[NUM_TEAMS - 1];
+    const userTeam = {
+      name: myTeamName,
+      w: finalSeason.w,
+      l: SEASON_LENGTH - finalSeason.w,
+      eff: myEffVal || 0,
+      lineup: myLineup,
+      isPlayer: true,
+      division: userMeta.division,
+      conference: userMeta.conference,
+    };
+    const all = [userTeam, ...finalAi.map((t) => ({ ...t, isPlayer: false }))];
+    const east = all.filter((t) => t.conference === "East");
+    const west = all.filter((t) => t.conference === "West");
+    const eastSeeds = seedConference(east, EAST_DIVISIONS);
+    const westSeeds = seedConference(west, WEST_DIVISIONS);
+    const eastBracket = buildBracket(eastSeeds);
+    const westBracket = buildBracket(westSeeds);
+    const finalsMatchup = { id: "finals", top: null, bot: null, winner: null, games: [], label: "FINALS" };
+    setBracket({
+      east: eastBracket,
+      west: westBracket,
+      finals: finalsMatchup,
+      champion: null,
+    });
+    setPhase("playoffs");
+    setPlayoffResult(null);
+    setActiveMatchId(null);
+    setElimInPlayoffs(false);
+  };
+
+  function getPlayoffMatchup(b, matchId) {
+    if (matchId === "finals") return { sub: b, matchup: b.finals, slot: "f1", conf: "finals" };
+    const [conf, slot] = matchId.split("-");
+    const sub = b[conf];
+    if (!sub) return null;
+    const slotMap = { pi1: sub.playIn?.[0], pi2: sub.playIn?.[1], pi3: sub.playIn?.[2], fr1: sub.firstRound?.[0], fr2: sub.firstRound?.[1], fr3: sub.firstRound?.[2], fr4: sub.firstRound?.[3], sf1: sub.semis?.[0], sf2: sub.semis?.[1], f: sub.finals };
+    const matchup = slotMap[slot];
+    return matchup ? { sub, matchup, slot: slot === "f" ? "f1" : slot, conf } : null;
+  }
 
   function runOnePlayoffGame(b, matchId, tr, lineup, diff) {
-    let matchup = matchId==="pi1"?b.playIn[0]:matchId==="pi2"?b.playIn[1]:matchId==="pi3"?b.playIn[2]:
-      matchId==="fr1"?b.firstRound[0]:matchId==="fr2"?b.firstRound[1]:matchId==="fr3"?b.firstRound[2]:matchId==="fr4"?b.firstRound[3]:
-      matchId==="sf1"?b.semis[0]:matchId==="sf2"?b.semis[1]:b.finals;
-    if(!matchup||matchup.winner) return { bracket: b, result: null, playerEliminated: false };
-    const topIsPlayer=matchup.top?.isPlayer, botIsPlayer=matchup.bot?.isPlayer;
-    let res=null, winnerIdx;
-    if(topIsPlayer||botIsPlayer){
-      const pTop=topIsPlayer;
-      res=simulate(lineup, pTop?matchup.bot.lineup:matchup.top.lineup, {...tr,_playoff:true}, {difficulty: diff});
-      winnerIdx=(res.myScore>res.oppScore)?(pTop?0:1):(pTop?1:0);
+    const parsed = getPlayoffMatchup(b, matchId);
+    if (!parsed) return { bracket: b, result: null, playerEliminated: false };
+    const { sub, matchup, slot, conf } = parsed;
+    if (!matchup || matchup.winner) return { bracket: b, result: null, playerEliminated: false };
+    const topIsPlayer = matchup.top?.isPlayer, botIsPlayer = matchup.bot?.isPlayer;
+    let res = null, winnerIdx;
+    if (topIsPlayer || botIsPlayer) {
+      const pTop = topIsPlayer;
+      res = simulate(lineup, pTop ? matchup.bot.lineup : matchup.top.lineup, { ...tr, _playoff: true }, { difficulty: diff });
+      winnerIdx = (res.myScore > res.oppScore) ? (pTop ? 0 : 1) : (pTop ? 1 : 0);
     } else {
-      winnerIdx=quickSim(matchup.top.lineup,matchup.bot.lineup,tr);
+      winnerIdx = quickSim(matchup.top.lineup, matchup.bot.lineup, tr);
     }
-    matchup.games.push({winnerIdx,myScore:res?.myScore,oppScore:res?.oppScore,res});
-    const wTop=matchup.games.filter(g=>g.winnerIdx===0).length, wBot=matchup.games.filter(g=>g.winnerIdx===1).length;
+    matchup.games.push({ winnerIdx, myScore: res?.myScore, oppScore: res?.oppScore, res });
+    const wTop = matchup.games.filter((g) => g.winnerIdx === 0).length, wBot = matchup.games.filter((g) => g.winnerIdx === 1).length;
     let playerEliminated = false;
-    if(wTop===1||wBot===1){
-      matchup.winner=wTop===1?matchup.top:matchup.bot;
-      const w=matchup.winner;
-      playerEliminated=(topIsPlayer&&wBot===1)||(botIsPlayer&&wTop===1);
-      if(matchId==="pi1"){ b.firstRound[1].bot=w; b.playIn[2].top=wTop===1?b.playIn[0].bot:b.playIn[0].top; }
-      else if(matchId==="pi2") b.playIn[2].bot=w;
-      else if(matchId==="pi3") b.firstRound[0].bot=w;
-      else if(matchId==="fr1") b.semis[0].top=w;
-      else if(matchId==="fr2") b.semis[0].bot=w;
-      else if(matchId==="fr3") b.semis[1].top=w;
-      else if(matchId==="fr4") b.semis[1].bot=w;
-      else if(matchId==="sf1") b.finals.top=w;
-      else if(matchId==="sf2") b.finals.bot=w;
-      else if(matchId==="f1"){ b.finals.winner=w; b.champion=w; }
+    if (wTop === 1 || wBot === 1) {
+      matchup.winner = wTop === 1 ? matchup.top : matchup.bot;
+      const w = matchup.winner;
+      playerEliminated = (topIsPlayer && wBot === 1) || (botIsPlayer && wTop === 1);
+      if (slot === "pi1") { sub.firstRound[1].bot = w; sub.playIn[2].top = wTop === 1 ? sub.playIn[0].bot : sub.playIn[0].top; }
+      else if (slot === "pi2") sub.playIn[2].bot = w;
+      else if (slot === "pi3") sub.firstRound[0].bot = w;
+      else if (slot === "fr1") sub.semis[0].top = w;
+      else if (slot === "fr2") sub.semis[0].bot = w;
+      else if (slot === "fr3") sub.semis[1].top = w;
+      else if (slot === "fr4") sub.semis[1].bot = w;
+      else if (slot === "sf1") sub.finals.top = w;
+      else if (slot === "sf2") sub.finals.bot = w;
+      else if (slot === "f1") {
+        if (conf === "east") b.finals.top = w;
+        else if (conf === "west") b.finals.bot = w;
+        else if (conf === "finals") { b.finals.winner = w; b.champion = w; }
+      }
     }
     const result = res
       ? { ...res, playerIsTop: topIsPlayer, matchId, seriesOver: !!matchup.winner, winner: matchup.winner, topName: matchup.top.name, botName: matchup.bot.name }
@@ -741,24 +891,36 @@ const startSeason = async () => {
   }
 
   function getNextAIMatchId(b) {
-    const order = ["pi1","pi2","pi3","fr1","fr2","fr3","fr4","sf1","sf2","f1"];
-    for (const id of order) {
-      const m = id==="pi1"?b.playIn[0]:id==="pi2"?b.playIn[1]:id==="pi3"?b.playIn[2]:
-        id==="fr1"?b.firstRound[0]:id==="fr2"?b.firstRound[1]:id==="fr3"?b.firstRound[2]:id==="fr4"?b.firstRound[3]:
-        id==="sf1"?b.semis[0]:id==="sf2"?b.semis[1]:b.finals;
-      if (m && !m.winner && m.top && m.bot && !m.top.isPlayer && !m.bot.isPlayer) return id;
+    const order = ["pi1", "pi2", "pi3", "fr1", "fr2", "fr3", "fr4", "sf1", "sf2", "f1"];
+    for (const conf of ["east", "west"]) {
+      const sub = b[conf];
+      if (!sub) continue;
+      for (const slot of order) {
+        const matchId = slot === "f1" ? `${conf}-f` : `${conf}-${slot}`;
+        const parsed = getPlayoffMatchup(b, matchId);
+        if (!parsed) continue;
+        const m = parsed.matchup;
+        if (m && !m.winner && m.top && m.bot && !m.top.isPlayer && !m.bot.isPlayer) return matchId;
+      }
     }
+    if (b.finals && b.finals.top && b.finals.bot && !b.finals.winner && !b.finals.top.isPlayer && !b.finals.bot.isPlayer) return "finals";
     return null;
   }
 
   function getNextPlayerMatchId(b) {
-    const order = ["pi1","pi2","pi3","fr1","fr2","fr3","fr4","sf1","sf2","f1"];
-    for (const id of order) {
-      const m = id==="pi1"?b.playIn[0]:id==="pi2"?b.playIn[1]:id==="pi3"?b.playIn[2]:
-        id==="fr1"?b.firstRound[0]:id==="fr2"?b.firstRound[1]:id==="fr3"?b.firstRound[2]:id==="fr4"?b.firstRound[3]:
-        id==="sf1"?b.semis[0]:id==="sf2"?b.semis[1]:b.finals;
-      if (m && !m.winner && (m.top?.isPlayer || m.bot?.isPlayer)) return id;
+    const order = ["pi1", "pi2", "pi3", "fr1", "fr2", "fr3", "fr4", "sf1", "sf2", "f1"];
+    for (const conf of ["east", "west"]) {
+      const sub = b[conf];
+      if (!sub) continue;
+      for (const slot of order) {
+        const matchId = slot === "f1" ? `${conf}-f` : `${conf}-${slot}`;
+        const parsed = getPlayoffMatchup(b, matchId);
+        if (!parsed) continue;
+        const m = parsed.matchup;
+        if (m && !m.winner && (m.top?.isPlayer || m.bot?.isPlayer)) return matchId;
+      }
     }
+    if (b.finals && b.finals.top && b.finals.bot && !b.finals.winner) return "finals";
     return null;
   }
 
@@ -785,10 +947,20 @@ const startSeason = async () => {
     setActiveMatchId(getNextPlayerMatchId(b) || null);
   }, [bracket, teamRoster, myLineup, difficulty]);
 
-const newSeason=()=>{
-  setInSeason(false);setSeason(emptySeason());setGameNum(1);setSchedIdx(0);
-  setResult(null);setPhase("teamSetup");setBracket(null);setPlayoffResult(null);setAiTeams([]);setElimInPlayoffs(false);
-  setRoster({PG:null,SG:null,SF:null,PF:null,C:null});setImportInfo("");setImportErr("");
+const newSeason = () => {
+  setInSeason(false);
+  setSeason(emptySeason());
+  setGameNum(1);
+  setResult(null);
+  setPhase("teamSetup");
+  setBracket(null);
+  setPlayoffResult(null);
+  setAiTeams([]);
+  setSchedule(null);
+  setElimInPlayoffs(false);
+  setRoster({ PG: null, SG: null, SF: null, PF: null, C: null });
+  setImportInfo("");
+  setImportErr("");
   getTopPicks().then(setTopPicks);
 };
 
@@ -845,11 +1017,7 @@ if(phase==="teamSetup") return(
 
   if(phase==="playoffs"&&bracket){
     const champion=bracket.champion,playerWon=champion?.isPlayer;
-    const finalAiRec=aiTeams.map(t=>{
-      const gW=t.gameLog.filter(x=>x===1).length,gL=t.gameLog.length-gW;
-      const pW=t.playerResult==='W'?1:0,pL=t.playerResult==='L'?1:0;
-      return{...t,w:gW+pW,l:gL+pL};
-    });
+    const finalAiRec=aiTeams.map((t)=>({...t,w:t.w,l:t.l}));
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
         {volumeSlider}{skipBtn}
@@ -867,7 +1035,7 @@ if(phase==="teamSetup") return(
           {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:12}}>
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
             <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
-            <div style={{marginBottom:2}}>• 12-team league — AI teams have real records</div>
+            <div style={{marginBottom:2}}>• 30-team league (2 conferences, 6 divisions) — 82-game season</div>
             <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
             <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
             <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
@@ -886,12 +1054,10 @@ if(phase==="teamSetup") return(
               <div style={{fontSize:24}}>💀</div><div style={{fontSize:16,fontWeight:900,color:"#ef4444"}}>YOUR SEASON IS OVER</div>
             </div>
           )}
-          <BracketDisplay bracket={bracket} onPlayMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);playPlayoffGame(id);}}/>
+          <BracketDisplay bracket={bracket} activeMatchId={activeMatchId} onPlayMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);playPlayoffGame(id);}}/>
           {activeMatchId&&(()=>{
-            const matchup=
-              activeMatchId==="pi1"?bracket.playIn[0]:activeMatchId==="pi2"?bracket.playIn[1]:activeMatchId==="pi3"?bracket.playIn[2]:
-              activeMatchId==="fr1"?bracket.firstRound[0]:activeMatchId==="fr2"?bracket.firstRound[1]:activeMatchId==="fr3"?bracket.firstRound[2]:activeMatchId==="fr4"?bracket.firstRound[3]:
-              activeMatchId==="sf1"?bracket.semis[0]:activeMatchId==="sf2"?bracket.semis[1]:bracket.finals;
+            const parsed=getPlayoffMatchup(bracket,activeMatchId);
+            const matchup=parsed?.matchup;
             if(!matchup)return null;
             const wT=matchup.games.filter(g=>g.winnerIdx===0).length,wB=matchup.games.filter(g=>g.winnerIdx===1).length;
             const done=!!matchup.winner,pInv=matchup.top?.isPlayer||matchup.bot?.isPlayer;
@@ -937,22 +1103,21 @@ if(phase==="teamSetup") return(
   }
 
   if(phase==="seasonEnd"){
-    const finalAi=aiTeams.map(t=>{
-      const gW=t.gameLog.filter(x=>x===1).length,gL=t.gameLog.length-gW;
-      const pW=t.playerResult==='W'?1:0,pL=t.playerResult==='L'?1:0;
-      return{...t,w:gW+pW,l:gL+pL};
-    });
+    const finalAi = aiTeams.map((t) => ({ ...t, w: t.w, l: t.l }));
+    const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
+    const userRecord = { name: myTeamName, w: season.w, l: SEASON_LENGTH - season.w, eff: myEffVal || 0, isPlayer: true, division: userMeta.division, conference: userMeta.conference };
+    const all = [userRecord, ...finalAi.map((t) => ({ ...t, isPlayer: false }))];
+    const confTeams = all.filter((t) => t.conference === userMeta.conference).sort((a, b) => b.w - a.w || (b.eff - a.eff));
+    const myRankInConf = confTeams.findIndex((t) => t.isPlayer) + 1;
+    const playoff = myRankInConf <= 10;
+    const playIn = myRankInConf >= 7 && myRankInConf <= 10;
+    const mySeed = myRankInConf;
     const ppg=season.gp>0?rf(season.ptsFor/season.gp):0,papg=season.gp>0?rf(season.ptsAgainst/season.gp):0;
     const playerRows=Object.entries(season.players).map(([name,s])=>({
       name,gp:s.gp,ppg:rf(s.pts/s.gp),apg:rf(s.ast/s.gp),rpg:rf(s.reb/s.gp),spg:rf(s.stl/s.gp),bpg:rf(s.blk/s.gp),
       tpg:rf(s.tov/s.gp),fgPct:s.fga>0?rf(s.fgm/s.fga*100):0,tpPct:s.tpa>0?rf(s.tpm/s.tpa*100):0,ftPct:s.fta>0?rf(s.ftm/s.fta*100):0,
     })).sort((a,b)=>b.ppg-a.ppg);
     const mvp=playerRows[0];
-    const all=[
-      {name:myTeamName,w:season.w,l:SEASON_LENGTH-season.w,eff:myEffVal||0,isPlayer:true},
-      ...finalAi.map(t=>({...t,isPlayer:false}))
-    ].sort((a,b)=>b.w-a.w||(b.eff-a.eff));
-    const mySeed=all.findIndex(t=>t.isPlayer)+1,playoff=mySeed<=10,playIn=mySeed>=7&&mySeed<=10;
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
         {volumeSlider}{skipBtn}
@@ -962,7 +1127,7 @@ if(phase==="teamSetup") return(
         {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:14,maxWidth:800,marginLeft:"auto",marginRight:"auto"}}>
           <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
           <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
-          <div style={{marginBottom:2}}>• 12-team league — AI teams have real records</div>
+          <div style={{marginBottom:2}}>• 30-team league (2 conferences, 6 divisions) — 82-game season</div>
           <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
           <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
           <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
@@ -1026,8 +1191,9 @@ if(phase==="teamSetup") return(
   }
 
   if(phase==="game"&&inSeason){
-    const opp=aiTeams[schedIdx],gp=Math.min(gameNum-1+(result?1:0),aiTeams.length>0?aiTeams[0].gameLog.length:0);
-    const curAi=getAiRecordsAtGame(aiTeams,gp),won=result?result.myScore>result.oppScore:false;
+    const oppIndex = schedule && gameNum <= SEASON_LENGTH ? schedule[29][gameNum - 1] : null;
+    const opp = oppIndex != null ? aiTeams[oppIndex] : null;
+    const won = result ? result.myScore > result.oppScore : false;
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
         {volumeSlider}{skipBtn}
@@ -1053,14 +1219,14 @@ if(phase==="teamSetup") return(
           {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:10}}>
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
             <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
-            <div style={{marginBottom:2}}>• 12-team league — AI teams have real records</div>
+            <div style={{marginBottom:2}}>• 30-team league (2 conferences, 6 divisions) — 82-game season</div>
             <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
             <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
             <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
             <div>Adjacent ×0.82 · Wrong ×0.65</div>
           </div>}
-          {showStandings&&<div style={{marginBottom:10}}><StandingsTable aiTeams={curAi} myRecord={myRecord} myName={myTeamName} highlight/></div>}
+          {showStandings&&<div style={{marginBottom:10}}><StandingsTable aiTeams={aiTeams} myRecord={myRecord} myName={myTeamName} highlight/></div>}
           {!result?(
             <div style={{background:"#0f172a",borderRadius:16,padding:24,border:"1px solid #1e293b",textAlign:"center",marginBottom:10}}>
               <div style={{fontSize:13,color:"#64748b",marginBottom:14,fontWeight:700,letterSpacing:1}}>GAME {gameNum} vs {opp?.name}</div>
@@ -1091,7 +1257,15 @@ if(phase==="teamSetup") return(
     </div>
   </div>
 )}
-              <button onClick={playGame} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding:"11px 32px",fontSize:14,fontWeight:800,cursor:"pointer"}}>▶ PLAY GAME {gameNum}</button>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center"}}>
+                <button onClick={playGame} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding:"11px 32px",fontSize:14,fontWeight:800,cursor:"pointer"}}>▶ PLAY GAME {gameNum}</button>
+                {gameNum < SEASON_LENGTH && (
+                  <>
+                    <button onClick={()=>simGames(41)} style={{background:"#475569",color:"white",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:"pointer"}}>⏩ SIM 41 GAMES</button>
+                    <button onClick={()=>simGames(SEASON_LENGTH - gameNum + 1)} style={{background:"#334155",color:"#94a3b8",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:"pointer"}}>⏭ SIM REST</button>
+                  </>
+                )}
+              </div>
             </div>
           ):(
             <>
@@ -1323,7 +1497,7 @@ if(phase==="teamSetup") return(
             {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginTop:6}}>
               <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
               <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
-              <div style={{marginBottom:2}}>• 12-team league — AI teams have real records</div>
+              <div style={{marginBottom:2}}>• 30-team league (2 conferences, 6 divisions) — 82-game season</div>
               <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
               <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
               <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
