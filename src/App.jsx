@@ -769,17 +769,24 @@ const startSeason = async () => {
     const won = res.myScore > res.oppScore;
     const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
     setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
-    const slot = getOppVsUserSlot(oppIndex, gameNum - 1);
-    setAiTeams((teams) =>
-      teams.map((t, i) => {
+    let slot = getOppVsUserSlot(oppIndex, gameNum - 1);
+    setAiTeams((teams) => {
+      const t = teams[oppIndex];
+      if (slot < 0 && t?.gameLog && schedule)
+        for (let i = 0; i < SEASON_LENGTH; i++)
+          if (schedule[oppIndex][i] === NUM_TEAMS - 1 && t.gameLog[i] == null) {
+            slot = i;
+            break;
+          }
+      return teams.map((t, i) => {
         if (i !== oppIndex || slot < 0) return t;
         const newLog = [...t.gameLog];
         newLog[slot] = won ? 0 : 1;
         const w = newLog.filter((x) => x === 1).length;
         const l = newLog.filter((x) => x === 0).length;
         return { ...t, gameLog: newLog, w, l };
-      })
-    );
+      });
+    });
     setResult(res);
   };
 
@@ -803,13 +810,20 @@ const startSeason = async () => {
       const opp = newAi[oppIndex];
       const result = quickSim(myLineup, opp.lineup, teamRoster);
       const won = result === 0;
-      newSeason = addToSeason(newSeason, [], won, 0, 0);
-      const slot = (() => {
+      newSeason = addToSeason(newSeason, [], won, 0, 0, myLineup);
+      let slot = (() => {
         const indices = [];
         for (let i = 0; i < SEASON_LENGTH; i++) if (schedule[oppIndex][i] === NUM_TEAMS - 1) indices.push(i);
         const c = schedule[29].slice(0, g - 1).filter((x) => x === oppIndex).length;
         return indices[c];
       })();
+      if (slot == null) {
+        for (let i = 0; i < SEASON_LENGTH; i++)
+          if (schedule[oppIndex][i] === NUM_TEAMS - 1 && newAi[oppIndex].gameLog[i] == null) {
+            slot = i;
+            break;
+          }
+      }
       if (slot != null) {
         newAi[oppIndex].gameLog[slot] = won ? 0 : 1;
         const gl = newAi[oppIndex].gameLog;
@@ -1124,7 +1138,11 @@ if(phase==="teamSetup") return(
   }
 
   if(phase==="seasonEnd"){
-    const finalAi = aiTeams.map((t) => ({ ...t, w: t.w, l: t.l }));
+    const finalAi = aiTeams.map((t) => ({
+      ...t,
+      w: (t.gameLog && t.gameLog.filter((x) => x === 1).length) ?? t.w,
+      l: (t.gameLog && t.gameLog.filter((x) => x === 0).length) ?? t.l,
+    }));
     const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
     const userRecord = { name: myTeamName, w: season.w, l: SEASON_LENGTH - season.w, eff: myEffVal || 0, isPlayer: true, division: userMeta.division, conference: userMeta.conference };
     const all = [userRecord, ...finalAi.map((t) => ({ ...t, isPlayer: false }))];
@@ -1134,11 +1152,29 @@ if(phase==="teamSetup") return(
     const playIn = myRankInConf >= 7 && myRankInConf <= 10;
     const mySeed = myRankInConf;
     const ppg=season.gp>0?rf(season.ptsFor/season.gp):0,papg=season.gp>0?rf(season.ptsAgainst/season.gp):0;
-    const playerRows=Object.entries(season.players).map(([name,s])=>({
-      name,gp:s.gp,ppg:rf(s.pts/s.gp),apg:rf(s.ast/s.gp),rpg:rf(s.reb/s.gp),spg:rf(s.stl/s.gp),bpg:rf(s.blk/s.gp),
-      tpg:rf(s.tov/s.gp),fgPct:s.fga>0?rf(s.fgm/s.fga*100):0,tpPct:s.tpa>0?rf(s.tpm/s.tpa*100):0,ftPct:s.fta>0?rf(s.ftm/s.fta*100):0,
-    })).sort((a,b)=>b.ppg-a.ppg);
-    const mvp=playerRows[0];
+    const gpSafe = (s) => (s.gp > 0 ? s.gp : 1);
+    let playerRows = Object.entries(season.players || {}).map(([name, s]) => ({
+      name,
+      gp: s.gp,
+      ppg: rf(s.pts / gpSafe(s)),
+      apg: rf(s.ast / gpSafe(s)),
+      rpg: rf(s.reb / gpSafe(s)),
+      spg: rf(s.stl / gpSafe(s)),
+      bpg: rf(s.blk / gpSafe(s)),
+      tpg: rf(s.tov / gpSafe(s)),
+      fgPct: s.fga > 0 ? rf((s.fgm / s.fga) * 100) : 0,
+      tpPct: s.tpa > 0 ? rf((s.tpm / s.tpa) * 100) : 0,
+      ftPct: s.fta > 0 ? rf((s.ftm / s.fta) * 100) : 0,
+    })).sort((a, b) => b.ppg - a.ppg);
+    if (playerRows.length === 0 && myLineup && season.gp > 0) {
+      playerRows = myLineup.map(({ player }) => ({
+        name: player.name,
+        gp: season.gp,
+        ppg: 0, apg: 0, rpg: 0, spg: 0, bpg: 0, tpg: 0,
+        fgPct: 0, tpPct: 0, ftPct: 0,
+      }));
+    }
+    const mvp = playerRows[0];
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
         {volumeSlider}{skipBtn}

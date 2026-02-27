@@ -608,7 +608,15 @@ export function simulate(
   };
 }
 
-export function addToSeason(season, gameStats, won, myScore, oppScore) {
+function emptyPlayerStat() {
+  return {
+    pts: 0, ast: 0, reb: 0, stl: 0, blk: 0, tov: 0,
+    fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0,
+    gp: 0,
+  };
+}
+
+export function addToSeason(season, gameStats, won, myScore, oppScore, lineupWhenNoStats = null) {
   const next = { ...season, players: {}, gameLog: [...(season.gameLog || [])] };
   Object.entries(season.players).forEach(
     ([k, v]) => (next.players[k] = { ...v })
@@ -619,38 +627,33 @@ export function addToSeason(season, gameStats, won, myScore, oppScore) {
   next.ptsFor += myScore;
   next.ptsAgainst += oppScore;
   next.gameLog.push({ gp: next.gp, won, myScore, oppScore });
-  gameStats.slice(0, 5).forEach((s) => {
-    if (!next.players[s.name])
-      next.players[s.name] = {
-        pts: 0,
-        ast: 0,
-        reb: 0,
-        stl: 0,
-        blk: 0,
-        tov: 0,
-        fgm: 0,
-        fga: 0,
-        tpm: 0,
-        tpa: 0,
-        ftm: 0,
-        fta: 0,
-        gp: 0,
-      };
-    const p = next.players[s.name];
-    p.pts += s.pts;
-    p.ast += s.ast;
-    p.reb += s.reb;
-    p.stl += s.stl;
-    p.blk += s.blk;
-    p.tov += s.tov;
-    p.fgm += s.fgm;
-    p.fga += s.fga;
-    p.tpm += s.tpm;
-    p.tpa += s.tpa;
-    p.ftm += s.ftm;
-    p.fta += s.fta;
-    p.gp++;
-  });
+  const hasStats = gameStats && gameStats.length > 0;
+  if (hasStats) {
+    gameStats.slice(0, 5).forEach((s) => {
+      if (!next.players[s.name]) next.players[s.name] = emptyPlayerStat();
+      const p = next.players[s.name];
+      p.pts += s.pts;
+      p.ast += s.ast;
+      p.reb += s.reb;
+      p.stl += s.stl;
+      p.blk += s.blk;
+      p.tov += s.tov;
+      p.fgm += s.fgm;
+      p.fga += s.fga;
+      p.tpm += s.tpm;
+      p.tpa += s.tpa;
+      p.ftm += s.ftm;
+      p.fta += s.fta;
+      p.gp++;
+    });
+  } else if (lineupWhenNoStats && lineupWhenNoStats.length) {
+    lineupWhenNoStats.forEach(({ player }) => {
+      const name = player?.name;
+      if (!name) return;
+      if (!next.players[name]) next.players[name] = emptyPlayerStat();
+      next.players[name].gp++;
+    });
+  }
   return next;
 }
 
