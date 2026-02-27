@@ -1374,21 +1374,23 @@ const startSeason = async () => {
     return { bracket: b, result, playerEliminated };
   }
 
-  function getNextAIMatchId(b) {
-    const order = ["pi1", "pi2", "pi3", "fr1", "fr2", "fr3", "fr4", "sf1", "sf2", "f1"];
-    for (const conf of ["east", "west"]) {
-      const sub = b[conf];
-      if (!sub) continue;
-      for (const slot of order) {
-        const matchId = slot === "f1" ? `${conf}-f` : `${conf}-${slot}`;
-        const parsed = getPlayoffMatchup(b, matchId);
-        if (!parsed) continue;
-        const m = parsed.matchup;
-        if (m && !m.winner && m.top && m.bot && !m.top.isPlayer && !m.bot.isPlayer) return matchId;
-      }
-    }
-    if (b.finals && b.finals.top && b.finals.bot && !b.finals.winner && !b.finals.top.isPlayer && !b.finals.bot.isPlayer) return "finals";
-    return null;
+  // Stage = same slot across both conferences (e.g. pi1 = east-pi1 + west-pi1). Order: pi1, pi2, pi3, fr1..fr4, sf1, sf2, confF, finals.
+  const PLAYOFF_STAGE_ORDER = ["pi1", "pi2", "pi3", "fr1", "fr2", "fr3", "fr4", "sf1", "sf2", "confF", "finals"];
+
+  function getStageKey(matchId) {
+    if (!matchId) return null;
+    if (matchId === "finals") return "finals";
+    const parts = matchId.split("-");
+    if (parts.length !== 2) return null;
+    const slot = parts[1];
+    if (slot === "f") return "confF";
+    return slot;
+  }
+
+  function getMatchIdsForStage(stageKey) {
+    if (stageKey === "finals") return ["finals"];
+    if (stageKey === "confF") return ["east-f", "west-f"];
+    return ["east-" + stageKey, "west-" + stageKey];
   }
 
   function getNextPlayerMatchId(b) {
@@ -1408,6 +1410,37 @@ const startSeason = async () => {
     return null;
   }
 
+  // Earliest stage that has a pending AI-only match; never past the user's current stage (so we stop until user plays).
+  function getCurrentStageMatchIds(b) {
+    const playerMatchId = getNextPlayerMatchId(b);
+    const maxStageIndex = playerMatchId != null
+      ? (() => {
+          const k = getStageKey(playerMatchId);
+          const idx = PLAYOFF_STAGE_ORDER.indexOf(k);
+          return idx >= 0 ? idx : PLAYOFF_STAGE_ORDER.length - 1;
+        })()
+      : PLAYOFF_STAGE_ORDER.length - 1;
+
+    for (let i = 0; i <= maxStageIndex; i++) {
+      const stageKey = PLAYOFF_STAGE_ORDER[i];
+      const ids = getMatchIdsForStage(stageKey);
+      const pending = ids.filter((matchId) => {
+        const parsed = getPlayoffMatchup(b, matchId);
+        const m = parsed?.matchup;
+        if (!m || m.winner || !m.top || !m.bot) return false;
+        if (m.top.isPlayer || m.bot.isPlayer) return false; // never sim user's game
+        return true;
+      });
+      if (pending.length > 0) return pending;
+    }
+    return [];
+  }
+
+  function getNextAIMatchId(b) {
+    const stage = getCurrentStageMatchIds(b);
+    return stage.length > 0 ? stage[0] : null;
+  }
+
   const playPlayoffGame=(matchId)=>{
     if(!bracket) return;
     const b = JSON.parse(JSON.stringify(bracket));
@@ -1420,9 +1453,13 @@ const startSeason = async () => {
   const simAllAIGames = useCallback(() => {
     if (!bracket) return;
     let b = JSON.parse(JSON.stringify(bracket));
-    let id;
-    while ((id = getNextAIMatchId(b)) !== null) {
-      const out = runOnePlayoffGame(b, id, teamRoster, myLineup, difficulty);
+    const matchIds = getCurrentStageMatchIds(b);
+    if (matchIds.length === 0) return;
+    for (const matchId of matchIds) {
+      const parsed = getPlayoffMatchup(b, matchId);
+      const m = parsed?.matchup;
+      if (m && (m.top?.isPlayer || m.bot?.isPlayer)) continue; // never sim user's game
+      const out = runOnePlayoffGame(b, matchId, teamRoster, myLineup, difficulty);
       b = out.bracket;
       if (out.playerEliminated) setElimInPlayoffs(true);
     }
@@ -1544,7 +1581,7 @@ if(phase==="teamSetup") return(
             <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
               <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
               <button onClick={()=>setShowPlayoffLeaders(s=>!s)} style={{background:"#1e293b",color:"#f97316",border:"1px solid #334155",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{showPlayoffLeaders?"Hide":"Show"} Leaders</button>
-              {getNextAIMatchId(bracket)&&<button onClick={simAllAIGames} style={{background:"#475569",color:"#e2e8f0",border:"1px solid #64748b",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>⚡ Sim all AI games</button>}
+              {getNextAIMatchId(bracket)&&<button onClick={simAllAIGames} style={{background:"#475569",color:"#e2e8f0",border:"1px solid #64748b",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>⚡ Sim current round</button>}
               {champion&&<button onClick={newSeason} style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"white",border:"none",borderRadius:7,padding:"5px 14px",fontSize:11,fontWeight:800,cursor:"pointer"}}>🔄 New Season</button>}
               <button onClick={()=>setShowHelp(h=>!h)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
             </div>
@@ -1979,6 +2016,9 @@ if(phase==="teamSetup") return(
                     <div key={i} style={{textAlign:"center"}}><div style={{fontSize:10,color:col,fontWeight:700}}>{l}</div><div style={{fontSize:38,fontWeight:900,color:col,lineHeight:1}}>{sc}</div><div style={{fontSize:9,color:"#475569"}}>RTG {eff}</div></div>
                   ))}
                 </div>
+                {result.possessionsPerTeam != null && (
+                  <div style={{fontSize:9,color:"#64748b",marginTop:4}}>Possessions: {result.possessionsPerTeam} per team</div>
+                )}
                 {(() => {
                   const topMy = [...result.myStats].sort((a,b)=>b.pts-a.pts)[0];
                   const topOpp = [...result.oppStats].sort((a,b)=>b.pts-a.pts)[0];

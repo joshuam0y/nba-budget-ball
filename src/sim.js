@@ -7,6 +7,14 @@ export const SEASON_LENGTH = 82;
 export const POOL_SIZE = 150;
 export const NUM_TEAMS = 30;
 
+// 2024-25 NBA: ~100 poss/team, league avg team PPG ~112–114
+const TARGET_POSS_PER_TEAM_MIN = 98;
+const TARGET_POSS_PER_TEAM_MAX = 104;
+const TARGET_TEAM_PTS_MEAN = 113;
+const TARGET_TEAM_PTS_SD = 7;
+const TARGET_TEAM_PTS_MIN = 98;
+const TARGET_TEAM_PTS_MAX = 128;
+
 export const NBA_DIVISIONS = {
   Atlantic: ["Boston Celtics", "Toronto Raptors", "Philadelphia 76ers", "Brooklyn Nets", "New York Knicks"],
   Central: ["Milwaukee Bucks", "Cleveland Cavaliers", "Indiana Pacers", "Chicago Bulls", "Detroit Pistons"],
@@ -438,7 +446,10 @@ export function simulate(
     isPlayoff ? 0.46 : 0.44,
     isPlayoff ? 0.54 : 0.56
   );
-  const pace = Math.round((isPlayoff ? 90 : 96) + Math.random() * 12);
+  const pace = Math.round(
+    TARGET_POSS_PER_TEAM_MIN +
+    Math.random() * (TARGET_POSS_PER_TEAM_MAX - TARGET_POSS_PER_TEAM_MIN)
+  );
   const myVar = myLineup.map(({ player }) => gameVariance(player.rating));
   const oppVar = oppLineup.map(({ player }) => gameVariance(player.rating));
 
@@ -531,36 +542,38 @@ export function simulate(
     const archVar =
       offArch.id === "spotUp" ? 1.8 : offArch.id === "role" ? 0.8 : 1.2;
 
-    // Shooting realism tweaks:
-    // - Slightly bump 2P% window
-    // - Pull 3P% down into a more realistic band
+    // Shooting: 2025-ish league FG% ~46%; 2P higher, 3P in range
     const raw = base * clutchMult + gauss(archVar);
     const fgPct = clamp(
       raw,
-      is3 ? 24 : 34,   // min %
-      is3 ? 45 : 62    // max %
+      is3 ? 28 : 40,   // min % (bump so FG% isn't too low)
+      is3 ? 48 : 65    // max %
     ) / 100;
     const adjFg = clamp(
       fgPct * defFactor,
-      is3 ? 0.26 : 0.44,
-      is3 ? 0.42 : 0.66
+      is3 ? 0.30 : 0.48,
+      is3 ? 0.44 : 0.68
     );
+    // Turnovers: ~12–15 team TOV per game; not so high that Westbrook goes 8+
     const tovChance = clamp(
-      ((sp.tov / 40) * offV[si] * 0.7) / clutchMult,
-      0.02,
-      0.15
+      ((sp.tov / 40) * offV[si] * 1.05) / clutchMult,
+      0.035,
+      0.18
     );
     const blkChance = clamp(dp.blk * dm * 0.04, 0, 0.12);
     if (Math.random() < tovChance) {
       shooter.tov++;
-      defS[
-        wIdx(defS, (_, j) =>
-          Math.max(
-            0.01,
-            defL[j].player.stl * posMult(defL[j].player, defL[j].slot)
+      // In real NBA only ~half of TOV are steals; rest are bad pass, lost ball, etc.
+      if (Math.random() < 0.52) {
+        defS[
+          wIdx(defS, (_, j) =>
+            Math.max(
+              0.01,
+              defL[j].player.stl * posMult(defL[j].player, defL[j].slot)
+            )
           )
-        )
-      ].stl++;
+        ].stl++;
+      }
     } else if (!is3 && Math.random() < blkChance) {
       shooter.fga++;
       defender.blk++;
@@ -653,18 +666,53 @@ export function simulate(
 
   let ms = myStats.reduce((s, p) => s + p.pts, 0);
   let os = oppStats.reduce((s, p) => s + p.pts, 0);
+
+  // Scale box scores to NBA-like team totals (possessions already ~100; target ~108–115 PPG)
+  const targetMy = Math.round(
+    clamp(TARGET_TEAM_PTS_MEAN + gauss(TARGET_TEAM_PTS_SD), TARGET_TEAM_PTS_MIN, TARGET_TEAM_PTS_MAX)
+  );
+  const targetOpp = Math.round(
+    clamp(TARGET_TEAM_PTS_MEAN + gauss(TARGET_TEAM_PTS_SD), TARGET_TEAM_PTS_MIN, TARGET_TEAM_PTS_MAX)
+  );
+  const scaleStat = (val, scale) => Math.max(0, ri(val * scale));
+  const applyScale = (stats, scale) =>
+    stats.map((s) => ({
+      ...s,
+      pts: scaleStat(s.pts, scale),
+      fgm: scaleStat(s.fgm, scale),
+      fga: scaleStat(s.fga, scale),
+      tpm: scaleStat(s.tpm, scale),
+      tpa: scaleStat(s.tpa, scale),
+      ftm: scaleStat(s.ftm, scale),
+      fta: scaleStat(s.fta, scale),
+      reb: scaleStat(s.reb, scale),
+      ast: scaleStat(s.ast, scale),
+      stl: scaleStat(s.stl, scale),
+      blk: scaleStat(s.blk, scale),
+      tov: scaleStat(s.tov, scale),
+    }));
+
+  const myScale = ms > 0 ? targetMy / ms : 1;
+  const oppScale = os > 0 ? targetOpp / os : 1;
+  const myStatsScaled = applyScale(myStats, myScale);
+  const oppStatsScaled = applyScale(oppStats, oppScale);
+  ms = myStatsScaled.reduce((s, p) => s + p.pts, 0);
+  os = oppStatsScaled.reduce((s, p) => s + p.pts, 0);
+
   let ot = 0;
   while (ms === os) {
     ot++;
     ms += ri(5 + Math.random() * 15 * myOff);
     os += ri(5 + Math.random() * 15 * (1 - myOff));
   }
+
   return {
     myScore: ms,
     oppScore: os,
     ot,
-    myStats: finalize(myStats),
-    oppStats: finalize(oppStats),
+    possessionsPerTeam: pace,
+    myStats: finalize(myStatsScaled),
+    oppStats: finalize(oppStatsScaled),
     myEff: rf(myE, 1),
     oppEff: rf(oppE, 1),
     myChem: chemBoost(myLineup, teamRoster),

@@ -19,7 +19,6 @@ export function LeagueLeaders({ leaders, myTeamName }) {
       const fgPct = p.fga > 0 ? (p.fgm / p.fga) * 100 : 0;
       const tpPct = p.tpa > 0 ? (p.tpm / p.tpa) * 100 : 0;
       const ftPct = p.fta > 0 ? (p.ftm / p.fta) * 100 : 0;
-      // Per-36 scaling: game stats are over 48 minutes, so per36 is 0.75x.
       const factor36 = 0.75;
       return {
         ...p,
