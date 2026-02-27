@@ -530,8 +530,21 @@ export function simulate(
     const base = is3 ? (sp.tpPct > 0 ? sp.tpPct : baseFg * 0.65) : baseFg * (m * 0.1 + 0.9);
     const archVar =
       offArch.id === "spotUp" ? 1.8 : offArch.id === "role" ? 0.8 : 1.2;
-    const fgPct = clamp(base * clutchMult + gauss(archVar), 18, 52) / 100;
-    const adjFg = clamp(fgPct * defFactor, 0.44, 0.72);
+
+    // Shooting realism tweaks:
+    // - Slightly bump 2P% window
+    // - Pull 3P% down into a more realistic band
+    const raw = base * clutchMult + gauss(archVar);
+    const fgPct = clamp(
+      raw,
+      is3 ? 24 : 34,   // min %
+      is3 ? 45 : 62    // max %
+    ) / 100;
+    const adjFg = clamp(
+      fgPct * defFactor,
+      is3 ? 0.26 : 0.44,
+      is3 ? 0.42 : 0.66
+    );
     const tovChance = clamp(
       ((sp.tov / 40) * offV[si] * 0.7) / clutchMult,
       0.02,
@@ -661,6 +674,7 @@ export function simulate(
 
 function emptyPlayerStat() {
   return {
+    pos: null,
     pts: 0, ast: 0, reb: 0, stl: 0, blk: 0, tov: 0,
     fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0,
     gp: 0,
@@ -683,6 +697,7 @@ export function addToSeason(season, gameStats, won, myScore, oppScore, lineupWhe
     gameStats.slice(0, 5).forEach((s) => {
       if (!next.players[s.name]) next.players[s.name] = emptyPlayerStat();
       const p = next.players[s.name];
+      if (!p.pos) p.pos = s.pos;
       p.pts += s.pts;
       p.ast += s.ast;
       p.reb += s.reb;
