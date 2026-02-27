@@ -198,43 +198,63 @@ function BoxScore({stats,acc,label}){
   );
 }
 
-function StandingsTable({aiTeams,myRecord,myName,highlight}){
-  const all=[
-    {name:myName,w:myRecord.w,l:myRecord.l,eff:myRecord.eff||0,isPlayer:true},
-    ...aiTeams.map(t=>({name:t.name,w:t.w,l:t.l,eff:t.eff,isPlayer:false}))
-  ].sort((a,b)=>b.w-a.w||(b.eff-a.eff));
-  return(
-    <div style={{background:"#0f172a",borderRadius:10,overflow:"hidden",border:"1px solid #1e293b"}}>
-      <div style={{padding:"8px 12px",background:"#1e293b",fontWeight:800,fontSize:10,letterSpacing:2,color:"#60a5fa"}}>🏆 LEAGUE STANDINGS</div>
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:600}}>
-        <thead><tr style={{borderBottom:"1px solid #1e293b"}}>
-          {[["#","c"],["TEAM","left"],["W","c"],["L","c"],["PCT","c"],["RTG","c"]].map(([h,a])=>(
-            <th key={h} style={{padding:"5px 8px",textAlign:a==="c"?"center":"left",color:"#475569",fontSize:10}}>{h}</th>
+function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
+  const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
+  const userRow = { name: myName, w: myRecord.w, l: myRecord.l, eff: myRecord.eff || 0, isPlayer: true, conference: userMeta.conference, division: userMeta.division };
+  const all = [
+    userRow,
+    ...aiTeams.map((t) => ({ name: t.name, w: t.w, l: t.l, eff: t.eff, isPlayer: false, conference: t.conference, division: t.division })),
+  ];
+  const east = all.filter((t) => t.conference === "East").sort((a, b) => b.w - a.w || (b.eff - a.eff));
+  const west = all.filter((t) => t.conference === "West").sort((a, b) => b.w - a.w || (b.eff - a.eff));
+
+  const renderTable = (confLabel, color, rows) => (
+    <table key={confLabel} style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 280 }}>
+      <thead>
+        <tr style={{ borderBottom: "1px solid #1e293b" }}>
+          <th colSpan={6} style={{ padding: "6px 8px", textAlign: "left", color, fontWeight: 800, fontSize: 10, letterSpacing: 2 }}>
+            {confLabel} ({rows.length})
+          </th>
+        </tr>
+        <tr style={{ borderBottom: "1px solid #1e293b" }}>
+          {[["#", "c"], ["TEAM", "left"], ["W", "c"], ["L", "c"], ["PCT", "c"], ["RTG", "c"]].map(([h, a]) => (
+            <th key={h} style={{ padding: "4px 6px", textAlign: a === "c" ? "center" : "left", color: "#475569", fontSize: 10 }}>{h}</th>
           ))}
-        </tr></thead>
-        <tbody>
-          {all.map((t,i)=>{
-            const pct=t.w+t.l>0?rf(t.w/(t.w+t.l)*100,1):0,isHL=highlight&&t.isPlayer;
-            return(
-              <tr key={t.name} style={{borderBottom:"1px solid #0d1626",background:isHL?"#0d2137":i%2===0?"#080f1e":"#0a1221"}}>
-                <td style={{textAlign:"center",padding:"5px 8px",color:i<6?"#22c55e":i<10?"#f59e0b":"#475569",fontWeight:800}}>{i+1}</td>
-                <td style={{padding:"5px 8px",fontWeight:700,color:t.isPlayer?"#60a5fa":"#e2e8f0"}}>
-                  {t.isPlayer?"🌟 ":""}{t.name}
-                  {i===5&&<span style={{marginLeft:4,fontSize:9,background:"#14532d",color:"#4ade80",borderRadius:3,padding:"1px 4px"}}>6 SEED</span>}
-                  {(i===6||i===7)&&<span style={{marginLeft:4,fontSize:9,background:"#78350f",color:"#fbbf24",borderRadius:3,padding:"1px 4px"}}>PLAY-IN</span>}
-                  {(i===8||i===9)&&<span style={{marginLeft:4,fontSize:9,background:"#3b0764",color:"#c084fc",borderRadius:3,padding:"1px 4px"}}>PLAY-IN</span>}
-                  {i===10&&<span style={{marginLeft:4,fontSize:9,background:"#7f1d1d",color:"#fca5a5",borderRadius:3,padding:"1px 4px"}}>OUT</span>}
-                </td>
-                <td style={{textAlign:"center",color:"#22c55e",fontWeight:700}}>{t.w}</td>
-                <td style={{textAlign:"center",color:"#f87171"}}>{t.l}</td>
-                <td style={{textAlign:"center"}}>{pct}%</td>
-                <td style={{textAlign:"center",color:"#a78bfa"}}>{rf(t.eff,0)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <div style={{padding:"6px 12px",borderTop:"2px dashed #1e293b",fontSize:9,color:"#22c55e"}}>▲ Per conference: top 6 direct · 7-10 play-in</div>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((t, i) => {
+          const pct = t.w + t.l > 0 ? rf((t.w / (t.w + t.l)) * 100, 1) : 0;
+          const isHL = highlight && t.isPlayer;
+          return (
+            <tr key={t.name} style={{ borderBottom: "1px solid #0d1626", background: isHL ? "#0d2137" : i % 2 === 0 ? "#080f1e" : "#0a1221" }}>
+              <td style={{ textAlign: "center", padding: "4px 6px", color: i < 6 ? "#22c55e" : i < 10 ? "#f59e0b" : "#475569", fontWeight: 800 }}>{i + 1}</td>
+              <td style={{ padding: "4px 6px", fontWeight: 700, color: t.isPlayer ? "#60a5fa" : "#e2e8f0" }}>
+                {t.isPlayer ? "🌟 " : ""}{t.name}
+                {i === 5 && <span style={{ marginLeft: 4, fontSize: 9, background: "#14532d", color: "#4ade80", borderRadius: 3, padding: "1px 4px" }}>6</span>}
+                {(i === 6 || i === 7) && <span style={{ marginLeft: 4, fontSize: 9, background: "#78350f", color: "#fbbf24", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
+                {(i === 8 || i === 9) && <span style={{ marginLeft: 4, fontSize: 9, background: "#3b0764", color: "#c084fc", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
+                {i === 10 && <span style={{ marginLeft: 4, fontSize: 9, background: "#7f1d1d", color: "#fca5a5", borderRadius: 3, padding: "1px 4px" }}>OUT</span>}
+              </td>
+              <td style={{ textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{t.w}</td>
+              <td style={{ textAlign: "center", color: "#f87171" }}>{t.l}</td>
+              <td style={{ textAlign: "center" }}>{pct}%</td>
+              <td style={{ textAlign: "center", color: "#a78bfa" }}>{rf(t.eff, 0)}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+
+  return (
+    <div style={{ background: "#0f172a", borderRadius: 10, overflow: "hidden", border: "1px solid #1e293b" }}>
+      <div style={{ padding: "8px 12px", background: "#1e293b", fontWeight: 800, fontSize: 10, letterSpacing: 2, color: "#60a5fa" }}>🏆 LEAGUE STANDINGS</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: 10, overflowX: "auto" }}>
+        {renderTable("EAST", "#3b82f6", east)}
+        {renderTable("WEST", "#f59e0b", west)}
+      </div>
+      <div style={{ padding: "6px 12px", borderTop: "2px dashed #1e293b", fontSize: 9, color: "#22c55e" }}>▲ You’re in {userMeta.conference} ({userMeta.division}) · Top 6 direct · 7–10 play-in</div>
     </div>
   );
 }
@@ -296,7 +316,7 @@ function MatchupCard({ matchup, onPlay, isActive, onPlayMatch }) {
           </div>
         );
       })}
-      {isActive && !done && top && bot && onPlay && (
+      {!done && top && bot && onPlay && (
         <button onClick={onPlay} style={{ width: "100%", marginTop: 6, background: top?.isPlayer || bot?.isPlayer ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "linear-gradient(135deg,#475569,#334155)", color: "white", border: "none", borderRadius: 6, padding: "6px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>
           {top?.isPlayer || bot?.isPlayer ? `▶ PLAY GAME ${games.length + 1}` : `⚡ SIM GAME ${games.length + 1}`}
         </button>
@@ -826,15 +846,16 @@ const startSeason = async () => {
     const eastBracket = buildBracket(eastSeeds);
     const westBracket = buildBracket(westSeeds);
     const finalsMatchup = { id: "finals", top: null, bot: null, winner: null, games: [], label: "FINALS" };
-    setBracket({
+    const newBracket = {
       east: eastBracket,
       west: westBracket,
       finals: finalsMatchup,
       champion: null,
-    });
+    };
+    setBracket(newBracket);
     setPhase("playoffs");
     setPlayoffResult(null);
-    setActiveMatchId(null);
+    setActiveMatchId(getNextPlayerMatchId(newBracket) || getNextAIMatchId(newBracket) || null);
     setElimInPlayoffs(false);
   };
 
