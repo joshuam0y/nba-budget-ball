@@ -696,8 +696,6 @@ export function getArchetype(p) {
     p.reb > 5 &&
     p.pts < 28 &&
     p.rating > 43;
-  const isWingScorer =
-    isWing && p.pts > 20 && p.ast >= 3 && p.reb >= 3 && p.rating > 45;
 
   const isFloorGeneral =
     p.ast > 11 &&
@@ -706,9 +704,11 @@ export function getArchetype(p) {
     p.rating > 50;
   const isBucketGetter =
     (isGuard || isWing || isBig) &&
-    p.pts > 22 &&
-    p.ast < 6 &&
-    p.rating > 47;
+    p.pts > 25 &&
+    p.ast < 5 &&
+    p.rating > 49;
+  const isWingScorer =
+    isWing && p.pts > 18 && p.ast >= 2 && p.reb >= 2 && p.rating > 43;
   const isScoringGuard =
     isGuard && p.pts > 24 && p.ast >= 3 && p.rating > 48;
 
@@ -746,12 +746,12 @@ export function getArchetype(p) {
     return { label: "POINT FORWARD", color: "#34d399", id: "pointForward" };
   if (isFloorGeneral)
     return { label: "FLOOR GENERAL", color: "#fbbf24", id: "fg" };
+  if (isWingScorer)
+    return { label: "WING SCORER", color: "#e879f9", id: "wing" };
   if (isBucketGetter)
     return { label: "BUCKET GETTER", color: "#f97316", id: "bucket" };
   if (isScoringGuard)
     return { label: "SCORING GUARD", color: "#a78bfa", id: "scoringGuard" };
-  if (isWingScorer)
-    return { label: "WING SCORER", color: "#e879f9", id: "wing" };
   if (isSpotUp)
     return { label: "SPOT UP SHOOTER", color: "#38bdf8", id: "spotUp" };
   if (isMidrange)
