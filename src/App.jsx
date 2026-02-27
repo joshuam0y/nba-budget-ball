@@ -664,7 +664,7 @@ const audioRef = useRef(null);
 const trackIndex = useRef(0);
 const hasStarted = useRef(false);
 
-const TRACKS = ['weonit.mp3','lovenwantiti.mp3','poppin.mp3','onepunch.mp3', 'photograph.mp3', 'ateam.mp3', 'cold.mp3','lemonade.mp3', 'outstanding.mp3', 'amazing.mp3', 'bestfriend.mp3', 'baddecisions.mp3', 'lightsplease.mp3', 'loveletter.mp3', 'didntchaknow.mp3', 'familyties.mp3', 'letmeknow.mp3', 'imdope.mp3', 'digital.mp3', 'dior.mp3', 'kaceytalk.mp3'];
+const TRACKS = ['weonit.mp3','lovenwantiti.mp3','poppin.mp3','onepunch.mp3', 'photograph.mp3', 'ateam.mp3', 'cold.mp3','lemonade.mp3', 'outstanding.mp3', 'amazing.mp3', 'bestfriend.mp3', 'baddecisions.mp3', 'lightsplease.mp3', 'loveletter.mp3', 'didntchaknow.mp3', 'familyties.mp3', 'letmeknow.mp3', 'imdope.mp3', 'digital.mp3', 'dior.mp3'];
 
 const playTrack = (index) => {
   const audio = audioRef.current;
@@ -1618,6 +1618,7 @@ if(phase==="teamSetup") return(
                   {[["cost","$"],["name","A–Z"]].map(([k,l])=>(
                     <button key={k} onClick={()=>setSortBy(k)} style={{background:sortBy===k?"#4c1d95":"#1e293b",color:sortBy===k?"#c4b5fd":"#64748b",border:"none",borderRadius:5,padding:"4px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{l}</button>
                   ))}
+
                 </div>
               </div>
               <div style={{display:"flex",gap:3,flexWrap:"wrap",paddingBottom:4}}>
