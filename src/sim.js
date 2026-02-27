@@ -692,10 +692,10 @@ export function getArchetype(p) {
 
   const isPointForward =
     (p.pos === "SF" || p.pos === "PF") &&
-    p.ast > 5 &&
-    p.reb > 6 &&
-    p.pts < 27 &&
-    p.rating > 45;
+    p.ast > 4 &&
+    p.reb > 5 &&
+    p.pts < 28 &&
+    p.rating > 43;
   const isWingScorer =
     isWing && p.pts > 20 && p.ast >= 3 && p.reb >= 3 && p.rating > 45;
 
@@ -715,17 +715,17 @@ export function getArchetype(p) {
   const isLockdown =
     p.stl > 2.0 && (p.blk > 1.0 || p.pts < 16) && p.rating > 42;
   const is3D =
-    p.tpPct > 37 &&
-    p.tR > 0.38 &&
-    (p.stl > 1.5 || p.blk > 1.0) &&
-    p.pts < 24 &&
-    p.rating > 40;
-  const isSpotUp =
-    p.tR > 0.45 &&
-    p.tpPct > 37 &&
+    p.tpPct > 35 &&
+    p.tR > 0.35 &&
+    (p.stl > 1.2 || p.blk > 0.8) &&
     p.pts < 26 &&
-    (p.stl > 1.0 || p.reb > 3) &&
     p.rating > 38;
+  const isSpotUp =
+    p.tR > 0.40 &&
+    p.tpPct > 35 &&
+    p.pts < 28 &&
+    (p.stl > 0.8 || p.reb > 2.5) &&
+    p.rating > 36;
 
   if (isSwiss)
     return { label: "SWISS ARMY KNIFE", color: "#f472b6", id: "swiss" };
