@@ -2038,10 +2038,10 @@ if(phase==="teamSetup") return(
           <div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:400,padding:24,color:"#e2e8f0"}}>
             <div style={{fontSize:28,fontWeight:900,marginBottom:12,color:"#f59e0b"}}>How to play</div>
             <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.6,marginBottom:20}}>
-              <div style={{marginBottom:8}}>1. <strong style={{color:"#e2e8f0"}}>Name your team</strong> and tap Let&apos;s Build.</div>
-              <div style={{marginBottom:8}}>2. <strong style={{color:"#e2e8f0"}}>Draft 5 players</strong> (one per position) within your <strong style={{color:"#fbbf24"}}>${BUDGET}</strong> budget.</div>
-              <div style={{marginBottom:8}}>3. Play an <strong style={{color:"#e2e8f0"}}>82-game season</strong> vs 29 AI teams — win to climb the standings.</div>
-              <div>4. <strong style={{color:"#e2e8f0"}}>Playoffs</strong>: top 6 go straight in; seeds 7–10 enter the play-in. Win to become champion!</div>
+              <div style={{marginBottom:8}}>1. <strong style={{color:"#e2e8f0"}}>Draft 5 players</strong> (one per position) within your <strong style={{color:"#fbbf24"}}>${BUDGET}</strong> budget and build your lineup.</div>
+              <div style={{marginBottom:8}}>2. Battle through a <strong style={{color:"#e2e8f0"}}>full {SEASON_LENGTH}-game season</strong> in a 30-team league with 2 conferences and 6 divisions — every win moves you up the standings.</div>
+              <div style={{marginBottom:8}}>3. Track the league with <strong style={{color:"#e2e8f0"}}>League Leaders, Season Highs, and Playoff Highs</strong> — your players are highlighted in green anywhere they show up.</div>
+              <div>4. <strong style={{color:"#e2e8f0"}}>Playoffs</strong>: top 6 in each conference go straight in; seeds 7–10 fight through the play-in. Win the bracket to become champion!</div>
             </div>
             <button onClick={dismissTutorial} style={{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"white",border:"none",borderRadius:8,padding:12,fontSize:14,fontWeight:800,cursor:"pointer"}}>Got it</button>
           </div>
