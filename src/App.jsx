@@ -19,6 +19,7 @@ import {
   simulate,
   quickSim,
   simLeagueGames,
+  fillMissingVsUserSlots,
   getTier,
   cellBg,
   getArchetype,
@@ -1084,7 +1085,8 @@ if(phase==="teamSetup") return(
 
   if(phase==="playoffs"&&bracket){
     const champion=bracket.champion,playerWon=champion?.isPlayer;
-    const finalAiRec = aiTeams.map((t) => {
+    const filledAi = schedule && teamRoster ? fillMissingVsUserSlots(aiTeams, myLineup, schedule, teamRoster) : aiTeams;
+    const finalAiRec = filledAi.map((t) => {
       const rec = getRecordFromGameLog(t.gameLog);
       return { ...t, w: rec ? rec.w : t.w, l: rec ? rec.l : t.l };
     });
@@ -1173,7 +1175,8 @@ if(phase==="teamSetup") return(
   }
 
   if(phase==="seasonEnd"){
-    const finalAi = aiTeams.map((t) => {
+    const filledAi = schedule && teamRoster ? fillMissingVsUserSlots(aiTeams, myLineup, schedule, teamRoster) : aiTeams;
+    const finalAi = filledAi.map((t) => {
       const rec = getRecordFromGameLog(t.gameLog);
       return { ...t, w: rec ? rec.w : t.w, l: rec ? rec.l : t.l };
     });

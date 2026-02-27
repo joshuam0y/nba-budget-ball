@@ -706,6 +706,35 @@ export function simLeagueGames(teams, schedule, tr) {
   return records;
 }
 
+/**
+ * Fill any remaining null "vs user" slots in AI gameLogs so every team has 82 games.
+ * Call when user has completed 82 games but some AI teams still have nulls (slot-matching bug).
+ * Returns a new array of teams (does not mutate input).
+ */
+export function fillMissingVsUserSlots(aiTeams, userLineup, schedule, tr) {
+  if (!schedule || !userLineup || aiTeams.length !== NUM_TEAMS - 1) return aiTeams;
+  const out = aiTeams.map((t, idx) => ({
+    ...t,
+    gameLog: [...(t.gameLog || Array(SEASON_LENGTH).fill(null))],
+  }));
+  for (let i = 0; i < out.length; i++) {
+    const team = out[i];
+    let changed = false;
+    for (let g = 0; g < SEASON_LENGTH; g++) {
+      if (schedule[i][g] === NUM_TEAMS - 1 && team.gameLog[g] == null) {
+        const result = quickSim(userLineup, team.lineup, tr);
+        team.gameLog[g] = result === 0 ? 0 : 1;
+        changed = true;
+      }
+    }
+    if (changed) {
+      team.w = team.gameLog.filter((x) => x === 1).length;
+      team.l = team.gameLog.filter((x) => x === 0).length;
+    }
+  }
+  return out;
+}
+
 export function getAiRecordsAtGame(aiTeams, g) {
   return aiTeams.map((t) => {
     const games = t.gameLog.slice(0, g);
