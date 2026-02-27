@@ -19,6 +19,7 @@ import {
   simulate,
   quickSim,
   simLeagueGames,
+  buildAiRecordsFromUserSeason,
   fillMissingVsUserSlots,
   getTier,
   cellBg,
@@ -1085,7 +1086,9 @@ if(phase==="teamSetup") return(
 
   if(phase==="playoffs"&&bracket){
     const champion=bracket.champion,playerWon=champion?.isPlayer;
-    const filledAi = schedule && teamRoster ? fillMissingVsUserSlots(aiTeams, myLineup, schedule, teamRoster) : aiTeams;
+    const filledAi = schedule && season?.gameLog?.length
+      ? buildAiRecordsFromUserSeason(aiTeams, schedule, season)
+      : schedule && teamRoster ? fillMissingVsUserSlots(aiTeams, myLineup, schedule, teamRoster) : aiTeams;
     const finalAiRec = filledAi.map((t) => {
       const rec = getRecordFromGameLog(t.gameLog);
       return { ...t, w: rec ? rec.w : t.w, l: rec ? rec.l : t.l };
@@ -1175,7 +1178,9 @@ if(phase==="teamSetup") return(
   }
 
   if(phase==="seasonEnd"){
-    const filledAi = schedule && teamRoster ? fillMissingVsUserSlots(aiTeams, myLineup, schedule, teamRoster) : aiTeams;
+    const filledAi = schedule && season?.gameLog?.length
+      ? buildAiRecordsFromUserSeason(aiTeams, schedule, season)
+      : schedule && teamRoster ? fillMissingVsUserSlots(aiTeams, myLineup, schedule, teamRoster) : aiTeams;
     const finalAi = filledAi.map((t) => {
       const rec = getRecordFromGameLog(t.gameLog);
       return { ...t, w: rec ? rec.w : t.w, l: rec ? rec.l : t.l };
@@ -1320,7 +1325,7 @@ if(phase==="teamSetup") return(
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
             <div>Adjacent ×0.82 · Wrong ×0.65</div>
           </div>}
-          {showStandings&&<div style={{marginBottom:10}}><StandingsTable aiTeams={aiTeams} myRecord={myRecord} myName={myTeamName} highlight/></div>}
+          {showStandings&&<div style={{marginBottom:10}}><StandingsTable aiTeams={schedule&&season?.gameLog?.length?buildAiRecordsFromUserSeason(aiTeams,schedule,season):aiTeams} myRecord={myRecord} myName={myTeamName} highlight/></div>}
           {!result?(
             <div style={{background:"#0f172a",borderRadius:16,padding:24,border:"1px solid #1e293b",textAlign:"center",marginBottom:10}}>
               <div style={{fontSize:13,color:"#64748b",marginBottom:14,fontWeight:700,letterSpacing:1}}>GAME {gameNum} vs {opp?.name}</div>

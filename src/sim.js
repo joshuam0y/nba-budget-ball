@@ -707,30 +707,50 @@ export function simLeagueGames(teams, schedule, tr) {
 }
 
 /**
- * Fill any remaining null "vs user" slots in AI gameLogs so every team has 82 games.
- * Call when user has completed 82 games but some AI teams still have nulls (slot-matching bug).
+ * Build AI team records from the user's season game log (single source of truth).
+ * Maps each "vs user" slot to the correct user game so every team ends up with 82 games when season.gp === 82.
  * Returns a new array of teams (does not mutate input).
+ */
+export function buildAiRecordsFromUserSeason(aiTeams, schedule, season) {
+  if (!schedule || !season?.gameLog || aiTeams.length !== NUM_TEAMS - 1) return aiTeams;
+  const userLog = season.gameLog;
+  const gp = season.gp ?? userLog.length;
+  const out = aiTeams.map((t, i) => {
+    const gameLog = [...(t.gameLog || Array(SEASON_LENGTH).fill(null))];
+    const oppSlots = [];
+    for (let g = 0; g < SEASON_LENGTH; g++) if (schedule[i][g] === NUM_TEAMS - 1) oppSlots.push(g);
+    const userGameIndices = [];
+    for (let u = 0; u < SEASON_LENGTH; u++) if (schedule[NUM_TEAMS - 1][u] === i) userGameIndices.push(u);
+    for (let j = 0; j < oppSlots.length && j < userGameIndices.length && userGameIndices[j] < gp; j++) {
+      const won = userLog[userGameIndices[j]]?.won;
+      gameLog[oppSlots[j]] = won === true ? 0 : won === false ? 1 : null;
+    }
+    const w = gameLog.filter((x) => x === 1).length;
+    const l = gameLog.filter((x) => x === 0).length;
+    return { ...t, gameLog, w, l };
+  });
+  return out;
+}
+
+/**
+ * Fill any remaining null "vs user" slots with quickSim when user game log isn't available (fallback).
  */
 export function fillMissingVsUserSlots(aiTeams, userLineup, schedule, tr) {
   if (!schedule || !userLineup || aiTeams.length !== NUM_TEAMS - 1) return aiTeams;
-  const out = aiTeams.map((t, idx) => ({
+  const out = aiTeams.map((t) => ({
     ...t,
     gameLog: [...(t.gameLog || Array(SEASON_LENGTH).fill(null))],
   }));
   for (let i = 0; i < out.length; i++) {
     const team = out[i];
-    let changed = false;
     for (let g = 0; g < SEASON_LENGTH; g++) {
       if (schedule[i][g] === NUM_TEAMS - 1 && team.gameLog[g] == null) {
         const result = quickSim(userLineup, team.lineup, tr);
         team.gameLog[g] = result === 0 ? 0 : 1;
-        changed = true;
       }
     }
-    if (changed) {
-      team.w = team.gameLog.filter((x) => x === 1).length;
-      team.l = team.gameLog.filter((x) => x === 0).length;
-    }
+    team.w = team.gameLog.filter((x) => x === 1).length;
+    team.l = team.gameLog.filter((x) => x === 0).length;
   }
   return out;
 }
