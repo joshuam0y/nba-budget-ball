@@ -203,7 +203,14 @@ function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
   const userRow = { name: myName, w: myRecord.w, l: myRecord.l, eff: myRecord.eff || 0, isPlayer: true, conference: userMeta.conference, division: userMeta.division };
   const all = [
     userRow,
-    ...aiTeams.map((t) => ({ name: t.name, w: t.w, l: t.l, eff: t.eff, isPlayer: false, conference: t.conference, division: t.division })),
+    ...aiTeams.map((t) => {
+      let w = t.w, l = t.l;
+      if (t.gameLog && Array.isArray(t.gameLog)) {
+        w = t.gameLog.filter((x) => x === 1).length;
+        l = t.gameLog.filter((x) => x === 0).length;
+      }
+      return { name: t.name, w, l, eff: t.eff, isPlayer: false, conference: t.conference, division: t.division };
+    }),
   ];
   const east = all.filter((t) => t.conference === "East").sort((a, b) => b.w - a.w || (b.eff - a.eff));
   const west = all.filter((t) => t.conference === "West").sort((a, b) => b.w - a.w || (b.eff - a.eff));
@@ -808,9 +815,10 @@ const startSeason = async () => {
       const g = gameNum + k;
       const oppIndex = schedule[29][g - 1];
       const opp = newAi[oppIndex];
-      const result = quickSim(myLineup, opp.lineup, teamRoster);
-      const won = result === 0;
-      newSeason = addToSeason(newSeason, [], won, 0, 0, myLineup);
+      const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty });
+      const won = res.myScore > res.oppScore;
+      const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
+      newSeason = addToSeason(newSeason, uniqueStats, won, res.myScore, res.oppScore);
       let slot = (() => {
         const indices = [];
         for (let i = 0; i < SEASON_LENGTH; i++) if (schedule[oppIndex][i] === NUM_TEAMS - 1) indices.push(i);
