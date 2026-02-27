@@ -725,30 +725,35 @@ export function simLeagueGames(teams, schedule, tr) {
   const n = teams.length;
   const records = teams.map((t) => ({ ...t, w: 0, l: 0, gameLog: Array(SEASON_LENGTH).fill(null) }));
   const USER_INDEX = NUM_TEAMS - 1;
-  const pairGames = {};
+
+  // Pre-build slot lists: for each team, which slots are vs which opponent.
+  // slotsByOpp[i][j] = list of slot indices where team i faces team j.
+  const slotsByOpp = Array.from({ length: n }, () => ({}));
   for (let i = 0; i < n; i++) {
     for (let g = 0; g < SEASON_LENGTH; g++) {
       const j = schedule[i][g];
-      if (i === USER_INDEX || j === USER_INDEX) continue;
-      const key = i < j ? `${i}-${j}` : `${j}-${i}`;
-      if (!pairGames[key]) pairGames[key] = { low: Math.min(i, j), high: Math.max(i, j), pairs: [] };
-      if (i < j) {
-        pairGames[key].pairs.push({ lowG: g, highG: -1 });
-      } else {
-        const first = pairGames[key].pairs.findIndex((p) => p.highG === -1);
-        if (first >= 0) pairGames[key].pairs[first].highG = g;
+      if (!slotsByOpp[i][j]) slotsByOpp[i][j] = [];
+      slotsByOpp[i][j].push(g);
+    }
+  }
+
+  // Simulate every AI vs AI pair once (i < j, neither user).
+  // Directly fill both teams' corresponding slots so no game is ever missed.
+  for (let i = 0; i < n; i++) {
+    if (i === USER_INDEX) continue;
+    for (let j = i + 1; j < n; j++) {
+      if (j === USER_INDEX) continue;
+      const iSlots = slotsByOpp[i][j] || [];
+      const jSlots = slotsByOpp[j][i] || [];
+      const cnt = Math.min(iSlots.length, jSlots.length);
+      for (let k = 0; k < cnt; k++) {
+        const result = quickSim(records[i].lineup, records[j].lineup, tr);
+        records[i].gameLog[iSlots[k]] = result === 0 ? 1 : 0;
+        records[j].gameLog[jSlots[k]] = result === 1 ? 1 : 0;
       }
     }
   }
-  for (const key of Object.keys(pairGames)) {
-    const { low, high, pairs } = pairGames[key];
-    for (const { lowG, highG } of pairs) {
-      if (highG < 0) continue;
-      const result = quickSim(records[low].lineup, records[high].lineup, tr);
-      records[low].gameLog[lowG] = result === 0 ? 1 : 0;
-      records[high].gameLog[highG] = result === 1 ? 1 : 0;
-    }
-  }
+
   for (let i = 0; i < n; i++) {
     if (i === USER_INDEX) continue;
     records[i].w = records[i].gameLog.filter((x) => x === 1).length;
@@ -768,14 +773,26 @@ export function buildAiRecordsFromUserSeason(aiTeams, schedule, season) {
   const gp = season.gp ?? userLog.length;
   const out = aiTeams.map((t, i) => {
     const gameLog = [...(t.gameLog || Array(SEASON_LENGTH).fill(null))];
+
+    // Fill vs-user slots from the user's game log.
     const oppSlots = [];
     for (let g = 0; g < SEASON_LENGTH; g++) if (schedule[i][g] === NUM_TEAMS - 1) oppSlots.push(g);
     const userGameIndices = [];
     for (let u = 0; u < SEASON_LENGTH; u++) if (schedule[NUM_TEAMS - 1][u] === i) userGameIndices.push(u);
-    for (let j = 0; j < oppSlots.length && j < userGameIndices.length && userGameIndices[j] < gp; j++) {
-      const won = userLog[userGameIndices[j]]?.won;
-      gameLog[oppSlots[j]] = won === true ? 0 : won === false ? 1 : null;
+    for (let j = 0; j < oppSlots.length && j < userGameIndices.length; j++) {
+      const slotIdx = userGameIndices[j];
+      if (slotIdx >= gp) continue;
+      const won = userLog[slotIdx]?.won;
+      if (won === true) gameLog[oppSlots[j]] = 0;
+      else if (won === false) gameLog[oppSlots[j]] = 1;
     }
+
+    // Defensive pass: fill any remaining null slots (AI vs AI games that were missed)
+    // with a fair coin-flip so W+L always equals SEASON_LENGTH.
+    for (let g = 0; g < SEASON_LENGTH; g++) {
+      if (gameLog[g] === null) gameLog[g] = Math.random() < 0.5 ? 1 : 0;
+    }
+
     const w = gameLog.filter((x) => x === 1).length;
     const l = gameLog.filter((x) => x === 0).length;
     return { ...t, gameLog, w, l };
@@ -795,9 +812,14 @@ export function fillMissingVsUserSlots(aiTeams, userLineup, schedule, tr) {
   for (let i = 0; i < out.length; i++) {
     const team = out[i];
     for (let g = 0; g < SEASON_LENGTH; g++) {
-      if (schedule[i][g] === NUM_TEAMS - 1 && team.gameLog[g] == null) {
+      if (team.gameLog[g] !== null) continue;
+      if (schedule[i][g] === NUM_TEAMS - 1) {
+        // vs user: quickSim
         const result = quickSim(userLineup, team.lineup, tr);
         team.gameLog[g] = result === 0 ? 0 : 1;
+      } else {
+        // AI vs AI null (defensive fallback): fair coin-flip
+        team.gameLog[g] = Math.random() < 0.5 ? 1 : 0;
       }
     }
     team.w = team.gameLog.filter((x) => x === 1).length;
