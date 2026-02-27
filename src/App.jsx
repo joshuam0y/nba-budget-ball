@@ -205,6 +205,16 @@ function getRecordFromGameLog(gameLog) {
   return { w, l };
 }
 
+function standingsSort(a, b) {
+  const gpA = a.w + a.l;
+  const gpB = b.w + b.l;
+  const pctA = gpA > 0 ? a.w / gpA : 0;
+  const pctB = gpB > 0 ? b.w / gpB : 0;
+  if (pctB !== pctA) return pctB - pctA;
+  if (b.w !== a.w) return b.w - a.w;
+  return (b.eff || 0) - (a.eff || 0);
+}
+
 function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
   const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
   const userRow = {
@@ -225,8 +235,8 @@ function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
       return { name: t.name, w, l, eff: t.eff, isPlayer: false, conference: t.conference, division: t.division };
     }),
   ];
-  const east = all.filter((t) => t.conference === "East").sort((a, b) => b.w - a.w || (b.eff - a.eff));
-  const west = all.filter((t) => t.conference === "West").sort((a, b) => b.w - a.w || (b.eff - a.eff));
+  const east = all.filter((t) => t.conference === "East").sort(standingsSort);
+  const west = all.filter((t) => t.conference === "West").sort(standingsSort);
 
   const renderTable = (confLabel, color, rows) => (
     <table key={confLabel} style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 280 }}>
@@ -287,10 +297,10 @@ function seedConference(teams, divisions) {
   const byDiv = {};
   divisions.forEach((d) => (byDiv[d] = teams.filter((t) => t.division === d)));
   const divWinners = divisions.map((d) => {
-    const arr = byDiv[d].sort((a, b) => b.w - a.w || (b.eff - a.eff));
+    const arr = byDiv[d].sort(standingsSort);
     return arr[0];
-  }).filter(Boolean).sort((a, b) => b.w - a.w || (b.eff - a.eff));
-  const rest = teams.filter((t) => !divWinners.includes(t)).sort((a, b) => b.w - a.w || (b.eff - a.eff));
+  }).filter(Boolean).sort(standingsSort);
+  const rest = teams.filter((t) => !divWinners.includes(t)).sort(standingsSort);
   const seeds = [...divWinners, ...rest.slice(0, 7)];
   return seeds.slice(0, 10);
 }
@@ -1170,7 +1180,7 @@ if(phase==="teamSetup") return(
     const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
     const userRecord = { name: myTeamName, w: season.w, l: SEASON_LENGTH - season.w, eff: myEffVal || 0, isPlayer: true, division: userMeta.division, conference: userMeta.conference };
     const all = [userRecord, ...finalAi.map((t) => ({ ...t, isPlayer: false }))];
-    const confTeams = all.filter((t) => t.conference === userMeta.conference).sort((a, b) => b.w - a.w || (b.eff - a.eff));
+    const confTeams = all.filter((t) => t.conference === userMeta.conference).sort(standingsSort);
     const myRankInConf = confTeams.findIndex((t) => t.isPlayer) + 1;
     const playoff = myRankInConf <= 10;
     const playIn = myRankInConf >= 7 && myRankInConf <= 10;
