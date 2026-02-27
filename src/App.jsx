@@ -198,17 +198,30 @@ function BoxScore({stats,acc,label}){
   );
 }
 
+function getRecordFromGameLog(gameLog) {
+  if (!gameLog || !Array.isArray(gameLog)) return null;
+  const w = gameLog.filter((x) => x === 1).length;
+  const l = gameLog.filter((x) => x === 0).length;
+  return { w, l };
+}
+
 function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
   const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
-  const userRow = { name: myName, w: myRecord.w, l: myRecord.l, eff: myRecord.eff || 0, isPlayer: true, conference: userMeta.conference, division: userMeta.division };
+  const userRow = {
+    name: myName,
+    w: myRecord.w,
+    l: myRecord.l,
+    eff: myRecord.eff || 0,
+    isPlayer: true,
+    conference: userMeta.conference,
+    division: userMeta.division,
+  };
   const all = [
     userRow,
     ...aiTeams.map((t) => {
-      let w = t.w, l = t.l;
-      if (t.gameLog && Array.isArray(t.gameLog)) {
-        w = t.gameLog.filter((x) => x === 1).length;
-        l = t.gameLog.filter((x) => x === 0).length;
-      }
+      const fromLog = getRecordFromGameLog(t.gameLog);
+      const w = fromLog ? fromLog.w : t.w;
+      const l = fromLog ? fromLog.l : t.l;
       return { name: t.name, w, l, eff: t.eff, isPlayer: false, conference: t.conference, division: t.division };
     }),
   ];
@@ -231,7 +244,8 @@ function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
       </thead>
       <tbody>
         {rows.map((t, i) => {
-          const pct = t.w + t.l > 0 ? rf((t.w / (t.w + t.l)) * 100, 1) : 0;
+          const gp = t.w + t.l;
+          const pct = gp > 0 ? rf((t.w / gp) * 100, 1) : 0;
           const isHL = highlight && t.isPlayer;
           return (
             <tr key={t.name} style={{ borderBottom: "1px solid #0d1626", background: isHL ? "#0d2137" : i % 2 === 0 ? "#080f1e" : "#0a1221" }}>
@@ -1060,7 +1074,10 @@ if(phase==="teamSetup") return(
 
   if(phase==="playoffs"&&bracket){
     const champion=bracket.champion,playerWon=champion?.isPlayer;
-    const finalAiRec=aiTeams.map((t)=>({...t,w:t.w,l:t.l}));
+    const finalAiRec = aiTeams.map((t) => {
+      const rec = getRecordFromGameLog(t.gameLog);
+      return { ...t, w: rec ? rec.w : t.w, l: rec ? rec.l : t.l };
+    });
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
         {volumeSlider}{skipBtn}
@@ -1146,11 +1163,10 @@ if(phase==="teamSetup") return(
   }
 
   if(phase==="seasonEnd"){
-    const finalAi = aiTeams.map((t) => ({
-      ...t,
-      w: (t.gameLog && t.gameLog.filter((x) => x === 1).length) ?? t.w,
-      l: (t.gameLog && t.gameLog.filter((x) => x === 0).length) ?? t.l,
-    }));
+    const finalAi = aiTeams.map((t) => {
+      const rec = getRecordFromGameLog(t.gameLog);
+      return { ...t, w: rec ? rec.w : t.w, l: rec ? rec.l : t.l };
+    });
     const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
     const userRecord = { name: myTeamName, w: season.w, l: SEASON_LENGTH - season.w, eff: myEffVal || 0, isPlayer: true, division: userMeta.division, conference: userMeta.conference };
     const all = [userRecord, ...finalAi.map((t) => ({ ...t, isPlayer: false }))];
