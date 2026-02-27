@@ -18,9 +18,6 @@ import {
   getNBATeamsWithMeta,
   simulate,
   quickSim,
-  simLeagueGames,
-  buildAiRecordsFromUserSeason,
-  fillMissingVsUserSlots,
   getTier,
   cellBg,
   getArchetype,
@@ -218,6 +215,7 @@ function standingsSort(a, b) {
 }
 
 function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
+  const [viewMode, setViewMode] = useState("divisions"); // "divisions" | "conference"
   const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
   const userRow = {
     name: myName,
@@ -240,7 +238,17 @@ function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
   const east = all.filter((t) => t.conference === "East").sort(standingsSort);
   const west = all.filter((t) => t.conference === "West").sort(standingsSort);
 
-  const renderTable = (confLabel, color, rows) => (
+  const buildRankMap = (rows) => {
+    const m = {};
+    rows.forEach((t, i) => {
+      m[t.name] = i + 1;
+    });
+    return m;
+  };
+  const eastRanks = buildRankMap(east);
+  const westRanks = buildRankMap(west);
+
+  const renderTable = (confLabel, color, rows, ranks) => (
     <table key={confLabel} style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 280 }}>
       <thead>
         <tr style={{ borderBottom: "1px solid #1e293b" }}>
@@ -255,37 +263,117 @@ function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
         </tr>
       </thead>
       <tbody>
-        {rows.map((t, i) => {
-          const gp = t.w + t.l;
-          const pct = gp > 0 ? rf((t.w / gp) * 100, 1) : 0;
-          const isHL = highlight && t.isPlayer;
-          return (
-            <tr key={t.name} style={{ borderBottom: "1px solid #0d1626", background: isHL ? "#0d2137" : i % 2 === 0 ? "#080f1e" : "#0a1221" }}>
-              <td style={{ textAlign: "center", padding: "4px 6px", color: i < 6 ? "#22c55e" : i < 10 ? "#f59e0b" : "#475569", fontWeight: 800 }}>{i + 1}</td>
-              <td style={{ padding: "4px 6px", fontWeight: 700, color: t.isPlayer ? "#60a5fa" : "#e2e8f0" }}>
-                {t.isPlayer ? "🌟 " : ""}{t.name}
-                {i === 5 && <span style={{ marginLeft: 4, fontSize: 9, background: "#14532d", color: "#4ade80", borderRadius: 3, padding: "1px 4px" }}>6</span>}
-                {(i === 6 || i === 7) && <span style={{ marginLeft: 4, fontSize: 9, background: "#78350f", color: "#fbbf24", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
-                {(i === 8 || i === 9) && <span style={{ marginLeft: 4, fontSize: 9, background: "#3b0764", color: "#c084fc", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
-                {i === 10 && <span style={{ marginLeft: 4, fontSize: 9, background: "#7f1d1d", color: "#fca5a5", borderRadius: 3, padding: "1px 4px" }}>OUT</span>}
-              </td>
-              <td style={{ textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{t.w}</td>
-              <td style={{ textAlign: "center", color: "#f87171" }}>{t.l}</td>
-              <td style={{ textAlign: "center" }}>{pct}%</td>
-              <td style={{ textAlign: "center", color: "#a78bfa" }}>{rf(t.eff, 0)}</td>
-            </tr>
-          );
-        })}
+        {viewMode === "divisions"
+          ? Array.from(new Set(rows.map((t) => t.division))).sort().map((div) => {
+              const divTeams = rows.filter((t) => t.division === div);
+              if (!divTeams.length) return null;
+              const divLeaderName = divTeams[0].name; // rows already sorted by standingsSort
+              return (
+                <>
+                  <tr style={{ background: "#020617" }}>
+                    <td colSpan={6} style={{ padding: "4px 6px", fontSize: 9, color: "#64748b", fontWeight: 700, letterSpacing: 1 }}>
+                      {div.toUpperCase()} DIVISION
+                    </td>
+                  </tr>
+                  {divTeams.map((t) => {
+                    const idx = (ranks[t.name] ?? 1) - 1;
+                    const gp = t.w + t.l;
+                    const pct = gp > 0 ? rf((t.w / gp) * 100, 1) : 0;
+                    const isHL = highlight && t.isPlayer;
+                    const isDivWinner = t.name === divLeaderName;
+                    return (
+                      <tr key={t.name} style={{ borderBottom: "1px solid #0d1626", background: isHL ? "#0d2137" : idx % 2 === 0 ? "#080f1e" : "#0a1221" }}>
+                        <td style={{ textAlign: "center", padding: "4px 6px", color: idx < 6 ? "#22c55e" : idx < 10 ? "#f59e0b" : "#475569", fontWeight: 800 }}>
+                          {idx + 1}
+                        </td>
+                        <td style={{ padding: "4px 6px", fontWeight: 700, color: t.isPlayer ? "#60a5fa" : "#e2e8f0" }}>
+                          {t.isPlayer ? "🌟 " : ""}{t.name}
+                          {isDivWinner && <span style={{ marginLeft: 4, fontSize: 9, background: "#0369a1", color: "#e0f2fe", borderRadius: 3, padding: "1px 4px" }}>DIV</span>}
+                          {idx === 5 && <span style={{ marginLeft: 4, fontSize: 9, background: "#14532d", color: "#4ade80", borderRadius: 3, padding: "1px 4px" }}>6</span>}
+                          {(idx === 6 || idx === 7) && <span style={{ marginLeft: 4, fontSize: 9, background: "#78350f", color: "#fbbf24", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
+                          {(idx === 8 || idx === 9) && <span style={{ marginLeft: 4, fontSize: 9, background: "#3b0764", color: "#c084fc", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
+                          {idx === 10 && <span style={{ marginLeft: 4, fontSize: 9, background: "#7f1d1d", color: "#fca5a5", borderRadius: 3, padding: "1px 4px" }}>OUT</span>}
+                        </td>
+                        <td style={{ textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{t.w}</td>
+                        <td style={{ textAlign: "center", color: "#f87171" }}>{t.l}</td>
+                        <td style={{ textAlign: "center" }}>{pct}%</td>
+                        <td style={{ textAlign: "center", color: "#a78bfa" }}>{rf(t.eff, 0)}</td>
+                      </tr>
+                    );
+                  })}
+                </>
+              );
+            })
+          : rows.map((t) => {
+              const idx = (ranks[t.name] ?? 1) - 1;
+              const gp = t.w + t.l;
+              const pct = gp > 0 ? rf((t.w / gp) * 100, 1) : 0;
+              const isHL = highlight && t.isPlayer;
+              const isDivWinner =
+                rows.find((x) => x.division === t.division) &&
+                rows.filter((x) => x.division === t.division)[0].name === t.name;
+              return (
+                <tr key={t.name} style={{ borderBottom: "1px solid #0d1626", background: isHL ? "#0d2137" : idx % 2 === 0 ? "#080f1e" : "#0a1221" }}>
+                  <td style={{ textAlign: "center", padding: "4px 6px", color: idx < 6 ? "#22c55e" : idx < 10 ? "#f59e0b" : "#475569", fontWeight: 800 }}>
+                    {idx + 1}
+                  </td>
+                  <td style={{ padding: "4px 6px", fontWeight: 700, color: t.isPlayer ? "#60a5fa" : "#e2e8f0" }}>
+                    {t.isPlayer ? "🌟 " : ""}{t.name}
+                    {isDivWinner && <span style={{ marginLeft: 4, fontSize: 9, background: "#0369a1", color: "#e0f2fe", borderRadius: 3, padding: "1px 4px" }}>DIV</span>}
+                    {idx === 5 && <span style={{ marginLeft: 4, fontSize: 9, background: "#14532d", color: "#4ade80", borderRadius: 3, padding: "1px 4px" }}>6</span>}
+                    {(idx === 6 || idx === 7) && <span style={{ marginLeft: 4, fontSize: 9, background: "#78350f", color: "#fbbf24", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
+                    {(idx === 8 || idx === 9) && <span style={{ marginLeft: 4, fontSize: 9, background: "#3b0764", color: "#c084fc", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
+                    {idx === 10 && <span style={{ marginLeft: 4, fontSize: 9, background: "#7f1d1d", color: "#fca5a5", borderRadius: 3, padding: "1px 4px" }}>OUT</span>}
+                  </td>
+                  <td style={{ textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{t.w}</td>
+                  <td style={{ textAlign: "center", color: "#f87171" }}>{t.l}</td>
+                  <td style={{ textAlign: "center" }}>{pct}%</td>
+                  <td style={{ textAlign: "center", color: "#a78bfa" }}>{rf(t.eff, 0)}</td>
+                </tr>
+              );
+            })}
       </tbody>
     </table>
   );
 
   return (
     <div style={{ background: "#0f172a", borderRadius: 10, overflow: "hidden", border: "1px solid #1e293b" }}>
-      <div style={{ padding: "8px 12px", background: "#1e293b", fontWeight: 800, fontSize: 10, letterSpacing: 2, color: "#60a5fa" }}>🏆 LEAGUE STANDINGS</div>
+      <div style={{ padding: "8px 12px", background: "#1e293b", fontWeight: 800, fontSize: 10, letterSpacing: 2, color: "#60a5fa", display:"flex",alignItems:"center",justifyContent:"space-between",gap:8 }}>
+        <span>🏆 LEAGUE STANDINGS</span>
+        <div style={{display:"flex",gap:4,fontSize:9}}>
+          <button
+            onClick={() => setViewMode("divisions")}
+            style={{
+              padding:"3px 8px",
+              borderRadius:999,
+              border:"1px solid #334155",
+              background:viewMode==="divisions"?"#0f172a":"#020617",
+              color:viewMode==="divisions"?"#e5e7eb":"#64748b",
+              cursor:"pointer",
+              fontWeight:700,
+            }}
+          >
+            DIVISIONS
+          </button>
+          <button
+            onClick={() => setViewMode("conference")}
+            style={{
+              padding:"3px 8px",
+              borderRadius:999,
+              border:"1px solid #334155",
+              background:viewMode==="conference"?"#0f172a":"#020617",
+              color:viewMode==="conference"?"#e5e7eb":"#64748b",
+              cursor:"pointer",
+              fontWeight:700,
+            }}
+          >
+            CONFERENCE
+          </button>
+        </div>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: 10, overflowX: "auto" }}>
-        {renderTable("EAST", "#3b82f6", east)}
-        {renderTable("WEST", "#f59e0b", west)}
+        {renderTable("EAST", "#3b82f6", east, eastRanks)}
+        {renderTable("WEST", "#f59e0b", west, westRanks)}
       </div>
       <div style={{ padding: "6px 12px", borderTop: "2px dashed #1e293b", fontSize: 9, color: "#22c55e" }}>▲ You’re in {userMeta.conference} ({userMeta.division}) · Top 6 direct · 7–10 play-in</div>
     </div>
@@ -735,6 +823,53 @@ const volumeSlider = (
   const myCh=myLineup?chemBoost(myLineup,teamRoster):0;
   const myRecord={w:season.w,l:season.l,eff:myEffVal||0};
 
+  // Simulate all non-user games for a given game index (0-based).
+  const applyDayResults = useCallback(
+    (dayIndex, oppIndex, userWon) => {
+      setAiTeams((prev) => {
+        const USER_INDEX = NUM_TEAMS - 1;
+        const next = prev.map((t) => ({
+          ...t,
+          gameLog: [...(t.gameLog || Array(SEASON_LENGTH).fill(null))],
+        }));
+
+        // Record opponent's result vs user for this day.
+        if (oppIndex != null && next[oppIndex]) {
+          next[oppIndex].gameLog[dayIndex] = userWon ? 0 : 1;
+        }
+
+        // Build list of AI teams that still need a game this day (exclude user opponent).
+        const pool = [];
+        for (let i = 0; i < NUM_TEAMS - 1; i++) {
+          if (i === oppIndex) continue;
+          pool.push(i);
+        }
+        // Shuffle for randomness.
+        for (let k = pool.length - 1; k > 0; k--) {
+          const r = Math.floor(Math.random() * (k + 1));
+          [pool[k], pool[r]] = [pool[r], pool[k]];
+        }
+        // Pair off and quick-sim.
+        while (pool.length > 1) {
+          const a = pool.pop();
+          const b = pool.pop();
+          const res = quickSim(next[a].lineup, next[b].lineup, teamRoster);
+          next[a].gameLog[dayIndex] = res === 0 ? 1 : 0;
+          next[b].gameLog[dayIndex] = res === 1 ? 1 : 0;
+        }
+
+        // Recompute W/L from full log.
+        for (let i = 0; i < next.length; i++) {
+          const gl = next[i].gameLog;
+          next[i].w = gl.filter((x) => x === 1).length;
+          next[i].l = gl.filter((x) => x === 0).length;
+        }
+        return next;
+      });
+    },
+    [teamRoster]
+  );
+
   useEffect(()=>{
     setImportInfo("Loading players...");
     Promise.all([
@@ -770,9 +905,15 @@ const startSeason = async () => {
   if(!full) return;
   const sched = buildSeasonSchedule();
   const teams = generateLeague(myLineup, playerPool, myTeamName);
-  const simmed = simLeagueGames(teams, sched, teamRoster);
+  // Initialize AI teams with empty 82-game logs; games will be added day-by-day.
+  const ai = teams.slice(0, NUM_TEAMS - 1).map((t) => ({
+    ...t,
+    w: 0,
+    l: 0,
+    gameLog: Array(SEASON_LENGTH).fill(null),
+  }));
   setSchedule(sched);
-  setAiTeams(simmed.slice(0, NUM_TEAMS - 1));
+  setAiTeams(ai);
   setInSeason(true);
   setSeason(emptySeason());
   setGameNum(1);
@@ -785,41 +926,18 @@ const startSeason = async () => {
   getTopPicks().then(setTopPicks);
 };
 
-  const getOppVsUserSlot = (oppIndex, userGameIndex) => {
-    if (!schedule) return -1;
-    const indices = [];
-    for (let g = 0; g < SEASON_LENGTH; g++) if (schedule[oppIndex][g] === NUM_TEAMS - 1) indices.push(g);
-    const count = schedule[29].slice(0, userGameIndex).filter((x) => x === oppIndex).length;
-    return indices[count] ?? -1;
-  };
-
   const playGame = () => {
     if (!full || !schedule || gameNum > SEASON_LENGTH) return;
-    const oppIndex = schedule[29][gameNum - 1];
+    const USER_INDEX = NUM_TEAMS - 1;
+    const oppIndex = schedule[USER_INDEX][gameNum - 1];
     const opp = aiTeams[oppIndex];
     if (!opp) return;
     const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty });
     const won = res.myScore > res.oppScore;
     const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
     setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
-    let slot = getOppVsUserSlot(oppIndex, gameNum - 1);
-    setAiTeams((teams) => {
-      const t = teams[oppIndex];
-      if (slot < 0 && t?.gameLog && schedule)
-        for (let i = 0; i < SEASON_LENGTH; i++)
-          if (schedule[oppIndex][i] === NUM_TEAMS - 1 && t.gameLog[i] == null) {
-            slot = i;
-            break;
-          }
-      return teams.map((t, i) => {
-        if (i !== oppIndex || slot < 0) return t;
-        const newLog = [...t.gameLog];
-        newLog[slot] = won ? 0 : 1;
-        const w = newLog.filter((x) => x === 1).length;
-        const l = newLog.filter((x) => x === 0).length;
-        return { ...t, gameLog: newLog, w, l };
-      });
-    });
+    // Apply this day's results to all AI teams (including opponent vs user).
+    applyDayResults(gameNum - 1, oppIndex, won);
     setResult(res);
   };
 
@@ -834,39 +952,19 @@ const startSeason = async () => {
 
   const simGames = (count) => {
     if (!full || !schedule || gameNum > SEASON_LENGTH) return;
-    let newSeason = { ...season };
-    let newAi = aiTeams.map((t) => ({ ...t, gameLog: [...t.gameLog] }));
     const toPlay = Math.min(count, SEASON_LENGTH - gameNum + 1);
     for (let k = 0; k < toPlay; k++) {
       const g = gameNum + k;
-      const oppIndex = schedule[29][g - 1];
-      const opp = newAi[oppIndex];
+      const USER_INDEX = NUM_TEAMS - 1;
+      const oppIndex = schedule[USER_INDEX][g - 1];
+      const opp = aiTeams[oppIndex];
       const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty });
       const won = res.myScore > res.oppScore;
       const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
-      newSeason = addToSeason(newSeason, uniqueStats, won, res.myScore, res.oppScore);
-      let slot = (() => {
-        const indices = [];
-        for (let i = 0; i < SEASON_LENGTH; i++) if (schedule[oppIndex][i] === NUM_TEAMS - 1) indices.push(i);
-        const c = schedule[29].slice(0, g - 1).filter((x) => x === oppIndex).length;
-        return indices[c];
-      })();
-      if (slot == null) {
-        for (let i = 0; i < SEASON_LENGTH; i++)
-          if (schedule[oppIndex][i] === NUM_TEAMS - 1 && newAi[oppIndex].gameLog[i] == null) {
-            slot = i;
-            break;
-          }
-      }
-      if (slot != null) {
-        newAi[oppIndex].gameLog[slot] = won ? 0 : 1;
-        const gl = newAi[oppIndex].gameLog;
-        newAi[oppIndex].w = gl.filter((x) => x === 1).length;
-        newAi[oppIndex].l = gl.filter((x) => x === 0).length;
-      }
+      // Update season + all AI results for this day.
+      setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
+      applyDayResults(g - 1, oppIndex, won);
     }
-    setSeason(newSeason);
-    setAiTeams(newAi);
     const nextGameNum = Math.min(gameNum + toPlay, SEASON_LENGTH);
     setGameNum(nextGameNum);
     setResult(null);
@@ -1086,13 +1184,7 @@ if(phase==="teamSetup") return(
 
   if(phase==="playoffs"&&bracket){
     const champion=bracket.champion,playerWon=champion?.isPlayer;
-    const filledAi = schedule && season?.gameLog?.length
-      ? buildAiRecordsFromUserSeason(aiTeams, schedule, season)
-      : schedule && teamRoster ? fillMissingVsUserSlots(aiTeams, myLineup, schedule, teamRoster) : aiTeams;
-    const finalAiRec = filledAi.map((t) => {
-      const rec = getRecordFromGameLog(t.gameLog);
-      return { ...t, w: rec ? rec.w : t.w, l: rec ? rec.l : t.l };
-    });
+    const finalAiRec = aiTeams;
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
         {volumeSlider}{skipBtn}
@@ -1178,13 +1270,7 @@ if(phase==="teamSetup") return(
   }
 
   if(phase==="seasonEnd"){
-    const filledAi = schedule && season?.gameLog?.length
-      ? buildAiRecordsFromUserSeason(aiTeams, schedule, season)
-      : schedule && teamRoster ? fillMissingVsUserSlots(aiTeams, myLineup, schedule, teamRoster) : aiTeams;
-    const finalAi = filledAi.map((t) => {
-      const rec = getRecordFromGameLog(t.gameLog);
-      return { ...t, w: rec ? rec.w : t.w, l: rec ? rec.l : t.l };
-    });
+    const finalAi = aiTeams;
     const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
     const userRecord = { name: myTeamName, w: season.w, l: SEASON_LENGTH - season.w, eff: myEffVal || 0, isPlayer: true, division: userMeta.division, conference: userMeta.conference };
     const all = [userRecord, ...finalAi.map((t) => ({ ...t, isPlayer: false }))];
@@ -1325,7 +1411,16 @@ if(phase==="teamSetup") return(
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
             <div>Adjacent ×0.82 · Wrong ×0.65</div>
           </div>}
-          {showStandings&&<div style={{marginBottom:10}}><StandingsTable aiTeams={schedule&&season?.gameLog?.length?buildAiRecordsFromUserSeason(aiTeams,schedule,season):aiTeams} myRecord={myRecord} myName={myTeamName} highlight/></div>}
+          {showStandings&&(
+            <div style={{marginBottom:10}}>
+              <StandingsTable
+                aiTeams={aiTeams}
+                myRecord={myRecord}
+                myName={myTeamName}
+                highlight
+              />
+            </div>
+          )}
           {!result?(
             <div style={{background:"#0f172a",borderRadius:16,padding:24,border:"1px solid #1e293b",textAlign:"center",marginBottom:10}}>
               <div style={{fontSize:13,color:"#64748b",marginBottom:14,fontWeight:700,letterSpacing:1}}>GAME {gameNum} vs {opp?.name}</div>
@@ -1357,11 +1452,32 @@ if(phase==="teamSetup") return(
   </div>
 )}
               <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center"}}>
-                <button onClick={playGame} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding:"11px 32px",fontSize:14,fontWeight:800,cursor:"pointer"}}>▶ PLAY GAME {gameNum}</button>
+                <button
+                  onClick={playGame}
+                  style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding:"11px 32px",fontSize:14,fontWeight:800,cursor:"pointer"}}
+                >
+                  ▶ PLAY GAME {gameNum}
+                </button>
                 {gameNum < SEASON_LENGTH && (
                   <>
-                    <button onClick={()=>simGames(41)} style={{background:"#475569",color:"white",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:"pointer"}}>⏩ SIM 41 GAMES</button>
-                    <button onClick={()=>simGames(SEASON_LENGTH - gameNum + 1)} style={{background:"#334155",color:"#94a3b8",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:"pointer"}}>⏭ SIM REST</button>
+                    <button
+                      onClick={()=>simGames(10)}
+                      style={{background:"#4b5563",color:"white",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:"pointer"}}
+                    >
+                      ⏩ SIM 10 GAMES
+                    </button>
+                    <button
+                      onClick={()=>simGames(41)}
+                      style={{background:"#475569",color:"white",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:"pointer"}}
+                    >
+                      ⏩ SIM 41 GAMES
+                    </button>
+                    <button
+                      onClick={()=>simGames(SEASON_LENGTH - gameNum + 1)}
+                      style={{background:"#334155",color:"#94a3b8",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:"pointer"}}
+                    >
+                      ⏭ SIM REST
+                    </button>
                   </>
                 )}
               </div>
