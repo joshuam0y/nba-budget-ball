@@ -632,6 +632,7 @@ export default function App(){
   const [showPlayoffLeaders,setShowPlayoffLeaders]=useState(false);
   const [topPicks, setTopPicks] = useState([]);
   const [myTeamName, setMyTeamName] = useState("Your Team");
+  const [teamNameHistory, setTeamNameHistory] = useState([]);
   const [difficulty, setDifficulty] = useState("standard"); // casual | standard | hardcore
   const [inspectPlayer, setInspectPlayer] = useState(null);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -645,6 +646,20 @@ export default function App(){
     const handler = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
+  }, []);
+
+  // Load previously used team names (local history)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("nba-budget-ball-teamnames");
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) setTeamNameHistory(arr);
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   // Load saved team name and roster from localStorage or URL once players are loaded
@@ -714,6 +729,22 @@ export default function App(){
       // ignore localStorage issues
     }
   }, [roster, myTeamName, difficulty]);
+
+  const rememberTeamName = useCallback((name) => {
+    const trimmed = (name || "").trim();
+    if (!trimmed) return;
+    setTeamNameHistory((prev) => {
+      const next = [trimmed, ...prev.filter((n) => n !== trimmed)].slice(0, 8);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem("nba-budget-ball-teamnames", JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+      }
+      return next;
+    });
+  }, []);
 
   // First-time tutorial: show when entering draft if never seen
   useEffect(() => {
@@ -1435,13 +1466,39 @@ if(phase==="teamSetup") return(
           autoFocus
           value={myTeamName}
           onChange={e=>setMyTeamName(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&myTeamName.trim()&&setPhase("draft")}
+          onKeyDown={e=>{
+            if(e.key==="Enter"&&myTeamName.trim()){
+              rememberTeamName(myTeamName);
+              setPhase("draft");
+            }
+          }}
           maxLength={20}
           placeholder="e.g. Hardwood Kings..."
           style={{width:"100%",background:"#080f1e",border:"1px solid #334155",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#e2e8f0",outline:"none",boxSizing:"border-box",marginBottom:16,textAlign:"center"}}
         />
+        {teamNameHistory.length>0&&(
+          <div style={{marginBottom:12,fontSize:10,color:"#64748b"}}>
+            <div style={{marginBottom:4,fontWeight:700,letterSpacing:0.5}}>RECENT NAMES</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center"}}>
+              {teamNameHistory.slice(0,6).map((name)=>(
+                <button
+                  key={name}
+                  type="button"
+                  onClick={()=>setMyTeamName(name)}
+                  style={{borderRadius:999,background:"#020617",border:"1px solid #1e293b",padding:"4px 8px",color:"#e5e7eb",fontSize:10,cursor:"pointer"}}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <button
-          onClick={()=>myTeamName.trim()&&setPhase("draft")}
+          onClick={()=>{
+            if(!myTeamName.trim()) return;
+            rememberTeamName(myTeamName);
+            setPhase("draft");
+          }}
           disabled={!myTeamName.trim()}
           style={{width:"100%",background:myTeamName.trim()?"linear-gradient(135deg,#f59e0b,#d97706)":"#1e293b",color:myTeamName.trim()?"white":"#374151",border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:800,cursor:myTeamName.trim()?"pointer":"not-allowed"}}>
           🏀 LET'S BUILD
@@ -1983,7 +2040,7 @@ if(phase==="teamSetup") return(
             <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.6,marginBottom:20}}>
               <div style={{marginBottom:8}}>1. <strong style={{color:"#e2e8f0"}}>Name your team</strong> and tap Let&apos;s Build.</div>
               <div style={{marginBottom:8}}>2. <strong style={{color:"#e2e8f0"}}>Draft 5 players</strong> (one per position) within your <strong style={{color:"#fbbf24"}}>${BUDGET}</strong> budget.</div>
-              <div style={{marginBottom:8}}>3. Play an <strong style={{color:"#e2e8f0"}}>11-game season</strong> vs AI teams — win to climb the standings.</div>
+              <div style={{marginBottom:8}}>3. Play an <strong style={{color:"#e2e8f0"}}>82-game season</strong> vs 29 AI teams — win to climb the standings.</div>
               <div>4. <strong style={{color:"#e2e8f0"}}>Playoffs</strong>: top 6 go straight in; seeds 7–10 enter the play-in. Win to become champion!</div>
             </div>
             <button onClick={dismissTutorial} style={{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"white",border:"none",borderRadius:8,padding:12,fontSize:14,fontWeight:800,cursor:"pointer"}}>Got it</button>
