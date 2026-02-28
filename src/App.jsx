@@ -3085,6 +3085,7 @@ if(phase==="teamSetup") return(
                 <select
                   value={yearF}
                   onChange={(e) => setYearF(e.target.value)}
+                  title={showOnePerPlayer ? "All Years = one row per player. Pick a year to see all seasons." : ""}
                   style={{
                     background: "#1e293b",
                     border: "1px solid #334155",
@@ -3105,6 +3106,7 @@ if(phase==="teamSetup") return(
                 <select
                   value={teamF}
                   onChange={(e) => setTeamF(e.target.value)}
+                  title={showOnePerPlayer ? "All Teams = one row per player. Pick a team to see all seasons." : ""}
                   style={{
                     background: "#1e293b",
                     border: "1px solid #334155",
@@ -3122,11 +3124,6 @@ if(phase==="teamSetup") return(
                     </option>
                   ))}
                 </select>
-                {showOnePerPlayer && (
-                  <span style={{ fontSize: 9, color: "#475569", fontStyle: "italic" }}>
-                    Pick year or team to compare seasons
-                  </span>
-                )}
                 {(archF !== "ALL" ||
                   yearF !== "ALL" ||
                   teamF !== "ALL" ||
