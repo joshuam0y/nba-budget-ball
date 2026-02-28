@@ -2189,13 +2189,16 @@ if(phase==="teamSetup") return(
     );
   });
 
-  // One row per player when year/team are both "All"; pick year or team to see all seasons (same player, different years).
-  const showOnePerPlayer = yearF === "ALL" && teamF === "ALL";
+  // One row per player when not deliberately "expanding": no search, year All, team All.
+  // That way role/position filters never show duplicate players. When you search (e.g. last name)
+  // or pick a year/team, we show all matching rows so every version pops up.
+  const showOnePerPlayer = yearF === "ALL" && teamF === "ALL" && search === "";
   const collapsedByName = showOnePerPlayer
     ? (() => {
         const byName = new Map();
         for (const p of filteredPool) {
-          const key = p.fullName || p.name;
+          const key = ((p.fullName || p.name) || "").toLowerCase().trim();
+          if (!key) continue;
           const existing = byName.get(key);
           if (!existing || (p.rating || 0) > (existing.rating || 0)) {
             byName.set(key, p);
