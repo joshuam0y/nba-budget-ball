@@ -1417,6 +1417,8 @@ const newSeason = () => {
   setShowTutorial(true);
   setImportInfo("");
   setImportErr("");
+  setYearF("ALL");
+  setTeamF("ALL");
   getTopPicks().then(setTopPicks);
 };
 
@@ -1565,6 +1567,7 @@ if(phase==="teamSetup") return(
             <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
             <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
             <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
+            <div style={{marginBottom:2}}>• Difficulty: Casual = you're favored · Hardcore = CPU favored</div>
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
             <div>Adjacent ×0.82 · Wrong ×0.65</div>
           </div>}
@@ -1586,6 +1589,10 @@ if(phase==="teamSetup") return(
                   <div style={{fontSize: 12, color: "#64748b"}}>—</div>
                 )}
               </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 12 }}>
+                <button onClick={newSeason} style={{ background: "linear-gradient(135deg,#3b82f6,#6366f1)", color: "white", border: "none", borderRadius: 10, padding: "12px 20px", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 2px 10px rgba(99,102,241,0.3)" }}>🔄 New Season</button>
+                <button onClick={() => document.getElementById("playoff-bracket")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "#1e293b", color: "#e2e8f0", border: "1px solid #334155", borderRadius: 10, padding: "12px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>View Bracket</button>
+              </div>
             </>
           )}
           {elimInPlayoffs&&!champion&&(
@@ -1594,7 +1601,9 @@ if(phase==="teamSetup") return(
             </div>
           )}
           <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"8px 0"}}>Loading bracket…</div>}>
-            <BracketDisplayLazy bracket={bracket} finalsMVP={finalsMVP} activeMatchId={activeMatchId} nextPlayerMatchId={nextPlayerMatchId || undefined} onSelectMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);}} onPlayMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);playPlayoffGame(id);}} isMobile={isMobile} density={bracketDensity}/>
+            <div id="playoff-bracket">
+            <BracketDisplayLazy bracket={bracket} activeMatchId={activeMatchId} nextPlayerMatchId={nextPlayerMatchId || undefined} onSelectMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);}} onPlayMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);playPlayoffGame(id);}} isMobile={isMobile} density={bracketDensity}/>
+            </div>
           </Suspense>
           {activeMatchId&&(()=>{
             const parsed=getPlayoffMatchup(bracket,activeMatchId);
@@ -1849,6 +1858,7 @@ if(phase==="teamSetup") return(
           <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
           <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
           <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
+          <div style={{marginBottom:2}}>• Difficulty: Casual = you're favored · Hardcore = CPU favored</div>
           <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
           <div>Adjacent ×0.82 · Wrong ×0.65</div>
         </div>}
@@ -2012,6 +2022,7 @@ if(phase==="teamSetup") return(
             <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
             <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
             <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
+            <div style={{marginBottom:2}}>• Difficulty: Casual = you're favored · Hardcore = CPU favored</div>
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
             <div>Adjacent ×0.82 · Wrong ×0.65</div>
           </div>}
@@ -2138,23 +2149,13 @@ if(phase==="teamSetup") return(
                   <div style={{fontSize:9,color:"#64748b",marginTop:4}}>Possessions: {result.possessionsPerTeam} per team</div>
                 )}
                 {(() => {
-                  const topMy = [...result.myStats].sort((a,b)=>b.pts-a.pts)[0];
-                  const topOpp = [...result.oppStats].sort((a,b)=>b.pts-a.pts)[0];
-                  if (!topMy && !topOpp) return null;
+                  const allStats = [...(result.myStats || []).map(s => ({ ...s, team: myTeamName })), ...(result.oppStats || []).map(s => ({ ...s, team: opp?.name || "Opponent" }))];
+                  const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.5 + (s.ast || 0) * 0.5;
+                  const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
+                  if (!pog) return null;
                   return (
-                    <div style={{marginTop:6,fontSize:10,color:"#f59e0b",fontWeight:700}}>
-                      🏅 Top Performers —{" "}
-                      {topMy && (
-                        <span>
-                          {topMy.name} ({myTeamName}) {topMy.pts} pts
-                        </span>
-                      )}
-                      {topMy && topOpp && <span style={{color:"#64748b"}}>  ·  </span>}
-                      {topOpp && (
-                        <span>
-                          {topOpp.name} ({opp?.name||"Opponent"}) {topOpp.pts} pts
-                        </span>
-                      )}
+                    <div style={{marginTop:8,fontSize:11,color:"#fbbf24",fontWeight:800}}>
+                      🏅 Player of the game: {pog.name} — {rf(pog.pts,0)} pts, {rf(pog.reb,0)} reb, {rf(pog.ast,0)} ast
                     </div>
                   );
                 })()}
@@ -2759,21 +2760,34 @@ if(phase==="teamSetup") return(
               {myLineup && (() => {
                 const bal = getTeamBalance(myLineup);
                 if (!bal) return null;
+                const suggested = bal.missing?.length > 0 ? (bal.missing[0] === "Big Man" ? "Add a big" : bal.missing[0] === "Playmaker" ? "Add a playmaker" : bal.missing[0] === "Defender" ? "Add defense" : bal.missing[0] === "Scorer" ? "Add shooting" : "Add " + bal.missing[0].toLowerCase()) : null;
                 return (
-                  <div style={{ marginTop: 6, background: "#080f1e", borderRadius: 8, padding: "6px 8px", border: "1px solid #1e293b" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, letterSpacing: 1 }}>TEAM BALANCE</div>
-                      <div style={{ fontSize: 16, fontWeight: 900, color: bal.color }}>{bal.grade}</div>
-                    </div>
-                    {bal.archetypeBonus !== 0 && (
-                      <div style={{ fontSize: 10, color: bal.archetypeBonus > 0 ? "#22c55e" : "#ef4444", fontWeight: 700 }}>
-                        🧩 Archetype bonus: {bal.archetypeBonus > 0 ? "+" : ""}{bal.archetypeBonus}
+                  <>
+                    {openPositions.length > 0 && suggested && (
+                      <div style={{ marginTop: 6, fontSize: 10, color: "#94a3b8", fontStyle: "italic" }}>
+                        Suggested: {suggested}
                       </div>
                     )}
-                    {bal.missing?.length > 0 && (
-                      <div style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>Missing: {bal.missing.join(", ")}</div>
-                    )}
-                  </div>
+                    <div style={{ marginTop: 6, background: "#080f1e", borderRadius: 8, padding: "6px 8px", border: "1px solid #1e293b" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, letterSpacing: 1 }}>TEAM BALANCE</div>
+                        <div style={{ fontSize: 16, fontWeight: 900, color: bal.color }}>{bal.grade}</div>
+                      </div>
+                      {bal.archetypeBonus !== 0 && (
+                        <div style={{ fontSize: 10, color: bal.archetypeBonus > 0 ? "#22c55e" : "#ef4444", fontWeight: 700 }}>
+                          🧩 Archetype bonus: {bal.archetypeBonus > 0 ? "+" : ""}{bal.archetypeBonus}
+                        </div>
+                      )}
+                      {bal.activeSynergies?.length > 0 && (
+                        <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 4 }}>
+                          Active: {bal.activeSynergies.map((s) => s.label + " (" + (s.bonus >= 0 ? "+" : "") + s.bonus + ")").join(", ")}
+                        </div>
+                      )}
+                      {bal.missing?.length > 0 && (
+                        <div style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>Missing: {bal.missing.join(", ")}</div>
+                      )}
+                    </div>
+                  </>
                 );
               })()}
 
@@ -2900,6 +2914,9 @@ if(phase==="teamSetup") return(
                   </div>
                   <div style={{ marginBottom: 2 }}>
                     • Top 6 direct · 7-10 play-in tournament
+                  </div>
+                  <div style={{ marginBottom: 2 }}>
+                    • Difficulty: Casual = you're favored · Hardcore = CPU favored
                   </div>
                 </div>
               )}
@@ -3127,7 +3144,7 @@ if(phase==="teamSetup") return(
                       cursor: "pointer",
                     }}
                   >
-                    ✕ Clear
+                    Clear filters
                   </button>
                 )}
                 <div

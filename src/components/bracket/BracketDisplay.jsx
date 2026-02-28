@@ -1,12 +1,7 @@
 import { MatchupCard } from "./MatchupCard";
 import { ConfBracketSection } from "./ConfBracketSection";
 
-function rf(n, d) {
-  if (n == null || Number.isNaN(n)) return "—";
-  return Number(n).toFixed(d ?? 0);
-}
-
-export function BracketDisplay({ bracket, finalsMVP, onSelectMatch, onPlayMatch, activeMatchId, nextPlayerMatchId, isMobile, density }) {
+export function BracketDisplay({ bracket, onSelectMatch, onPlayMatch, activeMatchId, nextPlayerMatchId, isMobile, density }) {
   const champion = bracket.champion;
   const hasConferences = bracket.east && bracket.west;
   const pad = isMobile ? 12 : 20;
@@ -45,23 +40,11 @@ export function BracketDisplay({ bracket, finalsMVP, onSelectMatch, onPlayMatch,
                 <MatchupCard matchup={bracket.finals} matchId="finals" isActive={activeMatchId === "finals"} isYourNextGame={"finals" === nextPlayerMatchId} onSelectMatch={onSelectMatch} onPlayMatch={onPlayMatch} isMobile={isMobile} density={density} />
               </div>
               {champion && (
-                <>
-                  <div style={{ marginTop: 14, textAlign: "center", padding: isMobile ? 14 : 16, background: "linear-gradient(135deg,#78350f,#92400e)", borderRadius: 12, border: "2px solid #fbbf24", boxShadow: "0 4px 16px rgba(251,191,36,0.2)" }}>
-                    <div style={{ fontSize: 28, marginBottom: 4 }}>🏆</div>
-                    <div style={{ fontSize: 11, color: "#fde68a", fontWeight: 900, letterSpacing: 2 }}>CHAMPION</div>
-                    <div style={{ fontSize: isMobile ? 16 : 18, fontWeight: 900, color: champion.isPlayer ? "#93c5fd" : "#fef3c7", marginTop: 4 }}>{champion.isPlayer ? "🌟 " : ""}{champion.name}</div>
-                  </div>
-                  {finalsMVP && (
-                    <div style={{ marginTop: 10, textAlign: "center", padding: 10, background: "#0f172a", borderRadius: 10, border: "1px solid #eab308" }}>
-                      <div style={{ fontSize: 9, color: "#eab308", fontWeight: 800, letterSpacing: 2, marginBottom: 4 }}>🏆 FINALS MVP</div>
-                      <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 900 }}>{finalsMVP.name}</div>
-                      <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>{finalsMVP.pos || "—"} · {finalsMVP.team}</div>
-                      {(finalsMVP.ppg != null || finalsMVP.rpg != null || finalsMVP.apg != null) && (
-                        <div style={{ fontSize: 11, color: "#e5e7eb", marginTop: 4 }}>{rf(finalsMVP.ppg, 1)} PPG · {rf(finalsMVP.rpg, 1)} RPG · {rf(finalsMVP.apg, 1)} APG</div>
-                      )}
-                    </div>
-                  )}
-                </>
+                <div style={{ marginTop: 14, textAlign: "center", padding: isMobile ? 14 : 16, background: "linear-gradient(135deg,#78350f,#92400e)", borderRadius: 12, border: "2px solid #fbbf24", boxShadow: "0 4px 16px rgba(251,191,36,0.2)" }}>
+                  <div style={{ fontSize: 28, marginBottom: 4 }}>🏆</div>
+                  <div style={{ fontSize: 11, color: "#fde68a", fontWeight: 900, letterSpacing: 2 }}>CHAMPION</div>
+                  <div style={{ fontSize: isMobile ? 16 : 18, fontWeight: 900, color: champion.isPlayer ? "#93c5fd" : "#fef3c7", marginTop: 4 }}>{champion.isPlayer ? "🌟 " : ""}{champion.name}</div>
+                </div>
               )}
             </div>
           )}

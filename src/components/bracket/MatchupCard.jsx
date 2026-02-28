@@ -38,7 +38,9 @@ export function MatchupCard({ matchup, matchId, isActive, onSelectMatch, onPlayM
       }}
     >
       {isYourNextGame && !done && <div style={{ fontSize: isMobile ? 10 : 9, color: "#22c55e", fontWeight: 800, letterSpacing: 0.5, marginBottom: 6 }}>YOUR GAME</div>}
-      <div style={{ fontSize: labelSize, color: "#64748b", letterSpacing: 1, marginBottom: 8, fontWeight: 700, textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontSize: labelSize, color: "#64748b", letterSpacing: 1, marginBottom: 8, fontWeight: 700, textTransform: "uppercase" }}>
+        {label}{showWins && games.length > 0 ? ` · ${wA}–${wB}` : ""}
+      </div>
       {[top, bot].map((team, ti) => {
         const isW = winner?.name === team?.name, wins = ti === 0 ? wA : wB;
         return team ? (

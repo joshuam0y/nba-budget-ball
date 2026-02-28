@@ -13,7 +13,7 @@ const TARGET_POSS_PER_TEAM_MAX = 104;
 const TARGET_TEAM_PTS_MEAN = 114;
 const TARGET_TEAM_PTS_SD = 6;
 const TARGET_TEAM_PTS_MIN = 99;
-const TARGET_TEAM_PTS_MAX = 129;
+const TARGET_TEAM_PTS_MAX = 135;
 // Not every miss = player rebound; slight bump so REB a little higher
 const REB_CREDIT_RATE = 0.98;
 // Offensive rebounds: we split ORB vs DRB. Real NBA ~22–26% of rebounds are ORB.
@@ -1139,7 +1139,52 @@ export function archetypeChemBonus(lineup) {
   const paintCount = archs.filter((a) => ["paint", "glass"].includes(a)).length;
   if (paintCount >= 2 && !archs.some((a) => ["stretch", "spotUp", "threeD"].includes(a))) bonus -= 4;
 
+  // No rim protector with multiple bigs (defensive gap)
+  const hasRimProt = archs.includes("rimProt");
+  if (!hasRimProt && paintCount >= 2) bonus -= 2;
+
+  // 3+ non-shooters (paint, glass, lockdown, rimProt only) — spacing kill
+  const nonShooterCount = archs.filter((a) =>
+    ["paint", "glass", "lockdown", "rimProt"].includes(a)
+  ).length;
+  if (nonShooterCount >= 3) bonus -= 3;
+
   return bonus;
+}
+
+// Returns list of active synergy labels and their bonus for UI (e.g. "Floor General + Spot-up (+7)").
+export function getActiveSynergies(lineup) {
+  if (!lineup || lineup.length !== 5) return [];
+  const archs = lineup.map(({ player }) => getArchetype(player).id);
+  const list = [];
+
+  if (archs.includes("fg") && archs.includes("spotUp")) list.push({ label: "Floor General + Spot-up", bonus: 7 });
+  if (archs.includes("fg") && (archs.includes("bucket") || archs.includes("scoringGuard"))) list.push({ label: "Floor General + Scorer", bonus: 6 });
+  if (archs.includes("fg") && archs.includes("wing")) list.push({ label: "Floor General + Wing", bonus: 5 });
+  if (archs.includes("fg") && archs.includes("stretch")) list.push({ label: "Floor General + Stretch", bonus: 5 });
+  if (archs.includes("rimProt") && archs.includes("lockdown")) list.push({ label: "Rim Protector + Lockdown", bonus: 7 });
+  if (archs.includes("rimProt") && archs.includes("threeD")) list.push({ label: "Rim Protector + 3&D", bonus: 4 });
+  if (archs.includes("lockdown") && archs.includes("threeD")) list.push({ label: "Lockdown + 3&D", bonus: 5 });
+  if (archs.includes("pmBig") && (archs.includes("spotUp") || archs.includes("stretch"))) list.push({ label: "Playmaking Big + Spacing", bonus: 6 });
+  if (archs.includes("paint") && (archs.includes("spotUp") || archs.includes("stretch"))) list.push({ label: "Paint + Spacing", bonus: 5 });
+  if (archs.includes("glass") && (archs.includes("spotUp") || archs.includes("stretch"))) list.push({ label: "Glass + Spacing", bonus: 5 });
+  if (archs.includes("threeD") && (archs.includes("bucket") || archs.includes("scoringGuard"))) list.push({ label: "3&D + Scorer", bonus: 6 });
+  if (archs.includes("threeD") && archs.includes("spotUp")) list.push({ label: "3&D + Spot-up", bonus: 4 });
+  if (archs.includes("pointForward") && (archs.includes("wing") || archs.includes("bucket"))) list.push({ label: "Point Forward + Scorer", bonus: 6 });
+  if (archs.includes("pointForward") && archs.includes("spotUp")) list.push({ label: "Point Forward + Spot-up", bonus: 4 });
+  if (archs.includes("swiss")) list.push({ label: "Swiss Army Knife", bonus: 4 });
+  if (archs.includes("midrange") && (archs.includes("fg") || archs.includes("pointForward"))) list.push({ label: "Midrange + Playmaker", bonus: 5 });
+
+  const bucketCount = archs.filter((a) => ["bucket", "scoringGuard"].includes(a)).length;
+  if (bucketCount >= 3) list.push({ label: "Too many ball-dominant scorers", bonus: -8 });
+  else if (bucketCount >= 2) list.push({ label: "Two ball-dominant scorers", bonus: -3 });
+  const paintCount = archs.filter((a) => ["paint", "glass"].includes(a)).length;
+  if (paintCount >= 2 && !archs.some((a) => ["stretch", "spotUp", "threeD"].includes(a))) list.push({ label: "Paint bigs, no spacing", bonus: -4 });
+  if (!archs.includes("rimProt") && paintCount >= 2) list.push({ label: "No rim protector", bonus: -2 });
+  const nonShooterCount = archs.filter((a) => ["paint", "glass", "lockdown", "rimProt"].includes(a)).length;
+  if (nonShooterCount >= 3) list.push({ label: "3+ non-shooters", bonus: -3 });
+
+  return list;
 }
 
 export function getTeamBalance(lineup) {
@@ -1197,6 +1242,7 @@ export function getTeamBalance(lineup) {
     score,
     missing,
     archetypeBonus: archetypeChemBonus(lineup),
+    activeSynergies: getActiveSynergies(lineup),
   };
 }
 
