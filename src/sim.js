@@ -141,6 +141,9 @@ export function processCSV(text) {
   return { players: withIdsAndArch, teamRoster };
 }
 
+// Chemistry: same team + same season. Much bigger boost for full squads (3–5 teammates).
+// Tuned for future "full squad" mode where users control teams of one roster.
+const CHEM_BY_COUNT = { 2: 4, 3: 14, 4: 28, 5: 48 };
 export function chemBoost(lineup, teamRoster) {
   if (!teamRoster) return 0;
   let boost = 0;
@@ -156,7 +159,8 @@ export function chemBoost(lineup, teamRoster) {
         .join(",")}`;
       if (!counted.has(pairKey)) {
         counted.add(pairKey);
-        boost += matches.length >= 3 ? 4 : 2;
+        const n = Math.min(matches.length, 5);
+        boost += CHEM_BY_COUNT[n] ?? CHEM_BY_COUNT[2];
       }
     }
   }
@@ -198,14 +202,23 @@ export function teamEff(lineup, teamRoster) {
   );
 }
 
-export function genLineup(excludeIds = new Set(), pool = []) {
+export function genLineup(excludeIds = new Set(), pool = [], excludeNames = new Set()) {
   const used = new Set(excludeIds);
+  const usedNames = new Set(excludeNames);
   const team = [];
   let rem = BUDGET;
   for (const pos of POSITIONS) {
-    const eligible = pool.filter((p) => p.pos === pos && !used.has(p.id));
+    const eligible = pool.filter((p) => {
+      const nameKey = p.fullName || p.name;
+      return p.pos === pos && !used.has(p.id) && !usedNames.has(nameKey);
+    });
     const cands =
-      eligible.length > 0 ? eligible : pool.filter((p) => !used.has(p.id));
+      eligible.length > 0
+        ? eligible
+        : pool.filter((p) => {
+            const nameKey = p.fullName || p.name;
+            return !used.has(p.id) && !usedNames.has(nameKey);
+          });
     if (!cands.length) continue;
     const avg = rem / Math.max(POSITIONS.length - team.length, 1);
     const weights = cands.map((p) =>
@@ -228,6 +241,7 @@ export function genLineup(excludeIds = new Set(), pool = []) {
     }
     team.push({ player: pick, slot: pos });
     used.add(pick.id);
+    usedNames.add(pick.fullName || pick.name);
     rem -= pick.cost;
   }
   return team;
@@ -373,12 +387,30 @@ export function buildSeasonSchedule() {
 }
 
 export function generateLeague(myLineup, pool, userTeamName) {
+  // Collapse pool to the best-rated season per real player (fullName),
+  // so AI teams always draft the strongest version of each player.
+  const byName = new Map();
+  for (const p of pool) {
+    const key = p.fullName || p.name;
+    const existing = byName.get(key);
+    if (!existing || (p.rating || 0) > (existing.rating || 0)) {
+      byName.set(key, p);
+    }
+  }
+  const collapsedPool = Array.from(byName.values());
+
   const usedIds = new Set(myLineup.map((x) => x.player.id));
+  const usedNames = new Set(
+    myLineup.map((x) => (x.player.fullName || x.player.name))
+  );
   const teams = [];
   for (let i = 0; i < NUM_TEAMS - 1; i++) {
     const meta = NBA_TEAMS_META[i];
-    const lineup = genLineup(usedIds, pool);
-    lineup.forEach((x) => usedIds.add(x.player.id));
+    const lineup = genLineup(usedIds, collapsedPool, usedNames);
+    lineup.forEach((x) => {
+      usedIds.add(x.player.id);
+      usedNames.add(x.player.fullName || x.player.name);
+    });
     teams.push({
       name: meta.name,
       division: meta.division,
@@ -434,15 +466,15 @@ export function simulate(
   const { difficulty = "standard" } = options;
   const isPlayoffGame = !!teamRoster?._playoff;
 
-  // Difficulty tuning: tilt effective ratings slightly.
+  // Difficulty: casual = you're favored, hardcore = CPU favored. Standard = even.
   let myE = teamEff(myLineup, teamRoster);
   let oppE = teamEff(oppLineup, teamRoster);
   if (difficulty === "casual") {
-    myE *= 1.06;
-    oppE *= 0.96;
+    myE *= 1.14;
+    oppE *= 0.88;
   } else if (difficulty === "hardcore") {
-    myE *= 0.96;
-    oppE *= 1.06;
+    myE *= 0.88;
+    oppE *= 1.14;
   }
   oppE *= isPlayoffGame ? 1.08 : 1.0;
   const isPlayoff = !!teamRoster?._playoff;
@@ -451,6 +483,8 @@ export function simulate(
     isPlayoff ? 0.46 : 0.44,
     isPlayoff ? 0.54 : 0.56
   );
+  // Possession variance: casual = steadier outcomes, hardcore = swingier games.
+  const possVariance = difficulty === "casual" ? 0.01 : difficulty === "hardcore" ? 0.045 : 0.03;
   const pace = Math.round(
     TARGET_POSS_PER_TEAM_MIN +
     Math.random() * (TARGET_POSS_PER_TEAM_MAX - TARGET_POSS_PER_TEAM_MIN)
@@ -498,10 +532,11 @@ export function simulate(
   }
 
   for (let i = 0; i < pace * 2; i++) {
+    const swing = (Math.random() - 0.5) * 2 * possVariance;
     const isMy =
       i % 2 === 0
-        ? Math.random() < myOff + 0.03
-        : Math.random() < myOff - 0.03;
+        ? Math.random() < myOff + 0.03 + swing
+        : Math.random() < myOff - 0.03 + swing;
     const offS = isMy ? myStats : oppStats;
     const defS = isMy ? oppStats : myStats;
     const offV = isMy ? myVar : oppVar;
@@ -1059,38 +1094,51 @@ export function archetypeMatchupFactor(defArch, offArch) {
   return b[defArch.id]?.[offArch.id] || 1.0;
 }
 
+// Archetype matching: bigger bonuses for synergistic combos (tuned for full-squad mode).
+// All bonuses apply to both player and AI teams in simulate() via teamEff(lineup, teamRoster).
 export function archetypeChemBonus(lineup) {
   const archs = lineup.map(({ player }) => getArchetype(player).id);
   let bonus = 0;
-  if (archs.includes("fg") && archs.includes("spotUp")) bonus += 3;
-  if (
-    archs.includes("fg") &&
-    (archs.includes("bucket") || archs.includes("scoringGuard"))
-  )
-    bonus += 2;
-  if (archs.includes("rimProt") && archs.includes("lockdown")) bonus += 3;
-  if (archs.includes("swiss")) bonus += 1;
-  if (
-    archs.includes("pmBig") &&
-    (archs.includes("spotUp") || archs.includes("stretch"))
-  )
-    bonus += 2;
-  if (
-    archs.includes("threeD") &&
-    (archs.includes("bucket") || archs.includes("scoringGuard"))
-  )
-    bonus += 2;
-  if (
-    archs.includes("playmaker") &&
-    (archs.includes("wing") || archs.includes("scoringGuard"))
-  )
-    bonus += 2;
-  if (archs.includes("fg") && archs.includes("wing")) bonus += 2;
-  const bucketCount = archs.filter((a) =>
-    ["bucket", "scoringGuard"].includes(a)
-  ).length;
-  if (bucketCount >= 3) bonus -= 4;
-  else if (bucketCount >= 2) bonus -= 1;
+
+  // Floor General synergies (playmaker + shooters/scorers)
+  if (archs.includes("fg") && archs.includes("spotUp")) bonus += 7;
+  if (archs.includes("fg") && (archs.includes("bucket") || archs.includes("scoringGuard"))) bonus += 6;
+  if (archs.includes("fg") && archs.includes("wing")) bonus += 5;
+  if (archs.includes("fg") && archs.includes("stretch")) bonus += 5;
+
+  // Defensive identity (rim protector + perimeter D)
+  if (archs.includes("rimProt") && archs.includes("lockdown")) bonus += 7;
+  if (archs.includes("rimProt") && archs.includes("threeD")) bonus += 4;
+  if (archs.includes("lockdown") && archs.includes("threeD")) bonus += 5;
+
+  // Inside-out (big + shooters)
+  if (archs.includes("pmBig") && (archs.includes("spotUp") || archs.includes("stretch"))) bonus += 6;
+  if (archs.includes("paint") && (archs.includes("spotUp") || archs.includes("stretch"))) bonus += 5;
+  if (archs.includes("glass") && (archs.includes("spotUp") || archs.includes("stretch"))) bonus += 5;
+
+  // 3&D spacing
+  if (archs.includes("threeD") && (archs.includes("bucket") || archs.includes("scoringGuard"))) bonus += 6;
+  if (archs.includes("threeD") && archs.includes("spotUp")) bonus += 4;
+
+  // Point forward / playmaking wings
+  if (archs.includes("pointForward") && (archs.includes("wing") || archs.includes("bucket"))) bonus += 6;
+  if (archs.includes("pointForward") && archs.includes("spotUp")) bonus += 4;
+
+  // Swiss Army Knife (versatility)
+  if (archs.includes("swiss")) bonus += 4;
+
+  // Midrange artist (elite iso spacing)
+  if (archs.includes("midrange") && (archs.includes("fg") || archs.includes("pointForward"))) bonus += 5;
+
+  // Too many ball-dominant scorers (anti-synergy)
+  const bucketCount = archs.filter((a) => ["bucket", "scoringGuard"].includes(a)).length;
+  if (bucketCount >= 3) bonus -= 8;
+  else if (bucketCount >= 2) bonus -= 3;
+
+  // Too many paint-only bigs (spacing kill)
+  const paintCount = archs.filter((a) => ["paint", "glass"].includes(a)).length;
+  if (paintCount >= 2 && !archs.some((a) => ["stretch", "spotUp", "threeD"].includes(a))) bonus -= 4;
+
   return bonus;
 }
 

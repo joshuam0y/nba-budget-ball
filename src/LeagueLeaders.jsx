@@ -8,6 +8,7 @@ export function LeagueLeaders({ leaders, myTeamName }) {
   const [stat, setStat] = useState("ppg");
   const [ascending, setAscending] = useState(false);
   const [perMode, setPerMode] = useState("game"); // "game" | "per36"
+  const [showAll, setShowAll] = useState(false);
 
   const leagueLeadersRows = useMemo(() => {
     const arr = Object.values(leaders || {});
@@ -128,12 +129,14 @@ export function LeagueLeaders({ leaders, myTeamName }) {
   ];
 
   const statLabel = statOptions.find(([k]) => k === stat)?.[1] ?? stat;
+  const isMobile = typeof window !== "undefined" ? window.innerWidth < 768 : false;
+  const visibleRows = isMobile && !showAll ? rows.slice(0, 5) : rows;
   return (
     <div style={{ background: "#0f172a", borderRadius: 10, border: "1px solid #1e293b", padding: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
         <div>
           <div style={{ fontWeight: 800, fontSize: 10, letterSpacing: 2, color: "#f97316" }}>📊 LEAGUE LEADERS</div>
-          <div style={{ fontSize: 9, color: "#64748b", marginTop: 2 }}>Top 30 league-wide by {statLabel} · Green = your team</div>
+          <div style={{ fontSize: 9, color: "#64748b", marginTop: 2 }}>{isMobile ? "Top 5 (tap Show all for top 30)" : "Top 30 league-wide"} by {statLabel} · Green = your team</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap:"wrap", justifyContent:"flex-end" }}>
           <div style={{display:"flex",gap:4,alignItems:"center"}}>
@@ -163,54 +166,100 @@ export function LeagueLeaders({ leaders, myTeamName }) {
               ))}
             </div>
           </div>
-          <span style={{ fontSize: 9, color: "#64748b" }}>STAT</span>
-          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-            {statOptions.map(([k,label])=>(
-              <button
-                key={k}
-                onClick={()=>{
-                  if(stat===k){
-                    setAscending(a=>!a);
-                  }else{
-                    setStat(k);
-                    setAscending(false);
-                  }
-                }}
-                style={{
-                  padding:"3px 7px",
-                  borderRadius:999,
-                  border:"1px solid #334155",
-                  background: stat===k ? "#111827" : "#020617",
-                  color: stat===k ? "#e5e7eb" : "#64748b",
-                  fontSize:9,
-                  fontWeight:700,
-                  cursor:"pointer",
-                  minWidth:38,
-                  textAlign:"center",
-                }}
+          {isMobile ? (
+            <>
+              <span style={{ fontSize: 9, color: "#64748b" }}>STAT</span>
+              <select
+                value={stat}
+                onChange={(e) => { setStat(e.target.value); setAscending(false); }}
+                style={{ background:"#020617", color:"#e5e7eb", border:"1px solid #334155", borderRadius:10, padding:"8px 10px", fontSize:12, fontWeight:800 }}
               >
-                {label}{stat===k ? (ascending ? " ↑" : " ↓") : ""}
+                {statOptions.map(([k,label]) => <option key={k} value={k}>{label}</option>)}
+              </select>
+              <button
+                type="button"
+                onClick={() => setAscending((a) => !a)}
+                style={{ padding:"8px 10px", borderRadius:10, border:"1px solid #334155", background:"#0b1220", color:"#cbd5e1", fontSize:12, fontWeight:900, cursor:"pointer", minHeight:40 }}
+              >
+                {ascending ? "↑" : "↓"}
               </button>
-            ))}
-          </div>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: 9, color: "#64748b" }}>STAT</span>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                {statOptions.map(([k,label])=>(
+                  <button
+                    key={k}
+                    onClick={()=>{
+                      if(stat===k){
+                        setAscending(a=>!a);
+                      }else{
+                        setStat(k);
+                        setAscending(false);
+                      }
+                    }}
+                    style={{
+                      padding:"3px 7px",
+                      borderRadius:999,
+                      border:"1px solid #334155",
+                      background: stat===k ? "#111827" : "#020617",
+                      color: stat===k ? "#e5e7eb" : "#64748b",
+                      fontSize:9,
+                      fontWeight:700,
+                      cursor:"pointer",
+                      minWidth:38,
+                      textAlign:"center",
+                    }}
+                  >
+                    {label}{stat===k ? (ascending ? " ↑" : " ↓") : ""}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
-      <div style={{ fontSize: 9, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 6 }}>League leaders (top 30)</div>
-      <div style={{ overflowX: "auto" }}>
+      {isMobile ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {visibleRows.map((p, i) => {
+            const isMine = myTeamName && p.team === myTeamName;
+            const isPct = stat === "fgPct" || stat === "tpPct" || stat === "ftPct";
+            const keyName = isPct ? stat : (perMode === "per36" ? `${stat}36` : stat);
+            const raw = p[keyName] ?? 0;
+            const v = isPct ? `${fmt1(raw)}%` : fmt1(raw);
+            return (
+              <div key={`m-${i}-${p.name}|${p.team}`} style={{ background: isMine ? "#022c22" : "#020617", border:"1px solid #1e293b", borderRadius:12, padding:12 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"baseline" }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:900, color: isMine ? "#a7f3d0" : "#e5e7eb", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{i + 1}. {p.name}</div>
+                    <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{p.pos || "-"} · {p.team} · GP {fmt0(p.gp || 0)}</div>
+                  </div>
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    <div style={{ fontSize:10, color:"#64748b", fontWeight:900, letterSpacing:1 }}>{statLabel}</div>
+                    <div style={{ fontSize:16, fontWeight:900, color:"#f97316" }}>{v}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {rows.length > 5 && (
+            <button type="button" onClick={() => setShowAll((s) => !s)} style={{ border:"1px solid #334155", background:"#0b1220", color:"#e2e8f0", borderRadius:12, padding:"10px 12px", fontSize:12, fontWeight:900, cursor:"pointer", minHeight:44 }}>
+              {showAll ? "Show top 5" : "Show all (top 30)"}
+            </button>
+          )}
+          {rows.length === 0 && (
+            <div style={{ padding: "6px 8px", fontSize: 11, color: "#64748b", textAlign: "center" }}>
+              No games played yet.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 820 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #1e293b", background: "#0f172a" }}>
-              <th style={{ padding: "4px 6px", textAlign: "center", color: "#475569", fontSize: 9 }}>#</th>
-              <th style={{ padding: "4px 6px", textAlign: "left", color: "#475569", fontSize: 9 }}>PLAYER</th>
-              <th style={{ padding: "4px 6px", textAlign: "center", color: "#475569", fontSize: 9 }}>POS</th>
-              <th style={{ padding: "4px 6px", textAlign: "left", color: "#475569", fontSize: 9 }}>TEAM</th>
-              <th style={{ padding: "4px 6px", textAlign: "center", color: "#475569", fontSize: 9 }}>GP</th>
-              <th colSpan={12} style={{ padding: "4px 8px", textAlign: "center", color: "#60a5fa", fontSize: 9, fontWeight: 800, borderLeft: "1px solid #334155", borderRight: "1px solid #334155" }}>PER GAME</th>
-              <th colSpan={6} style={{ padding: "4px 8px", textAlign: "center", color: "#22c55e", fontSize: 9, fontWeight: 800, borderRight: "1px solid #334155" }}>TOTALS</th>
-              <th colSpan={3} style={{ padding: "4px 8px", textAlign: "center", color: "#475569", fontSize: 9, fontWeight: 800 }}>%</th>
-            </tr>
-            <tr style={{ borderBottom: "1px solid #1e293b" }}>
-              {["#", "PLAYER", "POS", "TEAM", "GP", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FGM", "FGA", "3PM", "3PA", "FTM", "FTA", "FGM", "FGA", "3PM", "3PA", "FTM", "FTA", "FG%", "3P%", "FT%"].map((h, idx) => (
+              {["#", "PLAYER", "POS", "TEAM", "GP", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FGM/G", "FGA/G", "3PM/G", "3PA/G", "FTM/G", "FTA/G", "FGM", "FGA", "3PM", "3PA", "FTM", "FTA", "FG%", "3P%", "FT%"].map((h, idx) => (
                 <th
                   key={idx}
                   style={{ padding: "4px 6px", textAlign: h === "#" || h === "GP" ? "center" : "left", color: "#475569", fontSize: 9 }}
@@ -285,7 +334,8 @@ export function LeagueLeaders({ leaders, myTeamName }) {
             )}
           </tbody>
         </table>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

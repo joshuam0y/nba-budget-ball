@@ -1,10 +1,14 @@
 import "./index.css";
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { supabase } from "./supabase";
-import { LeagueLeaders } from "./LeagueLeaders";
-import { AllNBAAllDefensive } from "./AllNBAAllDefensive";
+import { StandingsTable } from "./components/StandingsTable";
+import { BoxScore } from "./components/BoxScore";
+import { TeamStatsPanel } from "./components/TeamStatsPanel";
+import { TeamHighs } from "./components/TeamHighs";
+import { SeasonHighs } from "./components/SeasonHighs";
+import { standingsSort } from "./utils/standings";
 import {
   POSITIONS,
   BUDGET,
@@ -27,6 +31,17 @@ import {
   emptySeason,
   addToSeason,
 } from "./sim";
+
+// Lazy-loaded heavy components for better initial bundle size
+const LeagueLeadersLazy = lazy(() =>
+  import("./LeagueLeaders").then((m) => ({ default: m.LeagueLeaders }))
+);
+const AllNBAAllDefensiveLazy = lazy(() =>
+  import("./AllNBAAllDefensive").then((m) => ({ default: m.AllNBAAllDefensive }))
+);
+const BracketDisplayLazy = lazy(() =>
+  import("./components/bracket").then((m) => ({ default: m.BracketDisplay }))
+);
 
 async function incrementPick(playerName) {
   await supabase.rpc('increment_pick', { player_name: playerName });
@@ -145,563 +160,10 @@ const Tag = ({ label, color, bg }) => (
   </span>
 );
 
-function BoxScore({stats,acc,label}){
-  return(
-    <div style={{marginBottom:10,background:"#0f172a",borderRadius:12,overflow:"hidden",border:"1px solid #1e293b"}}>
-      <div style={{padding:"7px 14px",background:"#1e293b",fontWeight:800,fontSize:11,letterSpacing:2,color:acc}}>{label}</div>
-      <div style={{overflowX:"auto"}}>
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:700}}>
-          <thead><tr style={{borderBottom:"1px solid #1e293b"}}>
-            {[["PLAYER","left"],["POS","c"],["PTS","c"],["REB","c"],["AST","c"],["STL","c"],["BLK","c"],["TOV","c"],["FGM-A","c"],["FG%","c"],["3PM-A","c"],["3P%","c"],["FTM-A","c"],["FT%","c"],["RTG","c"]].map(([h,a])=>(
-              <th key={h} style={{padding:"5px 6px",textAlign:a==="c"?"center":"left",color:"#475569",fontWeight:700,fontSize:10,whiteSpace:"nowrap"}}>{h}</th>
-            ))}
-          </tr></thead>
-          <tbody>
-            {stats.map((s,i)=>(
-              <tr key={i} style={{borderBottom:"1px solid #0d1626"}}>
-                <td style={{padding:"5px 6px",fontWeight:700,whiteSpace:"nowrap"}}>{s.hotCold&&<span style={{marginRight:3}}>{s.hotCold}</span>}{s.name}{s.oop&&<span style={{marginLeft:4,fontSize:9,background:"#78350f",color:"#fbbf24",borderRadius:3,padding:"1px 3px"}}>OOP</span>}</td>
-                <td style={{textAlign:"center",color:"#64748b"}}>{s.pos}</td>
-                <td style={{textAlign:"center",background:cellBg("pts",s.pts),fontWeight:700,padding:"5px 4px"}}>{s.pts}</td>
-                <td style={{textAlign:"center",background:cellBg("reb",s.reb),padding:"5px 4px"}}>{s.reb}</td>
-                <td style={{textAlign:"center",background:cellBg("ast",s.ast),padding:"5px 4px"}}>{s.ast}</td>
-                <td style={{textAlign:"center",background:cellBg("stl",s.stl),padding:"5px 4px"}}>{s.stl}</td>
-                <td style={{textAlign:"center",background:cellBg("blk",s.blk),padding:"5px 4px"}}>{s.blk}</td>
-                <td style={{textAlign:"center",background:cellBg("tov",s.tov),padding:"5px 4px"}}>{s.tov}</td>
-                <td style={{textAlign:"center",padding:"5px 4px",whiteSpace:"nowrap"}}>{s.fgm}-{s.fga}</td>
-                <td style={{textAlign:"center",background:cellBg("fgPct",s.fgPct),padding:"5px 4px"}}>{s.fgPct}%</td>
-                <td style={{textAlign:"center",padding:"5px 4px",whiteSpace:"nowrap"}}>{s.tpm}-{s.tpa}</td>
-                <td style={{textAlign:"center",background:cellBg("tpPct",s.tpPct),padding:"5px 4px"}}>{s.tpPct}%</td>
-                <td style={{textAlign:"center",padding:"5px 4px",whiteSpace:"nowrap"}}>{s.ftm}-{s.fta}</td>
-                <td style={{textAlign:"center",padding:"5px 4px"}}>{s.ftPct}%</td>
-                <td style={{textAlign:"center",background:`rgba(99,102,241,${s.rating/90})`,padding:"5px 4px",fontWeight:700,color:"#c7d2fe"}}>{s.rating}</td>
-              </tr>
-            ))}
-            <tr style={{borderTop:"2px solid #1e293b",background:"#0d1626",fontWeight:800}}>
-              <td style={{padding:"5px 6px",color:acc}}>TEAM</td><td/>
-              <td style={{textAlign:"center",color:acc}}>{stats.reduce((s,x)=>s+x.pts,0)}</td>
-              <td style={{textAlign:"center"}}>{stats.reduce((s,x)=>s+x.ast,0)}</td>
-              <td style={{textAlign:"center"}}>{stats.reduce((s,x)=>s+x.reb,0)}</td>
-              <td style={{textAlign:"center"}}>{stats.reduce((s,x)=>s+x.stl,0)}</td>
-              <td style={{textAlign:"center"}}>{stats.reduce((s,x)=>s+x.blk,0)}</td>
-              <td style={{textAlign:"center"}}>{stats.reduce((s,x)=>s+x.tov,0)}</td>
-              <td style={{textAlign:"center",whiteSpace:"nowrap"}}>{stats.reduce((s,x)=>s+x.fgm,0)}-{stats.reduce((s,x)=>s+x.fga,0)}</td>
-              <td style={{textAlign:"center"}}>{stats.reduce((s,x)=>s+x.fga,0)>0?rf(stats.reduce((s,x)=>s+x.fgm,0)/stats.reduce((s,x)=>s+x.fga,0)*100):0}%</td>
-              <td style={{textAlign:"center",whiteSpace:"nowrap"}}>{stats.reduce((s,x)=>s+x.tpm,0)}-{stats.reduce((s,x)=>s+x.tpa,0)}</td>
-              <td style={{textAlign:"center"}}>{stats.reduce((s,x)=>s+x.tpa,0)>0?rf(stats.reduce((s,x)=>s+x.tpm,0)/stats.reduce((s,x)=>s+x.tpa,0)*100):0}%</td>
-              <td style={{textAlign:"center",whiteSpace:"nowrap"}}>{stats.reduce((s,x)=>s+x.ftm,0)}-{stats.reduce((s,x)=>s+x.fta,0)}</td>
-              <td style={{textAlign:"center"}}>{stats.reduce((s,x)=>s+x.fta,0)>0?rf(stats.reduce((s,x)=>s+x.ftm,0)/stats.reduce((s,x)=>s+x.fta,0)*100):0}%</td>
-              <td/>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function getRecordFromGameLog(gameLog) {
-  if (!gameLog || !Array.isArray(gameLog)) return null;
-  const w = gameLog.filter((x) => x === 1).length;
-  const l = gameLog.filter((x) => x === 0).length;
-  return { w, l };
-}
-
-function standingsSort(a, b) {
-  const gpA = a.w + a.l;
-  const gpB = b.w + b.l;
-  const pctA = gpA > 0 ? a.w / gpA : 0;
-  const pctB = gpB > 0 ? b.w / gpB : 0;
-  if (pctB !== pctA) return pctB - pctA;
-  if (b.w !== a.w) return b.w - a.w;
-  return (b.eff || 0) - (a.eff || 0);
-}
-
-function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
-  const [viewMode, setViewMode] = useState("divisions"); // "divisions" | "conference"
-  const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
-  const userRow = {
-    name: myName,
-    w: myRecord.w,
-    l: myRecord.l,
-    eff: myRecord.eff || 0,
-    isPlayer: true,
-    conference: userMeta.conference,
-    division: userMeta.division,
-  };
-  const all = [
-    userRow,
-    ...aiTeams.map((t) => {
-      const fromLog = getRecordFromGameLog(t.gameLog);
-      const w = fromLog ? fromLog.w : t.w;
-      const l = fromLog ? fromLog.l : t.l;
-      return { name: t.name, w, l, eff: t.eff, isPlayer: false, conference: t.conference, division: t.division };
-    }),
-  ];
-  const east = all.filter((t) => t.conference === "East").sort(standingsSort);
-  const west = all.filter((t) => t.conference === "West").sort(standingsSort);
-
-  const buildRankMap = (rows) => {
-    const m = {};
-    rows.forEach((t, i) => {
-      m[t.name] = i + 1;
-    });
-    return m;
-  };
-  const eastRanks = buildRankMap(east);
-  const westRanks = buildRankMap(west);
-
-  const renderTable = (confLabel, color, rows, ranks) => (
-    <table key={confLabel} style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 280 }}>
-      <thead>
-        <tr style={{ borderBottom: "1px solid #1e293b" }}>
-          <th colSpan={6} style={{ padding: "6px 8px", textAlign: "left", color, fontWeight: 800, fontSize: 10, letterSpacing: 2 }}>
-            {confLabel} ({rows.length})
-          </th>
-        </tr>
-        <tr style={{ borderBottom: "1px solid #1e293b" }}>
-          {[["#", "c"], ["TEAM", "left"], ["W", "c"], ["L", "c"], ["PCT", "c"], ["RTG", "c"]].map(([h, a]) => (
-            <th key={h} style={{ padding: "4px 6px", textAlign: a === "c" ? "center" : "left", color: "#475569", fontSize: 10 }}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {viewMode === "divisions"
-          ? Array.from(new Set(rows.map((t) => t.division))).sort().map((div) => {
-              const divTeams = rows.filter((t) => t.division === div);
-              if (!divTeams.length) return null;
-              const divLeaderName = divTeams[0].name; // rows already sorted by standingsSort
-              return (
-                <>
-                  <tr style={{ background: "#020617" }}>
-                    <td colSpan={6} style={{ padding: "4px 6px", fontSize: 9, color: "#64748b", fontWeight: 700, letterSpacing: 1 }}>
-                      {div.toUpperCase()} DIVISION
-                    </td>
-                  </tr>
-                  {divTeams.map((t) => {
-                    const idx = (ranks[t.name] ?? 1) - 1;
-                    const gp = t.w + t.l;
-                    const pct = gp > 0 ? rf((t.w / gp) * 100, 1) : 0;
-                    const isHL = highlight && t.isPlayer;
-                    const isDivWinner = t.name === divLeaderName;
-                    return (
-                      <tr key={t.name} style={{ borderBottom: "1px solid #0d1626", background: isHL ? "#0d2137" : idx % 2 === 0 ? "#080f1e" : "#0a1221" }}>
-                        <td style={{ textAlign: "center", padding: "4px 6px", color: idx < 6 ? "#22c55e" : idx < 10 ? "#f59e0b" : "#475569", fontWeight: 800 }}>
-                          {idx + 1}
-                        </td>
-                        <td style={{ padding: "4px 6px", fontWeight: 700, color: t.isPlayer ? "#60a5fa" : "#e2e8f0" }}>
-                          {t.isPlayer ? "🌟 " : ""}{t.name}
-                          {isDivWinner && <span style={{ marginLeft: 4, fontSize: 9, background: "#0369a1", color: "#e0f2fe", borderRadius: 3, padding: "1px 4px" }}>DIV</span>}
-                          {idx === 5 && <span style={{ marginLeft: 4, fontSize: 9, background: "#14532d", color: "#4ade80", borderRadius: 3, padding: "1px 4px" }}>6</span>}
-                          {(idx === 6 || idx === 7) && <span style={{ marginLeft: 4, fontSize: 9, background: "#78350f", color: "#fbbf24", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
-                          {(idx === 8 || idx === 9) && <span style={{ marginLeft: 4, fontSize: 9, background: "#3b0764", color: "#c084fc", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
-                          {idx === 10 && <span style={{ marginLeft: 4, fontSize: 9, background: "#7f1d1d", color: "#fca5a5", borderRadius: 3, padding: "1px 4px" }}>OUT</span>}
-                        </td>
-                        <td style={{ textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{t.w}</td>
-                        <td style={{ textAlign: "center", color: "#f87171" }}>{t.l}</td>
-                        <td style={{ textAlign: "center" }}>{pct}%</td>
-                        <td style={{ textAlign: "center", color: "#a78bfa" }}>{rf(t.eff, 0)}</td>
-                      </tr>
-                    );
-                  })}
-                </>
-              );
-            })
-          : rows.map((t) => {
-              const idx = (ranks[t.name] ?? 1) - 1;
-              const gp = t.w + t.l;
-              const pct = gp > 0 ? rf((t.w / gp) * 100, 1) : 0;
-              const isHL = highlight && t.isPlayer;
-              const isDivWinner =
-                rows.find((x) => x.division === t.division) &&
-                rows.filter((x) => x.division === t.division)[0].name === t.name;
-              return (
-                <tr key={t.name} style={{ borderBottom: "1px solid #0d1626", background: isHL ? "#0d2137" : idx % 2 === 0 ? "#080f1e" : "#0a1221" }}>
-                  <td style={{ textAlign: "center", padding: "4px 6px", color: idx < 6 ? "#22c55e" : idx < 10 ? "#f59e0b" : "#475569", fontWeight: 800 }}>
-                    {idx + 1}
-                  </td>
-                  <td style={{ padding: "4px 6px", fontWeight: 700, color: t.isPlayer ? "#60a5fa" : "#e2e8f0" }}>
-                    {t.isPlayer ? "🌟 " : ""}{t.name}
-                    {isDivWinner && <span style={{ marginLeft: 4, fontSize: 9, background: "#0369a1", color: "#e0f2fe", borderRadius: 3, padding: "1px 4px" }}>DIV</span>}
-                    {idx === 5 && <span style={{ marginLeft: 4, fontSize: 9, background: "#14532d", color: "#4ade80", borderRadius: 3, padding: "1px 4px" }}>6</span>}
-                    {(idx === 6 || idx === 7) && <span style={{ marginLeft: 4, fontSize: 9, background: "#78350f", color: "#fbbf24", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
-                    {(idx === 8 || idx === 9) && <span style={{ marginLeft: 4, fontSize: 9, background: "#3b0764", color: "#c084fc", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
-                    {idx === 10 && <span style={{ marginLeft: 4, fontSize: 9, background: "#7f1d1d", color: "#fca5a5", borderRadius: 3, padding: "1px 4px" }}>OUT</span>}
-                  </td>
-                  <td style={{ textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{t.w}</td>
-                  <td style={{ textAlign: "center", color: "#f87171" }}>{t.l}</td>
-                  <td style={{ textAlign: "center" }}>{pct}%</td>
-                  <td style={{ textAlign: "center", color: "#a78bfa" }}>{rf(t.eff, 0)}</td>
-                </tr>
-              );
-            })}
-      </tbody>
-    </table>
-  );
-
-  return (
-    <div style={{ background: "#0f172a", borderRadius: 10, overflow: "hidden", border: "1px solid #1e293b" }}>
-      <div style={{ padding: "8px 12px", background: "#1e293b", fontWeight: 800, fontSize: 10, letterSpacing: 2, color: "#60a5fa", display:"flex",alignItems:"center",justifyContent:"space-between",gap:8 }}>
-        <span>🏆 LEAGUE STANDINGS</span>
-        <div style={{display:"flex",gap:4,fontSize:9}}>
-          <button
-            onClick={() => setViewMode("divisions")}
-            style={{
-              padding:"3px 8px",
-              borderRadius:999,
-              border:"1px solid #334155",
-              background:viewMode==="divisions"?"#0f172a":"#020617",
-              color:viewMode==="divisions"?"#e5e7eb":"#64748b",
-              cursor:"pointer",
-              fontWeight:700,
-            }}
-          >
-            DIVISIONS
-          </button>
-          <button
-            onClick={() => setViewMode("conference")}
-            style={{
-              padding:"3px 8px",
-              borderRadius:999,
-              border:"1px solid #334155",
-              background:viewMode==="conference"?"#0f172a":"#020617",
-              color:viewMode==="conference"?"#e5e7eb":"#64748b",
-              cursor:"pointer",
-              fontWeight:700,
-            }}
-          >
-            CONFERENCE
-          </button>
-        </div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: 10, overflowX: "auto" }}>
-        {renderTable("EAST", "#3b82f6", east, eastRanks)}
-        {renderTable("WEST", "#f59e0b", west, westRanks)}
-      </div>
-      <div style={{ padding: "6px 12px", borderTop: "2px dashed #1e293b", fontSize: 9, color: "#22c55e" }}>▲ You’re in {userMeta.conference} ({userMeta.division}) · Top 6 direct · 7–10 play-in</div>
-    </div>
-  );
-}
-
-const FACTOR_36 = 0.75;
+// Simple formatting helpers for season summary
 const fmt1 = (v) => (v ?? 0).toFixed(1);
 const fmt0 = (v) => Math.round(v ?? 0);
 
-function TeamStatsPanel({ teamName, playerSeasonRows, playerPlayoffRows, perMode, onPerModeChange, showPlayoff }) {
-  const [sortKey, setSortKey] = useState("pts");
-  const [sortAsc, setSortAsc] = useState(false);
-
-  const handleSort = (key) => {
-    if (key === sortKey) {
-      setSortAsc((asc) => !asc);
-      return;
-    }
-    setSortKey(key);
-    setSortAsc(false); // default to descending on new stat
-  };
-
-  const renderTable = (rows, label) => {
-    if (!rows || rows.length === 0) return null;
-    const mult = perMode === "per36" ? FACTOR_36 : 1;
-
-    const valueFor = (r, key) => {
-      const gp = r.gp > 0 ? r.gp : 1;
-      const pg = (k) => (r[k] ?? 0) / gp;
-      if (["pts", "reb", "ast", "stl", "blk", "tov", "fgm", "fga", "tpm", "tpa", "ftm", "fta"].includes(key))
-        return pg(key) * mult;
-      if (key === "fgPct") return r.fga > 0 ? r.fgm / r.fga : 0;
-      if (key === "tpPct") return r.tpa > 0 ? r.tpm / r.tpa : 0;
-      if (key === "ftPct") return r.fta > 0 ? r.ftm / r.fta : 0;
-      return 0;
-    };
-
-    const sorted = [...rows].sort((a, b) => {
-      const av = valueFor(a, sortKey);
-      const bv = valueFor(b, sortKey);
-      return sortAsc ? av - bv : bv - av;
-    });
-
-    return (
-      <div key={label} style={{ marginBottom: showPlayoff ? 12 : 0 }}>
-        <div style={{ fontSize: 10, fontWeight: 800, color: "#60a5fa", letterSpacing: 1, marginBottom: 6 }}>{label}</div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, minWidth: 920 }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #1e293b", background: "#0f172a" }}>
-                <th style={{ padding: "4px 6px", textAlign: "left", color: "#475569", fontSize: 9 }}>PLAYER</th>
-                <th style={{ padding: "4px 6px", textAlign: "center", color: "#475569", fontSize: 9 }}>POS</th>
-                <th style={{ padding: "4px 6px", textAlign: "center", color: "#475569", fontSize: 9 }}>GP</th>
-                <th colSpan={12} style={{ padding: "4px 8px", textAlign: "center", color: "#60a5fa", fontSize: 9, fontWeight: 800, borderLeft: "1px solid #334155", borderRight: "1px solid #334155" }}>PER GAME</th>
-                <th colSpan={6} style={{ padding: "4px 8px", textAlign: "center", color: "#22c55e", fontSize: 9, fontWeight: 800, borderRight: "1px solid #334155" }}>TOTALS</th>
-                <th colSpan={3} style={{ padding: "4px 8px", textAlign: "center", color: "#475569", fontSize: 9, fontWeight: 800 }}>%</th>
-              </tr>
-              <tr style={{ borderBottom: "1px solid #1e293b" }}>
-                {["PLAYER", "POS", "GP", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FGM", "FGA", "3PM", "3PA", "FTM", "FTA", "FGM", "FGA", "3PM", "3PA", "FTM", "FTA", "FG%", "3P%", "FT%"].map((h, idx) => (
-                  <th key={idx} style={{ padding: "4px 6px", textAlign: h === "PLAYER" ? "left" : "center", color: "#475569", fontSize: 9 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((r) => {
-                const gp = r.gp > 0 ? r.gp : 1;
-                const pg = (k) => (r[k] ?? 0) / gp;
-                const val = (k) => fmt1(pg(k) * mult);
-                const fgPct = r.fga > 0 ? rf((r.fgm / r.fga) * 100, 1) : "—";
-                const tpPct = r.tpa > 0 ? rf((r.tpm / r.tpa) * 100, 1) : "—";
-                const ftPct = r.fta > 0 ? rf((r.ftm / r.fta) * 100, 1) : "—";
-                return (
-                  <tr key={r.name} style={{ borderBottom: "1px solid #0d1626" }}>
-                    <td style={{ padding: "4px 6px", fontWeight: 700, color: "#e2e8f0" }}>{r.name}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center", color: "#64748b" }}>{r.pos || "—"}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center", color: "#64748b" }}>{fmt0(r.gp || 0)}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center", borderLeft: "1px solid #334155" }}>{val("pts")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("reb")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("ast")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("stl")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("blk")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("tov")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("fgm")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("fga")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("tpm")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("tpa")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center", borderRight: "1px solid #334155" }}>{val("ftm")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center", borderRight: "1px solid #334155" }}>{val("fta")}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fmt0(r.fgm || 0)}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fmt0(r.fga || 0)}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fmt0(r.tpm || 0)}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fmt0(r.tpa || 0)}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fmt0(r.ftm || 0)}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center", borderRight: "1px solid #334155" }}>{fmt0(r.fta || 0)}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fgPct}{typeof fgPct === "number" ? "%" : ""}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{tpPct}{typeof tpPct === "number" ? "%" : ""}</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{ftPct}{typeof ftPct === "number" ? "%" : ""}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-
-  const hasSeason = playerSeasonRows && playerSeasonRows.length > 0;
-  const hasPlayoff = showPlayoff && playerPlayoffRows && playerPlayoffRows.length > 0;
-  if (!hasSeason && !hasPlayoff) return null;
-  return (
-    <div style={{ background: "#0f172a", borderRadius: 10, border: "1px solid #1e293b", padding: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontWeight: 800, fontSize: 11, letterSpacing: 2, color: "#60a5fa" }}>📊 {teamName} — PLAYER STATS</span>
-        <div style={{ display: "flex", gap: 4 }}>
-          {["PER G", "PER 36"].map((m) => (
-            <button
-              key={m}
-              onClick={() => onPerModeChange(m === "PER 36" ? "per36" : "game")}
-              style={{
-                background: perMode === (m === "PER 36" ? "per36" : "game") ? "#334155" : "#1e293b",
-                color: "#e2e8f0",
-                border: "1px solid #334155",
-                borderRadius: 6,
-                padding: "4px 8px",
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8, fontSize: 9 }}>
-        {[
-          ["pts", "PTS"],
-          ["reb", "REB"],
-          ["ast", "AST"],
-          ["stl", "STL"],
-          ["blk", "BLK"],
-          ["tov", "TOV"],
-          ["fgm", "FGM"],
-          ["fga", "FGA"],
-          ["tpm", "3PM"],
-          ["tpa", "3PA"],
-          ["ftm", "FTM"],
-          ["fta", "FTA"],
-          ["fgPct", "FG%"],
-          ["tpPct", "3P%"],
-          ["ftPct", "FT%"],
-        ].map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => handleSort(key)}
-            style={{
-              background: sortKey === key ? "#1d4ed8" : "#0f172a",
-              color: sortKey === key ? "#e5e7eb" : "#9ca3af",
-              border: "1px solid #1e293b",
-              borderRadius: 999,
-              padding: "2px 8px",
-              fontSize: 9,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            {label}{sortKey === key ? (sortAsc ? " ↑" : " ↓") : ""}
-          </button>
-        ))}
-      </div>
-      {hasSeason && renderTable(playerSeasonRows, "SEASON")}
-      {hasPlayoff && renderTable(playerPlayoffRows, "PLAYOFFS")}
-    </div>
-  );
-}
-
-function TeamHighs({ teamSeasonHighs, teamPlayoffHighs, roster, title, showPlayoff }) {
-  const defs = [
-    ["pts", "PTS"],
-    ["reb", "REB"],
-    ["ast", "AST"],
-    ["stl", "STL"],
-    ["blk", "BLK"],
-    ["fgm", "FGM"],
-    ["tpm", "3PM"],
-    ["ftm", "FT"],
-    ["tov", "TOV"],
-  ];
-  const myNames = new Set(Object.values(roster || {}).filter(Boolean).map((p) => p.name));
-  const buildRows = (highs) => {
-    if (!highs || Object.keys(highs).length === 0) return [];
-    return defs.map(([key, label]) => {
-      let best = null;
-      myNames.forEach((name) => {
-        const v = highs[name] && highs[name][key];
-        if (v != null && (!best || v > best.val)) best = { name, val: v };
-      });
-      return { key, label, ...best };
-    });
-  };
-  const seasonRows = buildRows(teamSeasonHighs);
-  const playoffRows = showPlayoff ? buildRows(teamPlayoffHighs) : [];
-  const hasAny = seasonRows.some((r) => r.val != null) || playoffRows.some((r) => r.val != null);
-  if (!hasAny) return null;
-  return (
-    <div style={{ background: "#020617", borderRadius: 10, border: "1px solid #1e293b", padding: 10 }}>
-      <div style={{ fontWeight: 800, fontSize: 10, letterSpacing: 2, color: "#22c55e", marginBottom: 6 }}>{title || "📈 TEAM HIGHS (SINGLE GAME)"}</div>
-      {seasonRows.some((r) => r.val != null) && (
-        <>
-          <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4 }}>Season</div>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, marginBottom: 8 }}>
-            <thead><tr style={{ borderBottom: "1px solid #1e293b" }}>
-              {["STAT", "PLAYER", "VALUE"].map((h) => (
-                <th key={h} style={{ padding: "4px 6px", textAlign: h === "VALUE" ? "center" : "left", color: "#475569", fontSize: 9 }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {seasonRows.map((r) => (
-                <tr key={r.key} style={{ borderBottom: "1px solid #0b1220" }}>
-                  <td style={{ padding: "4px 6px", color: "#e5e7eb", fontWeight: 700 }}>{r.label}</td>
-                  <td style={{ padding: "4px 6px", color: "#a7f3d0", fontWeight: 700 }}>{r.name || "—"}</td>
-                  <td style={{ padding: "4px 6px", textAlign: "center", color: "#fbbf24", fontWeight: 800 }}>{r.val != null ? r.val : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-      {showPlayoff && playoffRows.some((r) => r.val != null) && (
-        <>
-          <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4 }}>Playoffs</div>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
-            <thead><tr style={{ borderBottom: "1px solid #1e293b" }}>
-              {["STAT", "PLAYER", "VALUE"].map((h) => (
-                <th key={h} style={{ padding: "4px 6px", textAlign: h === "VALUE" ? "center" : "left", color: "#475569", fontSize: 9 }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {playoffRows.map((r) => (
-                <tr key={r.key} style={{ borderBottom: "1px solid #0b1220" }}>
-                  <td style={{ padding: "4px 6px", color: "#e5e7eb", fontWeight: 700 }}>{r.label}</td>
-                  <td style={{ padding: "4px 6px", color: "#a7f3d0", fontWeight: 700 }}>{r.name || "—"}</td>
-                  <td style={{ padding: "4px 6px", textAlign: "center", color: "#fbbf24", fontWeight: 800 }}>{r.val != null ? r.val : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-    </div>
-  );
-}
-
-function SeasonHighs({ highs, myTeamName, title }) {
-  const defs = [
-    ["pts", "POINTS"],
-    ["reb", "REBOUNDS"],
-    ["ast", "ASSISTS"],
-    ["stl", "STEALS"],
-    ["blk", "BLOCKS"],
-    ["fgm", "FGM"],
-    ["tpm", "3PM"],
-    ["ftm", "FT MADE"],
-    ["tov", "TURNOVERS"],
-  ];
-  const rows = defs.map(([key, label]) => {
-    const h = highs[key];
-    return { key, label, ...h };
-  });
-  const hasAny = rows.some((r) => r && r.val != null);
-  if (!hasAny) return null;
-  return (
-    <div style={{ background: "#020617", borderRadius: 10, border: "1px solid #1e293b", padding: 10 }}>
-      <div style={{ fontWeight: 800, fontSize: 10, letterSpacing: 2, color: "#22c55e", marginBottom: 6 }}>
-        {title || "📈 SEASON HIGHS (SINGLE GAME)"}
-      </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, minWidth: 420 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #1e293b" }}>
-              {["STAT", "PLAYER", "TEAM", "VALUE"].map((h) => (
-                <th
-                  key={h}
-                  style={{ padding: "4px 6px", textAlign: h === "VALUE" ? "center" : "left", color: "#475569", fontSize: 9 }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const isMine = myTeamName && r.team === myTeamName;
-              if (r.val == null) {
-                return (
-                  <tr key={r.key} style={{ borderBottom: "1px solid #0b1220", opacity: 0.4 }}>
-                    <td style={{ padding: "4px 6px", color: "#6b7280" }}>{r.label}</td>
-                    <td style={{ padding: "4px 6px", color: "#4b5563" }}>—</td>
-                    <td style={{ padding: "4px 6px", color: "#4b5563" }}>—</td>
-                    <td style={{ padding: "4px 6px", textAlign: "center", color: "#4b5563" }}>—</td>
-                  </tr>
-                );
-              }
-              return (
-                <tr
-                  key={r.key}
-                  style={{
-                    borderBottom: "1px solid #0b1220",
-                    background: isMine ? "#022c22" : "transparent",
-                  }}
-                >
-                  <td style={{ padding: "4px 6px", color: "#e5e7eb", fontWeight: 700 }}>{r.label}</td>
-                  <td style={{ padding: "4px 6px", color: isMine ? "#a7f3d0" : "#e5e7eb", fontWeight: 700 }}>{r.name}</td>
-                  <td style={{ padding: "4px 6px", color: isMine ? "#6ee7b7" : "#9ca3af" }}>{r.team}</td>
-                  <td style={{ padding: "4px 6px", textAlign: "center", color: "#fbbf24", fontWeight: 800 }}>{r.val}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 const EAST_DIVISIONS = ["Atlantic", "Central", "Southeast"];
 const WEST_DIVISIONS = ["Northwest", "Pacific", "Southwest"];
@@ -740,113 +202,6 @@ function buildBracket(seeds) {
   };
 }
 
-function MatchupCard({ matchup, onPlay, isActive, onPlayMatch }) {
-  const { top, bot, winner, games, label } = matchup;
-  const wA = games.filter((g) => g.winnerIdx === 0).length, wB = games.filter((g) => g.winnerIdx === 1).length, done = !!winner;
-  return (
-    <div style={{ background: "#0f172a", border: `1px solid ${done ? "#22c55e" : isActive ? "#6366f1" : "#1e293b"}`, borderRadius: 10, padding: 10, minWidth: 190 }}>
-      <div style={{ fontSize: 9, color: "#475569", letterSpacing: 1, marginBottom: 6, fontWeight: 700 }}>{label}</div>
-      {[top, bot].map((team, ti) => {
-        const isW = winner?.name === team?.name, wins = ti === 0 ? wA : wB;
-        return team ? (
-          <div key={ti} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, padding: "5px 8px", borderRadius: 6, background: isW ? "#14532d" : done && !isW ? "#1a0a0a" : "#1e293b", border: `1px solid ${isW ? "#22c55e" : done && !isW ? "#3f0d0d" : "#334155"}` }}>
-            <div style={{ flex: 1, fontSize: 11, fontWeight: 800, color: team.isPlayer ? "#60a5fa" : "#e2e8f0" }}>{team.isPlayer ? "🌟 " : ""}{team.name}</div>
-            {games.length > 0 && <div style={{ fontSize: 12, fontWeight: 900, color: isW ? "#22c55e" : "#94a3b8" }}>{wins}</div>}
-            {isW && <span style={{ fontSize: 10 }}>✓</span>}
-          </div>
-        ) : (
-          <div key={ti} style={{ marginBottom: 4, padding: "5px 8px", borderRadius: 6, background: "#0a0a0f", border: "1px dashed #1e293b" }}>
-            <div style={{ fontSize: 10, color: "#334155", fontStyle: "italic" }}>TBD</div>
-          </div>
-        );
-      })}
-      {!done && top && bot && onPlay && (
-        <button onClick={onPlay} style={{ width: "100%", marginTop: 6, background: top?.isPlayer || bot?.isPlayer ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "linear-gradient(135deg,#475569,#334155)", color: "white", border: "none", borderRadius: 6, padding: "6px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>
-          {top?.isPlayer || bot?.isPlayer ? `▶ PLAY GAME ${games.length + 1}` : `⚡ SIM GAME ${games.length + 1}`}
-        </button>
-      )}
-      {done && <div style={{ textAlign: "center", fontSize: 10, color: "#22c55e", marginTop: 4, fontWeight: 700 }}>✓ DONE</div>}
-    </div>
-  );
-}
-
-function ConfBracketSection({ sub, confLabel, prefix, onPlayMatch, activeMatchId }) {
-  if (!sub || !sub.playIn) return null;
-  const { playIn, firstRound, semis, finals } = sub;
-  const pi1done = !!playIn[0].winner, pi2done = !!playIn[1].winner, pi3done = !!playIn[2].winner, playInDone = pi1done && pi2done && pi3done;
-  const fr1done = !!firstRound[0].winner, fr2done = !!firstRound[1].winner, fr3done = !!firstRound[2].winner, fr4done = !!firstRound[3].winner;
-  const sf1done = !!semis[0].winner, sf2done = !!semis[1].winner, fdone = !!finals.winner;
-  const pre = (s) => (s === "f1" ? `${prefix}f` : `${prefix}${s}`);
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontWeight: 800, fontSize: 12, color: confLabel === "EAST" ? "#3b82f6" : "#f59e0b", letterSpacing: 2, marginBottom: 8, textAlign: "center" }}>{confLabel} CONFERENCE</div>
-      <div style={{ marginBottom: 10, background: "#0a0f1a", borderRadius: 10, padding: 10, border: "1px solid #1e293b" }}>
-        <div style={{ fontSize: 9, color: "#f59e0b", fontWeight: 800, letterSpacing: 2, marginBottom: 8, textAlign: "center" }}>🎟 PLAY-IN</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-          <MatchupCard matchup={playIn[0]} isActive={activeMatchId === pre("pi1")} onPlay={() => onPlayMatch(pre("pi1"))} />
-          <MatchupCard matchup={playIn[1]} isActive={activeMatchId === pre("pi2")} onPlay={() => onPlayMatch(pre("pi2"))} />
-          <MatchupCard matchup={playIn[2]} isActive={activeMatchId === pre("pi3")} onPlay={() => onPlayMatch(pre("pi3"))} />
-        </div>
-      </div>
-      {playInDone && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 12px 1fr 12px 1fr", gap: 4, alignItems: "start" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontSize: 9, color: "#475569", letterSpacing: 1, textAlign: "center", marginBottom: 4 }}>FIRST ROUND</div>
-            <MatchupCard matchup={firstRound[0]} isActive={activeMatchId === pre("fr1")} onPlay={() => onPlayMatch(pre("fr1"))} />
-            <MatchupCard matchup={firstRound[1]} isActive={activeMatchId === pre("fr2")} onPlay={() => onPlayMatch(pre("fr2"))} />
-            <MatchupCard matchup={firstRound[2]} isActive={activeMatchId === pre("fr3")} onPlay={() => onPlayMatch(pre("fr3"))} />
-            <MatchupCard matchup={firstRound[3]} isActive={activeMatchId === pre("fr4")} onPlay={() => onPlayMatch(pre("fr4"))} />
-          </div>
-          <div style={{ textAlign: "center", color: "#1e293b", fontSize: 14, paddingTop: 30 }}>→</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontSize: 9, color: "#475569", letterSpacing: 1, textAlign: "center", marginBottom: 4 }}>SEMIFINALS</div>
-            <MatchupCard matchup={semis[0]} isActive={activeMatchId === pre("sf1")} onPlay={() => onPlayMatch(pre("sf1"))} />
-            <MatchupCard matchup={semis[1]} isActive={activeMatchId === pre("sf2")} onPlay={() => onPlayMatch(pre("sf2"))} />
-          </div>
-          <div style={{ textAlign: "center", color: "#1e293b", fontSize: 14, paddingTop: 30 }}>→</div>
-          <div>
-            <div style={{ fontSize: 9, color: "#f59e0b", letterSpacing: 1, textAlign: "center", marginBottom: 4 }}>CONF FINALS</div>
-            <MatchupCard matchup={finals} isActive={activeMatchId === pre("f")} onPlay={() => onPlayMatch(pre("f"))} />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BracketDisplay({ bracket, onPlayMatch, activeMatchId }) {
-  const champion = bracket.champion;
-  const hasConferences = bracket.east && bracket.west;
-  return (
-    <div style={{ background: "#080f1e", borderRadius: 14, padding: 14, border: "1px solid #1e293b" }}>
-      <div style={{ fontWeight: 900, fontSize: 13, color: "#f59e0b", letterSpacing: 2, marginBottom: 12, textAlign: "center" }}>🏀 PLAYOFF BRACKET</div>
-      {hasConferences ? (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-            <ConfBracketSection sub={bracket.east} confLabel="EAST" prefix="east-" onPlayMatch={onPlayMatch} activeMatchId={activeMatchId} />
-            <ConfBracketSection sub={bracket.west} confLabel="WEST" prefix="west-" onPlayMatch={onPlayMatch} activeMatchId={activeMatchId} />
-          </div>
-          {bracket.finals && (bracket.finals.top || bracket.finals.bot) && (
-            <div style={{ marginTop: 12, padding: 12, background: "#0a0f1a", borderRadius: 12, border: "2px solid #f59e0b" }}>
-              <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 800, letterSpacing: 2, marginBottom: 8, textAlign: "center" }}>🏆 FINALS</div>
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <MatchupCard matchup={bracket.finals} isActive={activeMatchId === "finals"} onPlay={() => onPlayMatch("finals")} />
-              </div>
-              {champion && (
-                <div style={{ marginTop: 10, textAlign: "center", padding: "10px", background: "linear-gradient(135deg,#78350f,#92400e)", borderRadius: 10, border: "2px solid #fbbf24" }}>
-                  <div style={{ fontSize: 18 }}>🏆</div>
-                  <div style={{ fontSize: 11, color: "#fbbf24", fontWeight: 900, letterSpacing: 1 }}>CHAMPION</div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: champion.isPlayer ? "#60a5fa" : "#e2e8f0" }}>{champion.isPlayer ? "🌟 " : ""}{champion.name}</div>
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      ) : null}
-    </div>
-  );
-}
-
 export default function App(){
   const [phase,setPhase]=useState("import");
   const [playerPool,setPlayerPool]=useState([]);
@@ -855,6 +210,10 @@ export default function App(){
   const [importInfo,setImportInfo]=useState("");
   const [roster,setRoster]=useState({PG:null,SG:null,SF:null,PF:null,C:null});
   const [slotSel,setSlotSel]=useState(null);
+  const [chemHoverKey, setChemHoverKey] = useState(null);
+  const [rosterHoverId, setRosterHoverId] = useState(null);
+  const [soundOn, setSoundOn] = useState(false);
+  const [volume, setVolume] = useState(0.5);
   const [aiTeams,setAiTeams]=useState([]);
   const [schedule,setSchedule]=useState(null);
   const [result,setResult]=useState(null);
@@ -879,6 +238,7 @@ export default function App(){
   const [seasonHighs,setSeasonHighs]=useState({});
   const [playoffLeaders,setPlayoffLeaders]=useState({});
   const [playoffHighs,setPlayoffHighs]=useState({});
+  const [finalsLeaders, setFinalsLeaders] = useState({});
   const [showPlayoffLeaders,setShowPlayoffLeaders]=useState(false);
   const [playoffLeadersView, setPlayoffLeadersView] = useState("playoff"); // "playoff" | "season" — which leaders/highs to show when on playoffs screen
   const [teamStatsPerMode, setTeamStatsPerMode] = useState("game"); // "game" | "per36"
@@ -895,12 +255,24 @@ export default function App(){
     typeof window !== "undefined" ? window.innerWidth < 768 : false
   );
 
+  const [bracketDensity, setBracketDensity] = useState(
+    typeof window !== "undefined" && window.innerWidth < 768 ? "compact" : "comfortable"
+  ); // comfortable | compact
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
+
+  // On mobile: auto-scroll selected matchup into view
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (phase !== "playoffs" || !activeMatchId || !isMobile) return;
+    const el = document.getElementById(`match-${activeMatchId}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [phase, activeMatchId, isMobile]);
 
   // Load previously used team names (local history)
   useEffect(() => {
@@ -916,53 +288,94 @@ export default function App(){
     }
   }, []);
 
-  // Load saved team name and roster from localStorage or URL once players are loaded
+  // Load saved team / season from localStorage (preferred), then fall back to URL roster once players are loaded
   useEffect(() => {
     if (typeof window === "undefined" || !playerPool.length) return;
     try {
-      const params = new URLSearchParams(window.location.search);
-      const rosterParam = params.get("roster");
-      if (rosterParam) {
-        const parts = rosterParam.split("-");
-        if (parts.length === POSITIONS.length) {
+      const raw = window.localStorage.getItem("nba-budget-ball-state");
+      let restored = false;
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved.teamName) setMyTeamName(saved.teamName);
+        if (saved.difficulty) setDifficulty(saved.difficulty);
+        if (saved.roster) {
           const next = { PG: null, SG: null, SF: null, PF: null, C: null };
-          let ok = true;
-          for (let i = 0; i < POSITIONS.length; i++) {
-            const id = parseInt(parts[i], 10);
-            if (!id) continue;
-            const p = playerPool.find((pl) => pl.id === id);
-            if (!p) { ok = false; break; }
-            next[POSITIONS[i]] = p;
-          }
-          if (ok) {
-            setRoster(next);
-            setPhase("draft");
-            return;
+          POSITIONS.forEach((pos) => {
+            const id = saved.roster[pos];
+            if (id != null) {
+              const player = playerPool.find((p) => p.id === id);
+              if (player) next[pos] = player;
+            }
+          });
+          setRoster(next);
+        }
+
+        // Only treat as a restored session if we're past the import screen
+        const hasRealPhase = saved.phase && saved.phase !== "import";
+
+        // Restore in-progress season / playoffs if present (so CSV effect won't override phase)
+        if (hasRealPhase) {
+          restoredSessionRef.current = true;
+          setPhase(saved.phase);
+        }
+        if (saved.season) setSeason(saved.season);
+        if (saved.schedule) setSchedule(saved.schedule);
+        if (saved.aiTeams) setAiTeams(saved.aiTeams);
+        if (typeof saved.gameNum === "number") setGameNum(saved.gameNum);
+        if (typeof saved.inSeason === "boolean") setInSeason(saved.inSeason);
+        if (saved.bracket) setBracket(saved.bracket);
+        if (saved.playoffResult) setPlayoffResult(saved.playoffResult);
+        if (saved.activeMatchId != null) setActiveMatchId(saved.activeMatchId);
+        if (typeof saved.elimInPlayoffs === "boolean") setElimInPlayoffs(saved.elimInPlayoffs);
+        if (typeof saved.showStandings === "boolean") setShowStandings(saved.showStandings);
+        if (typeof saved.showLeaders === "boolean") setShowLeaders(saved.showLeaders);
+        if (saved.leagueLeaders) setLeagueLeaders(saved.leagueLeaders);
+        if (saved.seasonHighs) setSeasonHighs(saved.seasonHighs);
+        if (saved.playoffLeaders) setPlayoffLeaders(saved.playoffLeaders);
+        if (saved.playoffHighs) setPlayoffHighs(saved.playoffHighs);
+        if (saved.finalsLeaders) setFinalsLeaders(saved.finalsLeaders);
+        if (typeof saved.showPlayoffLeaders === "boolean") setShowPlayoffLeaders(saved.showPlayoffLeaders);
+        if (saved.playoffLeadersView) setPlayoffLeadersView(saved.playoffLeadersView);
+        if (saved.teamStatsPerMode) setTeamStatsPerMode(saved.teamStatsPerMode);
+        if (saved.teamSeasonHighs) setTeamSeasonHighs(saved.teamSeasonHighs);
+        if (saved.teamPlayoffHighs) setTeamPlayoffHighs(saved.teamPlayoffHighs);
+
+        restored =
+          !!saved.inSeason ||
+          !!saved.bracket ||
+          hasRealPhase ||
+          !!(saved.season && saved.season.gp > 0);
+      }
+
+      // Only apply ?roster= if we did NOT restore an in-progress season/playoffs
+      if (!restored) {
+        const params = new URLSearchParams(window.location.search);
+        const rosterParam = params.get("roster");
+        if (rosterParam) {
+          const parts = rosterParam.split("-");
+          if (parts.length === POSITIONS.length) {
+            const next = { PG: null, SG: null, SF: null, PF: null, C: null };
+            let ok = true;
+            for (let i = 0; i < POSITIONS.length; i++) {
+              const id = parseInt(parts[i], 10);
+              if (!id) continue;
+              const p = playerPool.find((pl) => pl.id === id);
+              if (!p) { ok = false; break; }
+              next[POSITIONS[i]] = p;
+            }
+            if (ok) {
+              setRoster(next);
+              setPhase("draft");
+            }
           }
         }
-      }
-      const raw = window.localStorage.getItem("nba-budget-ball-state");
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      if (saved.teamName) setMyTeamName(saved.teamName);
-      if (saved.difficulty) setDifficulty(saved.difficulty);
-      if (saved.roster) {
-        const next = { PG: null, SG: null, SF: null, PF: null, C: null };
-        POSITIONS.forEach((pos) => {
-          const id = saved.roster[pos];
-          if (id != null) {
-            const player = playerPool.find((p) => p.id === id);
-            if (player) next[pos] = player;
-          }
-        });
-        setRoster(next);
       }
     } catch {
       // ignore
     }
   }, [playerPool]);
 
-  // Persist team name and roster whenever they change
+  // Persist team + season state whenever it changes
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -974,6 +387,28 @@ export default function App(){
         teamName: myTeamName,
         roster: rosterIds,
         difficulty,
+        phase,
+        season,
+        schedule,
+        aiTeams,
+        gameNum,
+        inSeason,
+        bracket,
+        playoffResult,
+        activeMatchId,
+        elimInPlayoffs,
+        showStandings,
+        showLeaders,
+        leagueLeaders,
+        seasonHighs,
+        playoffLeaders,
+        playoffHighs,
+        finalsLeaders,
+        showPlayoffLeaders,
+        playoffLeadersView,
+        teamStatsPerMode,
+        teamSeasonHighs,
+        teamPlayoffHighs,
       };
       window.localStorage.setItem(
         "nba-budget-ball-state",
@@ -982,7 +417,7 @@ export default function App(){
     } catch {
       // ignore localStorage issues
     }
-  }, [roster, myTeamName, difficulty]);
+  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs]);
 
   const rememberTeamName = useCallback((name) => {
     const trimmed = (name || "").trim();
@@ -1000,10 +435,7 @@ export default function App(){
     });
   }, []);
 
-  // Show How to Play on every page load/refresh (not when clicking New Season)
-  useEffect(() => {
-    if (typeof window !== "undefined") setShowTutorial(true);
-  }, []);
+  // How to Play shows after New Season (when user lands on draft), not on initial load
 
   const dismissTutorial = useCallback(() => {
     setShowTutorial(false);
@@ -1110,76 +542,77 @@ export default function App(){
     setTimeout(() => setShareImageStatus(null), 2500);
   }, [roster, myTeamName, inSeason]);
 
-const audioRef = useRef(null);
-const trackIndex = useRef(0);
-const hasStarted = useRef(false);
+const soundtrackRef = useRef(null);
+  const trackIndexRef = useRef(0);
+  const soundOnRef = useRef(soundOn);
+  const volumeRef = useRef(volume);
+  const restoredSessionRef = useRef(false);
 
-const TRACKS = ['weonit.mp3','lovenwantiti.mp3','poppin.mp3','onepunch.mp3', 'photograph.mp3', 'ateam.mp3', 'cold.mp3','lemonade.mp3', 'outstanding.mp3', 'amazing.mp3', 'bestfriend.mp3', 'baddecisions.mp3', 'lightsplease.mp3', 'loveletter.mp3', 'didntchaknow.mp3', 'familyties.mp3', 'letmeknow.mp3', 'digital.mp3', 'dior.mp3', 'kaceytalk.mp3', 'gold.mp3', 'nowornever.mp3',  'whodowethinkweare.mp3'];
+  const SOUNDTRACK_TRACKS = ["/1.mp3", "/2.mp3", "/3.mp3", "/4.mp3"];
 
-const playTrack = (index) => {
-  const audio = audioRef.current;
-  if(!audio) return;
-  audio.src = TRACKS[index];
-  audio.play().catch(() => {});
-};
+  soundOnRef.current = soundOn;
+  volumeRef.current = volume;
 
-useEffect(() => {
-  const audio = new Audio();
-  audio.volume = 0.3;
-  audioRef.current = audio;
+  const pickNextTrack = useCallback((excludeIndex) => {
+    const others = [0, 1, 2, 3].filter((i) => i !== excludeIndex);
+    return others[Math.floor(Math.random() * others.length)];
+  }, []);
 
-  audio.addEventListener('ended', () => {
-    let next;
-    do { next = Math.floor(Math.random() * TRACKS.length); } while(next === trackIndex.current);
-    trackIndex.current = next;
-    playTrack(next);
-});
+  const skipSong = useCallback(() => {
+    const audio = soundtrackRef.current;
+    if (!audio) return;
+    const next = pickNextTrack(trackIndexRef.current);
+    trackIndexRef.current = next;
+    audio.src = SOUNDTRACK_TRACKS[next];
+    audio.volume = volumeRef.current;
+    if (soundOnRef.current) audio.play().catch(() => {});
+  }, [pickNextTrack]);
 
-  return () => { audio.pause(); audio.src = ''; };
-}, []);
+  // Background soundtrack: 4 tracks, random next (never same), volume 50% default
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const audio = new Audio(SOUNDTRACK_TRACKS[0]);
+    audio.volume = volume;
+    const onEnded = () => {
+      if (!soundOnRef.current) return;
+      const next = pickNextTrack(trackIndexRef.current);
+      trackIndexRef.current = next;
+      audio.src = SOUNDTRACK_TRACKS[next];
+      audio.volume = volumeRef.current;
+      audio.play().catch(() => {});
+    };
+    audio.addEventListener("ended", onEnded);
+    soundtrackRef.current = audio;
+    return () => {
+      audio.removeEventListener("ended", onEnded);
+      audio.pause();
+      soundtrackRef.current = null;
+    };
+  }, [pickNextTrack]);
 
-const skipSong = (e) => {
-  e?.stopPropagation();
-  e?.preventDefault();
-  let next;
-  do { next = Math.floor(Math.random() * TRACKS.length); } while(next === trackIndex.current);
-  trackIndex.current = next;
-  playTrack(next);
-};
+  useEffect(() => {
+    const audio = soundtrackRef.current;
+    if (!audio) return;
+    audio.volume = volume;
+  }, [volume]);
 
-const handleFirstClick = useCallback(() => {
-  if(hasStarted.current) return;
-  hasStarted.current = true;
-  playTrack(trackIndex.current)
-}, []);
-
-const skipBtn = (
-  <button
-    onMouseDown={(e) => { e.stopPropagation(); }}
-    onClick={(e) => { e.stopPropagation(); e.preventDefault(); skipSong(e); }}
-    style={{position:"fixed",bottom:16,right:16,zIndex:9999,background:"#1e293b",border:"1px solid #334155",borderRadius:"50%",width:36,height:36,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
-    ⏭
-  </button>
-);
-
-const volumeSlider = (
-  <div style={{position:"fixed",bottom:16,left:16,zIndex:9999,display:"flex",alignItems:"center",gap:6,background:"#1e293b",border:"1px solid #334155",borderRadius:20,padding:"4px 10px",boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
-    <span style={{fontSize:11}}>🔊</span>
-    <input
-      type="range"
-      min="0"
-      max="1"
-      step="0.05"
-      defaultValue="0.3"
-      onChange={(e) => { if(audioRef.current) audioRef.current.volume = parseFloat(e.target.value); }}
-      style={{width:60,accentColor:"#6366f1",cursor:"pointer"}}
-    />
-  </div>
-);
+  useEffect(() => {
+    const audio = soundtrackRef.current;
+    if (!audio) return;
+    if (soundOn) {
+      audio.src = SOUNDTRACK_TRACKS[trackIndexRef.current];
+      audio.volume = volumeRef.current;
+      audio.play().catch(() => {});
+    } else {
+      audio.pause();
+    }
+  }, [soundOn]);
 
   const myIds=new Set(Object.values(roster).filter(Boolean).map(p=>p.id));
   const spent=Object.values(roster).reduce((s,p)=>s+(p?.cost||0),0);
   const rem=BUDGET-spent,filled=POSITIONS.filter(p=>roster[p]).length,full=filled===5;
+  const openPositions = POSITIONS.filter((pos) => !roster[pos]);
+  const remainingPerOpenSlot = openPositions.length > 0 ? Math.floor(rem / openPositions.length) : 0;
   const myLineup=full?POSITIONS.map(pos=>({player:roster[pos],slot:pos})):null;
   const myEffVal=myLineup?rf(teamEff(myLineup,teamRoster),1):null;
   const myCh=myLineup?chemBoost(myLineup,teamRoster):0;
@@ -1373,6 +806,56 @@ const volumeSlider = (
     });
   }, []);
 
+  const updateFinalsLeaders = useCallback((res, teamALabel, teamBLabel) => {
+    if (!res) return;
+    setFinalsLeaders((prev) => {
+      const next = { ...prev };
+      const applyTeam = (stats, teamLabel) => {
+        stats.forEach((s) => {
+          const key = `${s.name}|${teamLabel}`;
+          const cur = next[key] || {
+            name: s.name,
+            team: teamLabel,
+            pos: s.pos,
+            gp: 0,
+            pts: 0,
+            reb: 0,
+            ast: 0,
+            stl: 0,
+            blk: 0,
+            tov: 0,
+            fgm: 0,
+            fga: 0,
+            tpm: 0,
+            tpa: 0,
+            ftm: 0,
+            fta: 0,
+          };
+          next[key] = {
+            ...cur,
+            pos: cur.pos || s.pos,
+            gp: cur.gp + 1,
+            pts: cur.pts + s.pts,
+            reb: cur.reb + s.reb,
+            ast: cur.ast + s.ast,
+            stl: cur.stl + s.stl,
+            blk: cur.blk + s.blk,
+            tov: cur.tov + s.tov,
+            fgm: cur.fgm + s.fgm,
+            fga: cur.fga + s.fga,
+            tpm: cur.tpm + s.tpm,
+            tpa: cur.tpa + s.tpa,
+            ftm: cur.ftm + s.ftm,
+            fta: cur.fta + s.fta,
+          };
+        });
+      };
+      applyTeam(res.myStats, teamALabel);
+      applyTeam(res.oppStats, teamBLabel);
+      return next;
+    });
+  }, []);
+
   const updatePlayoffHighs = useCallback((res, teamALabel, teamBLabel, myTeam) => {
     if (!res) return;
     setPlayoffHighs((prev) => {
@@ -1480,52 +963,73 @@ const volumeSlider = (
   const applyDayResults = useCallback(
     (dayIndex, oppIndex, userWon) => {
       setAiTeams((prev) => {
-        const USER_INDEX = NUM_TEAMS - 1;
-        const next = prev.map((t) => ({
-          ...t,
-          gameLog: [...(t.gameLog || Array(SEASON_LENGTH).fill(null))],
-        }));
+        try {
+          if (!Array.isArray(prev) || prev.length === 0) return prev;
 
-        // Record opponent's result vs user for this day.
-        if (oppIndex != null && next[oppIndex]) {
-          next[oppIndex].gameLog[dayIndex] = userWon ? 0 : 1;
-        }
+          const USER_INDEX = NUM_TEAMS - 1;
+          const next = prev.map((t) => ({
+            ...t,
+            gameLog: [...(t.gameLog || Array(SEASON_LENGTH).fill(null))],
+          }));
 
-        // Build list of AI teams that still need a game this day (exclude user opponent).
-        const pool = [];
-        for (let i = 0; i < NUM_TEAMS - 1; i++) {
-          if (i === oppIndex) continue;
-          pool.push(i);
-        }
-        // Shuffle for randomness.
-        for (let k = pool.length - 1; k > 0; k--) {
-          const r = Math.floor(Math.random() * (k + 1));
-          [pool[k], pool[r]] = [pool[r], pool[k]];
-        }
-        // Pair off and simulate.
-        while (pool.length > 1) {
-          const a = pool.pop();
-          const b = pool.pop();
-          const teamA = next[a];
-          const teamB = next[b];
-          const res = simulate(teamA.lineup, teamB.lineup, teamRoster, { difficulty });
-          const aWon = res.myScore > res.oppScore;
-          next[a].gameLog[dayIndex] = aWon ? 1 : 0;
-          next[b].gameLog[dayIndex] = aWon ? 0 : 1;
-          updateLeagueLeaders(res, teamA.name, teamB.name, dayIndex);
-          updateSeasonHighs(res, teamA.name, teamB.name);
-        }
+          // Record opponent's result vs user for this day.
+          if (oppIndex != null && next[oppIndex]) {
+            next[oppIndex].gameLog[dayIndex] = userWon ? 0 : 1;
+          }
 
-        // Recompute W/L from full log.
-        for (let i = 0; i < next.length; i++) {
-          const gl = next[i].gameLog;
-          next[i].w = gl.filter((x) => x === 1).length;
-          next[i].l = gl.filter((x) => x === 0).length;
+          // Build list of AI teams that still need a game this day (exclude user opponent).
+          const pool = [];
+          for (let i = 0; i < NUM_TEAMS - 1; i++) {
+            if (i === oppIndex) continue;
+            if (!next[i]) continue;
+            pool.push(i);
+          }
+
+          // Shuffle for randomness.
+          for (let k = pool.length - 1; k > 0; k--) {
+            const r = Math.floor(Math.random() * (k + 1));
+            [pool[k], pool[r]] = [pool[r], pool[k]];
+          }
+
+          // Pair off and simulate.
+          while (pool.length > 1) {
+            const a = pool.pop();
+            const b = pool.pop();
+            const teamA = next[a];
+            const teamB = next[b];
+            if (
+              !teamA ||
+              !teamB ||
+              !Array.isArray(teamA.lineup) ||
+              !Array.isArray(teamB.lineup)
+            ) {
+              continue;
+            }
+            const res = simulate(teamA.lineup, teamB.lineup, teamRoster, {
+              difficulty,
+            });
+            if (!res) continue;
+            const aWon = res.myScore > res.oppScore;
+            next[a].gameLog[dayIndex] = aWon ? 1 : 0;
+            next[b].gameLog[dayIndex] = aWon ? 0 : 1;
+            updateLeagueLeaders(res, teamA.name, teamB.name, dayIndex);
+            updateSeasonHighs(res, teamA.name, teamB.name);
+          }
+
+          // Recompute W/L from full log.
+          for (let i = 0; i < next.length; i++) {
+            const gl = next[i].gameLog || [];
+            next[i].w = gl.filter((x) => x === 1).length;
+            next[i].l = gl.filter((x) => x === 0).length;
+          }
+          return next;
+        } catch (err) {
+          console.error("applyDayResults error:", err);
+          return prev;
         }
-        return next;
       });
     },
-    [teamRoster, updateLeagueLeaders]
+    [teamRoster, updateLeagueLeaders, updateSeasonHighs]
   );
 
   useEffect(()=>{
@@ -1543,7 +1047,9 @@ const volumeSlider = (
       if(!res||res.players.length===0)throw new Error("CSV parsed but no valid players found");
       setPlayerPool(res.players);setTeamRoster(res.teamRoster);
       setImportInfo(`✓ ${res.players.length} players loaded`);
-      setTimeout(()=>setPhase("teamSetup"),600);
+      setTimeout(() => {
+        if (!restoredSessionRef.current) setPhase("teamSetup");
+      }, 600);
     }).catch(err=>{setImportErr(err.message);setImportInfo("");});
   },[]);
 
@@ -1552,6 +1058,11 @@ const volumeSlider = (
   const pickPlayer=useCallback((player)=>{
     if(inSeason)return;
     const targetSlot=slotSel||player.pos,prev=roster[targetSlot];
+    const nameKey = player.fullName || player.name;
+    const alreadyInRoster = Object.values(roster).some(
+      (p) => p && (p.fullName || p.name) === nameKey && p.id !== player.id
+    );
+    if (alreadyInRoster) return;
     if((player.cost-(prev?.cost||0))>rem)return;
     if(prev?.id===player.id){setRoster(r=>({...r,[targetSlot]:null}));setSlotSel(null);return;}
     setRoster(r=>({...r,[targetSlot]:player}));setSlotSel(null);
@@ -1612,27 +1123,31 @@ const startSeason = async () => {
   };
 
   const simGames = (count) => {
-    if (!full || !schedule || gameNum > SEASON_LENGTH) return;
+    if (!full || !schedule || !aiTeams?.length || gameNum > SEASON_LENGTH) return;
     const toPlay = Math.min(count, SEASON_LENGTH - gameNum + 1);
-    for (let k = 0; k < toPlay; k++) {
-      const g = gameNum + k;
-      const USER_INDEX = NUM_TEAMS - 1;
-      const oppIndex = schedule[USER_INDEX][g - 1];
-      const opp = aiTeams[oppIndex];
-      const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty });
-      const won = res.myScore > res.oppScore;
-      const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
-      // Update season + all AI results for this day.
-      const dayIndex = g - 1;
-      setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
-      applyDayResults(dayIndex, oppIndex, won);
-      updateLeagueLeaders(res, myTeamName, opp?.name || "Opponent", dayIndex);
-      updateSeasonHighs(res, myTeamName, opp?.name || "Opponent", myTeamName);
+    try {
+      for (let k = 0; k < toPlay; k++) {
+        const g = gameNum + k;
+        const USER_INDEX = NUM_TEAMS - 1;
+        const oppIndex = schedule[USER_INDEX]?.[g - 1];
+        const opp = oppIndex != null ? aiTeams[oppIndex] : null;
+        if (!opp?.lineup) continue;
+        const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty });
+        const won = res.myScore > res.oppScore;
+        const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
+        const dayIndex = g - 1;
+        setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
+        applyDayResults(dayIndex, oppIndex, won);
+        updateLeagueLeaders(res, myTeamName, opp?.name || "Opponent", dayIndex);
+        updateSeasonHighs(res, myTeamName, opp?.name || "Opponent", myTeamName);
+      }
+      const nextGameNum = Math.min(gameNum + toPlay, SEASON_LENGTH);
+      setGameNum(nextGameNum);
+      setResult(null);
+      if (gameNum + toPlay > SEASON_LENGTH) setPhase("seasonEnd");
+    } catch (err) {
+      console.error("Sim games error:", err);
     }
-    const nextGameNum = Math.min(gameNum + toPlay, SEASON_LENGTH);
-    setGameNum(nextGameNum);
-    setResult(null);
-    if (gameNum + toPlay > SEASON_LENGTH) setPhase("seasonEnd");
   };
 
   const buildPlayoffBracket = (finalSeason, finalAi) => {
@@ -1669,6 +1184,7 @@ const startSeason = async () => {
     setElimInPlayoffs(false);
     setPlayoffLeaders({});
     setPlayoffHighs({});
+    setFinalsLeaders({});
     setShowPlayoffLeaders(false);
   };
 
@@ -1705,12 +1221,14 @@ const startSeason = async () => {
       updatePlayoffHighs(res, matchup.top.name, matchup.bot.name);
     }
     matchup.games.push({ winnerIdx, myScore: res?.myScore, oppScore: res?.oppScore, res });
-    const wTop = matchup.games.filter((g) => g.winnerIdx === 0).length, wBot = matchup.games.filter((g) => g.winnerIdx === 1).length;
+    const wTop = matchup.games.filter((g) => g.winnerIdx === 0).length;
+    const wBot = matchup.games.filter((g) => g.winnerIdx === 1).length;
     let playerEliminated = false;
-    if (wTop === 1 || wBot === 1) {
-      matchup.winner = wTop === 1 ? matchup.top : matchup.bot;
+    const winsNeeded = slot.startsWith("pi") ? 1 : 4;
+    if (wTop === winsNeeded || wBot === winsNeeded) {
+      matchup.winner = wTop === winsNeeded ? matchup.top : matchup.bot;
       const w = matchup.winner;
-      const playerLost = (topIsPlayer && wBot === 1) || (botIsPlayer && wTop === 1);
+      const playerLost = (topIsPlayer && wBot === winsNeeded) || (botIsPlayer && wTop === winsNeeded);
       // Play-in pi1 (7v8): loser gets another chance in pi3 — not eliminated yet. pi2/pi3 and all later rounds: loser is out.
       if (playerLost && slot !== "pi1") playerEliminated = true;
       if (slot === "pi1") { sub.firstRound[1].bot = w; sub.playIn[2].top = wTop === 1 ? sub.playIn[0].bot : sub.playIn[0].top; }
@@ -1802,6 +1320,16 @@ const startSeason = async () => {
     return stage.length > 0 ? stage[0] : null;
   }
 
+  function getStageGroup(stageKey) {
+    if (!stageKey) return null;
+    if (stageKey.startsWith("pi")) return "pi";
+    if (stageKey.startsWith("fr")) return "fr";
+    if (stageKey.startsWith("sf")) return "sf";
+    if (stageKey === "confF") return "confF";
+    if (stageKey === "finals") return "finals";
+    return stageKey;
+  }
+
   const playPlayoffGame=(matchId)=>{
     if(!bracket) return;
     const b = JSON.parse(JSON.stringify(bracket));
@@ -1809,24 +1337,60 @@ const startSeason = async () => {
     if (out.playerEliminated) setElimInPlayoffs(true);
     setBracket(out.bracket);
     setPlayoffResult(out.result);
+    if (matchId === "finals" && out.result && out.result.myStats) {
+      updateFinalsLeaders(out.result, out.result.topName, out.result.botName);
+    }
   };
 
   const simAllAIGames = useCallback(() => {
-    if (!bracket) return;
-    let b = JSON.parse(JSON.stringify(bracket));
-    const matchIds = getCurrentStageMatchIds(b);
-    if (matchIds.length === 0) return;
-    for (const matchId of matchIds) {
-      const parsed = getPlayoffMatchup(b, matchId);
-      const m = parsed?.matchup;
-      if (m && (m.top?.isPlayer || m.bot?.isPlayer)) continue; // never sim user's game
-      const out = runOnePlayoffGame(b, matchId, teamRoster, myLineup, difficulty);
-      b = out.bracket;
-      if (out.playerEliminated) setElimInPlayoffs(true);
+    if (!bracket || !teamRoster) return;
+    try {
+      let b = JSON.parse(JSON.stringify(bracket));
+
+      // Determine which round group to simulate (play-in, first round, semis, conf finals, or finals)
+      const firstAIMatchId = getNextAIMatchId(b);
+      if (!firstAIMatchId) return;
+      const stageKey = getStageKey(firstAIMatchId);
+      const targetGroup = getStageGroup(stageKey);
+      if (!targetGroup) return;
+
+      const stageKeysForGroup = PLAYOFF_STAGE_ORDER.filter(
+        (k) => getStageGroup(k) === targetGroup
+      );
+
+      // All possible matchIds in this round group (east + west, all slots)
+      const groupMatchIds = [];
+      for (const sk of stageKeysForGroup) {
+        groupMatchIds.push(...getMatchIdsForStage(sk));
+      }
+
+      // Keep simming until every AI-only series in this round group has a winner
+      while (true) {
+        let progressed = false;
+        for (const matchId of groupMatchIds) {
+          const parsed = getPlayoffMatchup(b, matchId);
+          const m = parsed?.matchup;
+          if (!m || m.winner || !m.top || !m.bot) continue;
+          if (m.top.isPlayer || m.bot.isPlayer) continue; // never sim user's series
+          if (!Array.isArray(m.top.lineup) || !Array.isArray(m.bot.lineup)) continue;
+
+          const out = runOnePlayoffGame(b, matchId, teamRoster, myLineup, difficulty);
+          b = out.bracket;
+          progressed = true;
+          if (out.playerEliminated) setElimInPlayoffs(true);
+          if (matchId === "finals" && out.result?.myStats) {
+            updateFinalsLeaders(out.result, out.result.topName, out.result.botName);
+          }
+        }
+        if (!progressed) break;
+      }
+
+      setBracket(b);
+      setPlayoffResult(null);
+      setActiveMatchId(getNextPlayerMatchId(b) || null);
+    } catch (err) {
+      console.error("Sim CPU round error:", err);
     }
-    setBracket(b);
-    setPlayoffResult(null);
-    setActiveMatchId(getNextPlayerMatchId(b) || null);
   }, [bracket, teamRoster, myLineup, difficulty]);
 
 const newSeason = () => {
@@ -1846,17 +1410,23 @@ const newSeason = () => {
   setSeasonHighs({});
   setPlayoffLeaders({});
   setPlayoffHighs({});
+  setFinalsLeaders({});
   setShowPlayoffLeaders(false);
   setTeamSeasonHighs({});
   setTeamPlayoffHighs({});
-  setShowTutorial(false);
+  setShowTutorial(true);
   setImportInfo("");
   setImportErr("");
   getTopPicks().then(setTopPicks);
 };
 
 if(phase==="teamSetup") return(
-  <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+  <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24,position:"relative"}}>
+    <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+      <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
+      <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
+      <input type="range" min="0" max="100" value={Math.round(volume*100)} onChange={(e)=>setVolume(Number(e.target.value)/100)} style={{width:80,accentColor:"#60a5fa"}} title="Volume" />
+    </div>
     <div style={{maxWidth:400,width:"100%",textAlign:"center"}}>
       <div style={{fontSize:48,marginBottom:12}}>🏀</div>
       <h1 style={{margin:"0 0 6px",fontSize:28,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>NBA BUDGET BALL</h1>
@@ -1870,6 +1440,7 @@ if(phase==="teamSetup") return(
           onKeyDown={e=>{
             if(e.key==="Enter"&&myTeamName.trim()){
               rememberTeamName(myTeamName);
+              setShowTutorial(true);
               setPhase("draft");
             }
           }}
@@ -1898,6 +1469,7 @@ if(phase==="teamSetup") return(
           onClick={()=>{
             if(!myTeamName.trim()) return;
             rememberTeamName(myTeamName);
+            setShowTutorial(true);
             setPhase("draft");
           }}
           disabled={!myTeamName.trim()}
@@ -1910,7 +1482,13 @@ if(phase==="teamSetup") return(
 );
 
   if(phase==="import") return(
-    <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+    <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24,position:"relative"}}>
+      <button onClick={newSeason} style={{position:"absolute",top:12,right:12,zIndex:50,background:"#111827",color:"#e5e7eb",border:"1px solid #374151",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🔄 New Season</button>
+      <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+        <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
+        <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
+        <input type="range" min="0" max="100" value={Math.round(volume*100)} onChange={(e)=>setVolume(Number(e.target.value)/100)} style={{width:80,accentColor:"#60a5fa"}} title="Volume" />
+      </div>
       <div style={{maxWidth:400,width:"100%",textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:12}}>💰</div>
         <h1 style={{margin:"0 0 6px",fontSize:28,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>NBA BUDGET BALL</h1>
@@ -1935,22 +1513,52 @@ if(phase==="teamSetup") return(
   if(phase==="playoffs"&&bracket){
     const champion=bracket.champion,playerWon=champion?.isPlayer;
     const finalAiRec = aiTeams;
+    const nextPlayerMatchId = getNextPlayerMatchId(bracket) || null;
+    const finalsMVP = champion && (() => {
+      const arr = Object.values(finalsLeaders || {}).filter((p) => p.team === champion.name);
+      if (arr.length > 0) {
+        const withScore = arr.map((p) => {
+          const gp = p.gp || 1;
+          const ppg = p.pts / gp;
+          const rpg = p.reb / gp;
+          const apg = p.ast / gp;
+          return { ...p, gp, ppg, rpg, apg, fmvpScore: ppg * 2 + rpg * 0.8 + apg * 1.5 };
+        });
+        return withScore.reduce((best, p) => (!best || p.fmvpScore > best.fmvpScore ? p : best), null);
+      }
+      // Fallback: best player on champion lineup by rating when no Finals stats
+      const lineup = champion.lineup;
+      if (lineup && lineup.length) {
+        const best = lineup.reduce((a, b) => ((a?.player?.rating ?? 0) >= (b?.player?.rating ?? 0) ? a : b));
+        const p = best?.player;
+        if (p) return { name: p.fullName || p.name, pos: p.pos, team: champion.name, ppg: p.pts ?? 0, rpg: p.reb ?? 0, apg: p.ast ?? 0 };
+      }
+      return null;
+    })();
+    const btnBase = { border:"1px solid #334155", borderRadius:10, fontWeight:700, cursor:"pointer", minHeight: isMobile ? 44 : undefined };
     return(
-      <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
-        {volumeSlider}{skipBtn}
-        
-        <div style={{maxWidth:1100,margin:"0 auto"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
-            <h2 style={{margin:0,fontSize:18,fontWeight:900,color:"#f59e0b"}}>🏆 PLAYOFFS</h2>
-            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-              <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
-              <button onClick={()=>setShowPlayoffLeaders(s=>!s)} style={{background:"#1e293b",color:"#f97316",border:"1px solid #334155",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{showPlayoffLeaders?"Hide":"Show"} Leaders</button>
-              {getNextAIMatchId(bracket)&&<button onClick={simAllAIGames} style={{background:"#475569",color:"#e2e8f0",border:"1px solid #64748b",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>⚡ Sim current round</button>}
-              {champion&&<button onClick={newSeason} style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"white",border:"none",borderRadius:7,padding:"5px 14px",fontSize:11,fontWeight:800,cursor:"pointer"}}>🔄 New Season</button>}
-              <button onClick={()=>setShowHelp(h=>!h)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
+      <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding: isMobile ? 12 : 16, paddingBottom: isMobile ? 96 : undefined}}>
+        <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+          <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
+          <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
+          <input type="range" min="0" max="100" value={Math.round(volume*100)} onChange={(e)=>setVolume(Number(e.target.value)/100)} style={{width:80,accentColor:"#60a5fa"}} title="Volume" />
+        </div>
+        <div style={{maxWidth:1100,margin:"0 auto",minWidth:0,overflow:"hidden"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom: isMobile ? 14 : 16,flexWrap:"wrap",gap: isMobile ? 8 : 10}}>
+            <h2 style={{margin:0,fontSize: isMobile ? 18 : 20,fontWeight:900,color:"#f59e0b",letterSpacing:1}}>🏆 PLAYOFFS</h2>
+            <div style={{display:"flex",gap: isMobile ? 6 : 8,alignItems:"center",flexWrap:"wrap"}}>
+              {nextPlayerMatchId && (
+                <button onClick={()=>{ setActiveMatchId(nextPlayerMatchId); setPlayoffResult(null); }} style={{...btnBase,background:"#052e16",color:"#86efac",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,border:"1px solid #14532d"}}>⏭ Next game</button>
+              )}
+              <button onClick={()=>setShowStandings(s=>!s)} style={{...btnBase,background:showStandings?"#1e3a5f":"#1e293b",color:"#60a5fa",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>{showStandings?"Hide":"Show"} Standings</button>
+              <button onClick={()=>setShowPlayoffLeaders(s=>!s)} style={{...btnBase,background:showPlayoffLeaders?"#431407":"#1e293b",color:"#f97316",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>{showPlayoffLeaders?"Hide":"Show"} Leaders</button>
+              {getNextAIMatchId(bracket)&&<button onClick={()=>{ if(typeof window!=="undefined" && isMobile){ if(!window.confirm("Sim all CPU games in the current round?")) return; } simAllAIGames(); }} style={{...btnBase,background:"linear-gradient(135deg,#475569,#334155)",color:"#e2e8f0",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,boxShadow:"0 2px 8px rgba(0,0,0,0.2)"}}>⚡ Sim CPU round</button>}
+              <button onClick={()=>setBracketDensity(d=>d==="compact"?"comfortable":"compact")} style={{...btnBase,background:bracketDensity==="compact"?"#111827":"#1e293b",color:"#e2e8f0",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>{bracketDensity==="compact"?"Compact ✓":"Compact"}</button>
+              <button onClick={newSeason} style={{...btnBase,background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"white",border:"none",padding: isMobile ? "10px 16px" : "6px 16px",fontSize: isMobile ? 12 : 11,fontWeight:800,boxShadow:"0 2px 10px rgba(99,102,241,0.3)"}}>🔄 New Season</button>
+              <button onClick={()=>setShowHelp(h=>!h)} style={{...btnBase,width: isMobile ? 40 : 32,height: isMobile ? 40 : 32,borderRadius:10,background:"#1e293b",color:"#60a5fa",fontSize:14,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>?</button>
             </div>
           </div>
-          {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:12}}>
+          {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding: isMobile ? 12 : 10,border:"1px solid #334155",fontSize: isMobile ? 11 : 10,color:"#64748b",marginBottom:12,lineHeight:1.5}}>
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
             <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
             <div style={{marginBottom:2}}>• 30-team league (2 conferences, 6 divisions) — 82-game season</div>
@@ -1960,37 +1568,34 @@ if(phase==="teamSetup") return(
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
             <div>Adjacent ×0.82 · Wrong ×0.65</div>
           </div>}
-          {showStandings&&<div style={{marginBottom:12}}><StandingsTable aiTeams={finalAiRec} myRecord={myRecord} myName={myTeamName} highlight/></div>}
-          {showPlayoffLeaders&&(
-            <div style={{marginBottom:12}}>
-              <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
-                <button onClick={()=>setPlayoffLeadersView("playoff")} style={{background:playoffLeadersView==="playoff"?"#f97316":"#1e293b",color:playoffLeadersView==="playoff"?"#fff":"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>Playoff leaders</button>
-                <button onClick={()=>setPlayoffLeadersView("season")} style={{background:playoffLeadersView==="season"?"#f97316":"#1e293b",color:playoffLeadersView==="season"?"#fff":"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>Season leaders</button>
-              </div>
-              <LeagueLeaders leaders={playoffLeadersView==="playoff"?playoffLeaders:leagueLeaders} myTeamName={myTeamName}/>
-              <div style={{marginTop:8}}>
-                <SeasonHighs highs={playoffLeadersView==="playoff"?playoffHighs:seasonHighs} myTeamName={myTeamName} title={playoffLeadersView==="playoff"?"📈 PLAYOFF HIGHS (SINGLE GAME)":"📈 SEASON HIGHS (SINGLE GAME)"}/>
-              </div>
-            </div>
-          )}
-          <div style={{marginBottom:12}}>
-            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={true}/>
-            <div style={{marginTop:8}}>
-              <TeamHighs teamSeasonHighs={teamSeasonHighs} teamPlayoffHighs={teamPlayoffHighs} roster={roster} title="📈 TEAM HIGHS (SINGLE GAME)" showPlayoff={true}/>
-            </div>
-          </div>
           {champion&&(
-            <div style={{textAlign:"center",padding:16,background:playerWon?"linear-gradient(135deg,#78350f,#92400e)":"#0f172a",borderRadius:16,border:`2px solid ${playerWon?"#fbbf24":"#475569"}`,marginBottom:12}}>
-              <div style={{fontSize:36}}>{playerWon?"🏆":"👑"}</div>
-              <div style={{fontSize:22,fontWeight:900,color:playerWon?"#fbbf24":"#e2e8f0",letterSpacing:2}}>{playerWon?"YOU ARE CHAMPIONS!":champion.name+" WIN THE CHAMPIONSHIP!"}</div>
-            </div>
+            <>
+              <div style={{textAlign:"center",padding: isMobile ? 14 : 16,background:playerWon?"linear-gradient(135deg,#78350f,#92400e)":"#0f172a",borderRadius:16,border:`2px solid ${playerWon?"#fbbf24":"#475569"}`,marginBottom:12}}>
+                <div style={{fontSize: isMobile ? 32 : 36}}>{playerWon?"🏆":"👑"}</div>
+                <div style={{fontSize: isMobile ? 18 : 22,fontWeight:900,color:playerWon?"#fbbf24":"#e2e8f0",letterSpacing:2,lineHeight:1.3}}>{playerWon?"YOU ARE CHAMPIONS!":champion.name+" WIN THE CHAMPIONSHIP!"}</div>
+              </div>
+              <div style={{textAlign:"center",padding: isMobile ? 14 : 12,background:"#0f172a",borderRadius:12,border:"1px solid #eab308",marginBottom:12}}>
+                <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:4}}>🏆 FINALS MVP</div>
+                {finalsMVP ? (
+                  <>
+                    <div style={{fontSize: isMobile ? 16 : 18,fontWeight:900}}>{finalsMVP.name}</div>
+                    <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{finalsMVP.pos || "—"} · {finalsMVP.team}</div>
+                    <div style={{fontSize: isMobile ? 13 : 12,color:"#e5e7eb",marginTop:4}}>{rf(finalsMVP.ppg,1)} PPG · {rf(finalsMVP.rpg,1)} RPG · {rf(finalsMVP.apg,1)} APG</div>
+                  </>
+                ) : (
+                  <div style={{fontSize: 12, color: "#64748b"}}>—</div>
+                )}
+              </div>
+            </>
           )}
           {elimInPlayoffs&&!champion&&(
-            <div style={{textAlign:"center",padding:12,background:"#1a0a0a",borderRadius:12,border:"2px solid #ef4444",marginBottom:12}}>
-              <div style={{fontSize:24}}>💀</div><div style={{fontSize:16,fontWeight:900,color:"#ef4444"}}>YOUR SEASON IS OVER</div>
+            <div style={{textAlign:"center",padding: isMobile ? 14 : 12,background:"#1a0a0a",borderRadius:12,border:"2px solid #ef4444",marginBottom:12}}>
+              <div style={{fontSize:24}}>💀</div><div style={{fontSize: isMobile ? 15 : 16,fontWeight:900,color:"#ef4444"}}>YOUR SEASON IS OVER</div>
             </div>
           )}
-          <BracketDisplay bracket={bracket} activeMatchId={activeMatchId} onPlayMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);playPlayoffGame(id);}}/>
+          <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"8px 0"}}>Loading bracket…</div>}>
+            <BracketDisplayLazy bracket={bracket} finalsMVP={finalsMVP} activeMatchId={activeMatchId} nextPlayerMatchId={nextPlayerMatchId || undefined} onSelectMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);}} onPlayMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);playPlayoffGame(id);}} isMobile={isMobile} density={bracketDensity}/>
+          </Suspense>
           {activeMatchId&&(()=>{
             const parsed=getPlayoffMatchup(bracket,activeMatchId);
             const matchup=parsed?.matchup;
@@ -1998,46 +1603,99 @@ if(phase==="teamSetup") return(
             const wT=matchup.games.filter(g=>g.winnerIdx===0).length,wB=matchup.games.filter(g=>g.winnerIdx===1).length;
             const done=!!matchup.winner,pInv=matchup.top?.isPlayer||matchup.bot?.isPlayer;
             return(
-              <div style={{marginTop:12}}>
-                <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #334155",marginBottom:10}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-                    <div style={{fontWeight:800,fontSize:13,color:"#a78bfa"}}>{matchup.label}</div>
-                    <div style={{fontSize:12,color:"#64748b"}}>Series: {matchup.top?.name} {wT}–{wB} {matchup.bot?.name}</div>
+              <div style={{marginTop: isMobile ? 16 : 20}}>
+                <div style={{background:"linear-gradient(180deg,#1e293b 0%,#0f172a 100%)",borderRadius:14,padding: isMobile ? 14 : 16,border:"2px solid #334155",marginBottom:12,boxShadow:"0 4px 16px rgba(0,0,0,0.2)"}}>
+                  <div style={{fontSize:10,color:"#64748b",letterSpacing:1,marginBottom:6,textTransform:"uppercase",fontWeight:700}}>Selected matchup</div>
+                  <div style={{fontWeight:800,fontSize: isMobile ? 15 : 14,color:"#e2e8f0",marginBottom:8,lineHeight:1.3}}>{matchup.label}</div>
+                  <div style={{display:"flex",alignItems:"center",gap: isMobile ? 8 : 12,flexWrap:"wrap",marginBottom:12}}>
+                    <span style={{fontSize: isMobile ? 13 : 12,color:"#94a3b8",flex: isMobile ? "1 1 100%" : undefined}}>{matchup.top?.name ?? "TBD"}</span>
+                    <span style={{fontSize: isMobile ? 16 : 14,fontWeight:900,color:"#64748b",flexShrink:0}}>{wT} – {wB}</span>
+                    <span style={{fontSize: isMobile ? 13 : 12,color:"#94a3b8",flex: isMobile ? "1 1 100%" : undefined}}>{matchup.bot?.name ?? "TBD"}</span>
                   </div>
-                  {!done&&pInv&&<button onClick={()=>playPlayoffGame(activeMatchId)} style={{marginTop:8,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:8,padding:"9px 24px",fontSize:13,fontWeight:800,cursor:"pointer"}}>▶ Play Game {matchup.games.length+1}</button>}
-                  {!done&&!pInv&&<button onClick={()=>playPlayoffGame(activeMatchId)} style={{marginTop:8,background:"linear-gradient(135deg,#475569,#334155)",color:"white",border:"none",borderRadius:8,padding:"9px 24px",fontSize:13,fontWeight:800,cursor:"pointer"}}>⚡ Sim Game {matchup.games.length+1}</button>}
-                  {done&&<div style={{marginTop:8,fontSize:12,color:"#22c55e",fontWeight:700}}>✓ {matchup.winner?.name} advance</div>}
+                  {!done&&matchup.top&&matchup.bot&&(
+                    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                      {pInv?(
+                        <button onClick={()=>playPlayoffGame(activeMatchId)} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding: isMobile ? "14px 24px" : "12px 28px",fontSize: isMobile ? 14 : 13,fontWeight:800,cursor:"pointer",boxShadow:"0 4px 14px rgba(34,197,94,0.35)", minHeight: isMobile ? 48 : undefined}}>▶ Play Game {matchup.games.length+1}</button>
+                      ):(
+                        <button onClick={()=>playPlayoffGame(activeMatchId)} style={{background:"linear-gradient(135deg,#475569,#64748b)",color:"white",border:"none",borderRadius:10,padding: isMobile ? "14px 24px" : "12px 28px",fontSize: isMobile ? 14 : 13,fontWeight:800,cursor:"pointer", minHeight: isMobile ? 48 : undefined}}>⚡ Sim Game {matchup.games.length+1}</button>
+                      )}
+                    </div>
+                  )}
+                  {done&&<div style={{fontSize: isMobile ? 13 : 12,color:"#22c55e",fontWeight:700}}>✓ {matchup.winner?.name} advance</div>}
                 </div>
                 {playoffResult&&!playoffResult.aiOnly&&playoffResult.matchId===activeMatchId&&(()=>{
                   const pr=playoffResult,pTop=pr.playerIsTop;
                   const myS=pr.myStats,oppS=pr.oppStats;
                   const myScore=pr.myScore,oppScore=pr.oppScore,won=myScore>oppScore;
                   return(<>
-                    <div style={{textAlign:"center",padding:"12px",background:"#0f172a",borderRadius:12,border:`1px solid ${won?"#22c55e":"#ef4444"}`,marginBottom:10}}>
-                      <div style={{fontSize:20,fontWeight:900,color:won?"#22c55e":"#ef4444"}}>{won?"✓ WIN":"✗ LOSS"}{pr.ot>0?` (${pr.ot}OT)`:""}</div>
-                      <div style={{display:"flex",justifyContent:"center",gap:24,marginTop:6}}>
-                        <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#60a5fa",fontWeight:700}}>{myTeamName}</div><div style={{fontSize:34,fontWeight:900,color:"#60a5fa"}}>{myScore}</div></div>
-                        <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#f87171",fontWeight:700}}>{pTop?pr.botName:pr.topName}</div><div style={{fontSize:34,fontWeight:900,color:"#f87171"}}>{oppScore}</div></div>
+                    <div style={{textAlign:"center",padding: isMobile ? 14 : 16,background:won?"linear-gradient(135deg,#0f3320,#14532d)":"linear-gradient(135deg,#331a1a,#1a0a0a)",borderRadius:14,border:`2px solid ${won?"#22c55e":"#ef4444"}`,marginBottom:12,boxShadow:won?"0 4px 20px rgba(34,197,94,0.2)":"0 4px 20px rgba(239,68,68,0.15)"}}>
+                      <div style={{fontSize: isMobile ? 16 : 18,fontWeight:900,color:won?"#4ade80":"#f87171"}}>{won?"✓ WIN":"✗ LOSS"}{pr.ot>0?` (${pr.ot} OT)`:""}</div>
+                      <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap: isMobile ? 20 : 28,marginTop:10,flexWrap:"wrap"}}>
+                        <div style={{textAlign:"center"}}><div style={{fontSize: isMobile ? 12 : 11,color:"#60a5fa",fontWeight:700}}>{myTeamName}</div><div style={{fontSize: isMobile ? 32 : 36,fontWeight:900,color:"#60a5fa"}}>{myScore}</div></div>
+                        <div style={{fontSize: isMobile ? 16 : 18,color:"#475569",fontWeight:700}}>–</div>
+                        <div style={{textAlign:"center"}}><div style={{fontSize: isMobile ? 12 : 11,color:"#f87171",fontWeight:700}}>{pTop?pr.botName:pr.topName}</div><div style={{fontSize: isMobile ? 32 : 36,fontWeight:900,color:"#f87171"}}>{oppScore}</div></div>
                       </div>
-                      {pr.seriesOver&&<div style={{marginTop:6,fontSize:11,color:"#f59e0b",fontWeight:700}}>Series: {pr.winner?.name} win!</div>}
+                      {pr.seriesOver&&<div style={{marginTop:10,fontSize: isMobile ? 13 : 12,color:"#fbbf24",fontWeight:700}}>Series: {pr.winner?.name} win!</div>}
                     </div>
                     <BoxScore stats={myS} acc="#60a5fa" label={myTeamName}/>
                     <BoxScore stats={oppS} acc="#f87171" label={pTop?pr.botName:pr.topName}/>
                   </>);
                 })()}
                 {playoffResult?.aiOnly&&playoffResult.matchId===activeMatchId&&(
-                  <div style={{textAlign:"center",padding:12,background:"#0f172a",borderRadius:12,border:"1px solid #334155",marginBottom:10}}>
-                    <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>Simulated game (not your team)</div>
-                    <div style={{display:"flex",justifyContent:"center",gap:24,marginTop:6}}>
-                      <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#94a3b8",fontWeight:700}}>{playoffResult.topName}</div><div style={{fontSize:28,fontWeight:900,color:"#94a3b8"}}>{playoffResult.myScore ?? 0}</div></div>
-                      <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#94a3b8",fontWeight:700}}>{playoffResult.botName}</div><div style={{fontSize:28,fontWeight:900,color:"#94a3b8"}}>{playoffResult.oppScore ?? 0}</div></div>
+                  <div style={{textAlign:"center",padding: isMobile ? 14 : 16,background:"#0f172a",borderRadius:14,border:"1px solid #334155",marginBottom:12}}>
+                    <div style={{fontSize: isMobile ? 12 : 11,color:"#64748b",marginBottom:8}}>Simulated game (not your team)</div>
+                    <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap: isMobile ? 16 : 24,flexWrap:"wrap"}}>
+                      <div style={{textAlign:"center"}}><div style={{fontSize: isMobile ? 12 : 11,color:"#94a3b8",fontWeight:700}}>{playoffResult.topName}</div><div style={{fontSize: isMobile ? 26 : 30,fontWeight:900,color:"#94a3b8"}}>{playoffResult.myScore ?? 0}</div></div>
+                      <div style={{fontSize: isMobile ? 14 : 16,color:"#475569"}}>–</div>
+                      <div style={{textAlign:"center"}}><div style={{fontSize: isMobile ? 12 : 11,color:"#94a3b8",fontWeight:700}}>{playoffResult.botName}</div><div style={{fontSize: isMobile ? 26 : 30,fontWeight:900,color:"#94a3b8"}}>{playoffResult.oppScore ?? 0}</div></div>
                     </div>
-                    <div style={{fontSize:12,color:"#22c55e",fontWeight:700,marginTop:6}}>✓ {playoffResult.winner?.name} advance{playoffResult.seriesOver ? " — series over" : ""}</div>
+                    <div style={{fontSize: isMobile ? 13 : 12,color:"#22c55e",fontWeight:700,marginTop:10}}>✓ {playoffResult.winner?.name} advance{playoffResult.seriesOver ? " — series over" : ""}</div>
                   </div>
                 )}
               </div>
             );
           })()}
+          {isMobile && activeMatchId && (() => {
+            const parsed = getPlayoffMatchup(bracket, activeMatchId);
+            const matchup = parsed?.matchup;
+            if (!matchup || matchup.winner || !matchup.top || !matchup.bot) return null;
+            const pInv = matchup.top?.isPlayer || matchup.bot?.isPlayer;
+            const btnLabel = pInv ? `▶ Play Game ${matchup.games.length + 1}` : `⚡ Sim Game ${matchup.games.length + 1}`;
+            return (
+              <div style={{ position:"fixed", left:12, right:12, bottom:12, background:"linear-gradient(180deg,#0f172a 0%,#0b1220 100%)", border:"1px solid #334155", borderRadius:14, padding:12, boxShadow:"0 10px 30px rgba(0,0,0,0.45)", zIndex:50 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"center" }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:10, color:"#64748b", fontWeight:900, letterSpacing:1, textTransform:"uppercase" }}>Selected</div>
+                    <div style={{ fontSize:12, color:"#e2e8f0", fontWeight:900, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{matchup.label}</div>
+                  </div>
+                  <button onClick={()=>playPlayoffGame(activeMatchId)} style={{ background: pInv ? "linear-gradient(135deg,#22c55e,#16a34a)" : "linear-gradient(135deg,#475569,#64748b)", color:"white", border:"none", borderRadius:12, padding:"12px 14px", fontSize:13, fontWeight:900, minHeight:44, cursor:"pointer", flexShrink:0 }}>
+                    {btnLabel}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+          {showStandings&&<div style={{marginTop:16,marginBottom:12}}><StandingsTable aiTeams={finalAiRec} myRecord={myRecord} myName={myTeamName} highlight/></div>}
+          {showPlayoffLeaders&&(
+            <div style={{marginTop: isMobile ? 14 : 16,marginBottom:12}}>
+              <div style={{display:"flex",gap: isMobile ? 8 : 6,marginBottom: isMobile ? 10 : 8,flexWrap:"wrap"}}>
+                <button onClick={()=>setPlayoffLeadersView("playoff")} style={{background:playoffLeadersView==="playoff"?"#f97316":"#1e293b",color:playoffLeadersView==="playoff"?"#fff":"#94a3b8",border:"1px solid #334155",borderRadius:8,padding: isMobile ? "10px 14px" : "4px 10px",fontSize: isMobile ? 12 : 10,fontWeight:700,cursor:"pointer", minHeight: isMobile ? 44 : undefined}}>Playoff leaders</button>
+                <button onClick={()=>setPlayoffLeadersView("season")} style={{background:playoffLeadersView==="season"?"#f97316":"#1e293b",color:playoffLeadersView==="season"?"#fff":"#94a3b8",border:"1px solid #334155",borderRadius:8,padding: isMobile ? "10px 14px" : "4px 10px",fontSize: isMobile ? 12 : 10,fontWeight:700,cursor:"pointer", minHeight: isMobile ? 44 : undefined}}>Season leaders</button>
+              </div>
+              <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"4px 0"}}>Loading leaders…</div>}>
+                <LeagueLeadersLazy leaders={playoffLeadersView==="playoff"?playoffLeaders:leagueLeaders} myTeamName={myTeamName}/>
+              </Suspense>
+              <div style={{marginTop:8}}>
+                <SeasonHighs highs={playoffLeadersView==="playoff"?playoffHighs:seasonHighs} myTeamName={myTeamName} title={playoffLeadersView==="playoff"?"📈 PLAYOFF HIGHS (SINGLE GAME)":"📈 SEASON HIGHS (SINGLE GAME)"}/>
+              </div>
+            </div>
+          )}
+          <div style={{marginTop: isMobile ? 14 : 16,marginBottom:12}}>
+            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={true} isMobile={isMobile}/>
+            <div style={{marginTop:8}}>
+              <TeamHighs teamSeasonHighs={teamSeasonHighs} teamPlayoffHighs={teamPlayoffHighs} roster={roster} title="📈 TEAM HIGHS (SINGLE GAME)" showPlayoff={true}/>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -2175,9 +1833,14 @@ if(phase==="teamSetup") return(
     }
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
-        {volumeSlider}{skipBtn}
-        <div style={{position:"absolute",top:16,right:16,zIndex:10}}>
-          <button onClick={()=>setShowHelp(h=>!h)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
+        <div style={{position:"fixed",top:12,right:12,zIndex:50,display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={()=>setShowHelp(h=>!h)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>?</button>
+          <button onClick={newSeason} style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"white",border:"none",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:800,cursor:"pointer"}}>🔄 New Season</button>
+        </div>
+        <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+          <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
+          <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
+          <input type="range" min="0" max="100" value={Math.round(volume*100)} onChange={(e)=>setVolume(Number(e.target.value)/100)} style={{width:80,accentColor:"#60a5fa"}} title="Volume" />
         </div>
         {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:14,maxWidth:800,marginLeft:"auto",marginRight:"auto"}}>
           <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
@@ -2197,14 +1860,18 @@ if(phase==="teamSetup") return(
             </div>
             <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>Final Record: {season.w}–{season.l} · PPG {ppg} · OPP {papg}</div>
           </div>
-          <div style={{marginBottom:14}}><StandingsTable aiTeams={finalAi} myRecord={myRecord} myName={myTeamName} highlight/></div>
+          <div style={{marginBottom:14}}>
+            <StandingsTable aiTeams={finalAi} myRecord={myRecord} myName={myTeamName} highlight/>
+          </div>
           {(() => {
             const teamRecords = {};
             finalAi.forEach((t) => { teamRecords[t.name] = { w: t.w, l: t.l }; });
             teamRecords[myTeamName] = myRecord;
             return (
               <div style={{marginBottom:14}}>
-                <AllNBAAllDefensive leaders={leagueLeaders} teamRecords={teamRecords} myTeamName={myTeamName}/>
+                <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"4px 0"}}>Loading awards…</div>}>
+                  <AllNBAAllDefensiveLazy leaders={leagueLeaders} teamRecords={teamRecords} myTeamName={myTeamName}/>
+                </Suspense>
               </div>
             );
           })()}
@@ -2244,11 +1911,13 @@ if(phase==="teamSetup") return(
           </div>
           {showLeaders&&(
             <div style={{marginBottom:14}}>
-              <LeagueLeaders leaders={leagueLeaders} myTeamName={myTeamName}/>
+              <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"4px 0"}}>Loading leaders…</div>}>
+                <LeagueLeadersLazy leaders={leagueLeaders} myTeamName={myTeamName}/>
+              </Suspense>
             </div>
           )}
           <div style={{marginBottom:14}}>
-            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false}/>
+            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false} isMobile={isMobile}/>
             <div style={{marginTop:8}}>
               <TeamHighs teamSeasonHighs={teamSeasonHighs} teamPlayoffHighs={teamPlayoffHighs} roster={roster} title="📈 TEAM HIGHS (SINGLE GAME)" showPlayoff={false}/>
             </div>
@@ -2282,17 +1951,46 @@ if(phase==="teamSetup") return(
   if(phase==="game"&&inSeason){
     const oppIndex = schedule && gameNum <= SEASON_LENGTH ? schedule[29][gameNum - 1] : null;
     const opp = oppIndex != null ? aiTeams[oppIndex] : null;
+    const oppRecordLabel = opp ? `${opp.w ?? 0}W–${opp.l ?? 0}L` : null;
+    const oppTopPlayer = opp && Array.isArray(opp.lineup)
+      ? opp.lineup.reduce((best, { player }) => {
+          if (!player) return best;
+          if (!best) return player;
+          return (player.pts || 0) > (best.pts || 0) ? player : best;
+        }, null)
+      : null;
+    const oppWinPct = opp ? (opp.w ?? 0) / Math.max((opp.w ?? 0) + (opp.l ?? 0), 1) : 0;
+    const oppScoutingLabel = opp
+      ? oppWinPct >= 0.65
+        ? "Top-tier opponent"
+        : oppWinPct >= 0.5
+        ? "Solid playoff team"
+        : oppWinPct >= 0.35
+        ? "Fringe playoff team"
+        : "Lottery-level opponent"
+      : null;
     const won = result ? result.myScore > result.oppScore : false;
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
-        {volumeSlider}{skipBtn}
+        <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+          <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
+          <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
+          <input type="range" min="0" max="100" value={Math.round(volume*100)} onChange={(e)=>setVolume(Number(e.target.value)/100)} style={{width:80,accentColor:"#60a5fa"}} title="Volume" />
+        </div>
         <div style={{maxWidth:1040,margin:"0 auto"}}>
           <div style={{background:"#0f172a",borderRadius:10,padding:"10px 14px",marginBottom:10,border:"1px solid #1e293b",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
             <div style={{fontSize:11,fontWeight:800,color:"#64748b"}}>GAME {gameNum} / {SEASON_LENGTH}</div>
             <div style={{flex:1,background:"#1e293b",borderRadius:4,height:5,minWidth:80}}>
               <div style={{height:"100%",width:`${((result?gameNum:gameNum-1)/SEASON_LENGTH)*100}%`,background:"linear-gradient(90deg,#3b82f6,#8b5cf6)",borderRadius:4,transition:"width 0.3s"}}/>
             </div>
-            <div style={{fontSize:11,fontWeight:800,color:season.w>=season.l?"#22c55e":"#f87171"}}>{season.w}W–{season.l}L</div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{fontSize:11,fontWeight:800,color:season.w>=season.l?"#22c55e":"#f87171"}}>{season.w}W–{season.l}L</div>
+              {opp && (
+                <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",padding:"2px 6px",borderRadius:9999,background:"#020617",border:"1px solid #1e293b"}}>
+                  vs {opp.name} {oppRecordLabel}
+                </div>
+              )}
+            </div>
 {(()=>{
   const log=season.gameLog||[];
   if(log.length===0)return null;
@@ -2304,6 +2002,7 @@ if(phase==="teamSetup") return(
 })()}
             <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
             <button onClick={()=>setShowLeaders(s=>!s)} style={{background:"#1e293b",color:"#f97316",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showLeaders?"Hide":"Show"} Leaders</button>
+            <button onClick={newSeason} style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"white",border:"none",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:800,cursor:"pointer"}}>🔄 New Season</button>
             <button onClick={()=>setShowHelp(h=>!h)} style={{width:26,height:26,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:12,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
           </div>
           {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:10}}>
@@ -2316,6 +2015,23 @@ if(phase==="teamSetup") return(
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
             <div>Adjacent ×0.82 · Wrong ×0.65</div>
           </div>}
+          {opp && oppTopPlayer && (
+            <div style={{background:"#020617",borderRadius:10,padding:10,border:"1px solid #1e293b",fontSize:11,color:"#9ca3af",marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:9,color:"#475569",fontWeight:700,letterSpacing:1,marginBottom:2}}>SCOUTING REPORT</div>
+                  <div style={{fontSize:11,color:"#e5e7eb",fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                    {oppTopPlayer.name} · {rf(oppTopPlayer.pts,1)} PTS · {rf(oppTopPlayer.reb,1)} REB · {rf(oppTopPlayer.ast,1)} AST
+                  </div>
+                </div>
+                {oppScoutingLabel && (
+                  <div style={{fontSize:10,color:"#facc15",fontWeight:700,whiteSpace:"nowrap"}}>
+                    {oppScoutingLabel}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {showStandings&&(
             <div style={{marginBottom:10}}>
               <StandingsTable
@@ -2328,11 +2044,13 @@ if(phase==="teamSetup") return(
           )}
           {showLeaders&&(
             <div style={{marginBottom:10}}>
-              <LeagueLeaders leaders={leagueLeaders} myTeamName={myTeamName}/>
+              <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"4px 0"}}>Loading leaders…</div>}>
+                <LeagueLeadersLazy leaders={leagueLeaders} myTeamName={myTeamName}/>
+              </Suspense>
             </div>
           )}
           <div style={{marginBottom:10}}>
-            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false}/>
+            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false} isMobile={isMobile}/>
             <div style={{marginTop:8}}>
               <TeamHighs teamSeasonHighs={teamSeasonHighs} teamPlayoffHighs={{}} roster={roster} title="📈 TEAM HIGHS (SINGLE GAME)" showPlayoff={false}/>
             </div>
@@ -2456,69 +2174,168 @@ if(phase==="teamSetup") return(
     );
   }
 
-  const allArchetypes=[...new Set(playerPool.map(p=>getArchetype(p).label))].sort();
-  const allYears=[...new Set(playerPool.map(p=>String(p.season)))].sort((a,b)=>b-a);
-  const allTeams=[...new Set(playerPool.map(p=>p.tm))].sort();
-  const display=playerPool
-    .filter(p=>(posF==="ALL"||p.pos===posF)&&(search===""||p.name.toLowerCase().includes(search.toLowerCase()))&&(archF==="ALL"||getArchetype(p).label===archF)&&(yearF==="ALL"||String(p.season)===yearF)&&(teamF==="ALL"||p.tm===teamF))
-    .sort((a,b)=>{
-      if(sortBy==="cost"){
-        return sortDir==="desc"?b.cost-a.cost:a.cost-b.cost;
-      }
-      // name sort
-      return sortDir==="desc"
-        ? a.name.localeCompare(b.name)
-        : b.name.localeCompare(a.name);
-    });
+  const allArchetypes = [...new Set(playerPool.map(p => getArchetype(p).label))].sort();
+  const allYears = [...new Set(playerPool.map(p => String(p.season)))].sort((a, b) => b - a);
+  const allTeams = [...new Set(playerPool.map(p => p.tm))].sort();
 
-  return(
-    <div onClick={handleFirstClick} style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:isMobile ? "14px 10px" : 14}}>
-      {showTutorial&&(
-        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-          <div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:400,padding:24,color:"#e2e8f0"}}>
-            <div style={{fontSize:28,fontWeight:900,marginBottom:12,color:"#f59e0b"}}>How to play</div>
-            <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.6,marginBottom:20}}>
-              <div style={{marginBottom:8}}>1. <strong style={{color:"#e2e8f0"}}>Draft 5 players</strong> (one per position) within your <strong style={{color:"#fbbf24"}}>${BUDGET}</strong> budget and build your lineup.</div>
-              <div style={{marginBottom:8}}>2. Battle through a <strong style={{color:"#e2e8f0"}}>full {SEASON_LENGTH}-game season</strong> in a 30-team league with 2 conferences and 6 divisions — every win moves you up the standings.</div>
-              <div style={{marginBottom:8}}>3. Track the league with <strong style={{color:"#e2e8f0"}}>League Leaders, Season Highs, and Playoff Highs</strong> — your players are highlighted in green anywhere they show up.</div>
-              <div>4. <strong style={{color:"#e2e8f0"}}>Playoffs</strong>: top 6 in each conference go straight in; seeds 7–10 fight through the play-in. Win the bracket to become champion!</div>
+  const filteredPool = playerPool.filter((p) => {
+    return (
+      (posF === "ALL" || p.pos === posF) &&
+      (search === "" || p.name.toLowerCase().includes(search.toLowerCase())) &&
+      (archF === "ALL" || getArchetype(p).label === archF) &&
+      (yearF === "ALL" || String(p.season) === yearF) &&
+      (teamF === "ALL" || p.tm === teamF)
+    );
+  });
+
+  // When not filtering by specific year/team, show only the best-rated season per player (fullName).
+  const collapsedByName =
+    yearF === "ALL" && teamF === "ALL"
+      ? (() => {
+          const byName = new Map();
+          for (const p of filteredPool) {
+            const key = p.fullName || p.name;
+            const existing = byName.get(key);
+            if (!existing || (p.rating || 0) > (existing.rating || 0)) {
+              byName.set(key, p);
+            }
+          }
+          return Array.from(byName.values());
+        })()
+      : filteredPool;
+
+  const display = collapsedByName.slice().sort((a, b) => {
+    if (sortBy === "cost") {
+      return sortDir === "desc" ? b.cost - a.cost : a.cost - b.cost;
+    }
+    // name sort
+    return sortDir === "desc"
+      ? a.name.localeCompare(b.name)
+      : b.name.localeCompare(a.name);
+  });
+
+  return (
+    <div
+      style={{
+        background: "#080f1e",
+        minHeight: "100vh",
+        color: "#e2e8f0",
+        fontFamily: "'Segoe UI',system-ui",
+        padding: isMobile ? "14px 10px" : 14,
+      }}
+    >
+      {showTutorial && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ background: "#0f172a", borderRadius: 16, border: "2px solid #334155", maxWidth: 400, padding: 24, color: "#e2e8f0" }}>
+            <div style={{ fontSize: 28, fontWeight: 900, marginBottom: 12, color: "#f59e0b" }}>How to play</div>
+            <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6, marginBottom: 20 }}>
+              <div style={{ marginBottom: 8 }}>1. <strong style={{ color: "#e2e8f0" }}>Draft 5 players</strong> (one per position) within your <strong style={{ color: "#fbbf24" }}>${BUDGET}</strong> budget and build your lineup.</div>
+              <div style={{ marginBottom: 8 }}>2. Battle through a <strong style={{ color: "#e2e8f0" }}>full {SEASON_LENGTH}-game season</strong> in a 30-team league with 2 conferences and 6 divisions — every win moves you up the standings.</div>
+              <div style={{ marginBottom: 8 }}>3. Track the league with <strong style={{ color: "#e2e8f0" }}>League Leaders, Season Highs, and Playoff Highs</strong> — your players are highlighted in green anywhere they show up.</div>
+              <div>4. <strong style={{ color: "#e2e8f0" }}>Playoffs</strong>: top 6 in each conference go straight in; seeds 7–10 fight through the play-in. Win the bracket to become champion!</div>
             </div>
-            <button onClick={dismissTutorial} style={{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"white",border:"none",borderRadius:8,padding:12,fontSize:14,fontWeight:800,cursor:"pointer"}}>Got it</button>
+            <button onClick={dismissTutorial} style={{ width: "100%", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Got it</button>
           </div>
         </div>
       )}
+
+      <div style={{ position: "fixed", bottom: 16, left: 16, zIndex: 50, display: "flex", alignItems: "center", gap: 6, background: "#0f172a", border: "1px solid #334155", borderRadius: 12, padding: "8px 12px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}>
+        <button onClick={() => setSoundOn((s) => !s)} style={{ background: soundOn ? "#14532d" : "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 10px", fontSize: 14, fontWeight: 700, color: soundOn ? "#22c55e" : "#9ca3af", cursor: "pointer" }}>{soundOn ? "🔊" : "🔈"}</button>
+        <button onClick={skipSong} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 10px", fontSize: 12, fontWeight: 700, color: "#e2e8f0", cursor: "pointer" }} title="Skip song">⏭ Skip</button>
+        <input type="range" min="0" max="100" value={Math.round(volume * 100)} onChange={(e) => setVolume(Number(e.target.value) / 100)} style={{ width: 80, accentColor: "#60a5fa" }} title="Volume" />
+      </div>
+
       <Analytics />
       <SpeedInsights />
-      {volumeSlider}{skipBtn}
-      <div style={{maxWidth:1200,margin:"0 auto",overflow:"visible",paddingBottom:80}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
+
+      <div style={{ maxWidth: 1200, margin: "0 auto", paddingBottom: 80 }}>
+        {/* Header row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 10,
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
           <div>
-            <h1 style={{margin:0,fontSize:20,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
-              💰 NBA BUDGET BALL <span style={{fontSize:11,color:"#475569",WebkitTextFillColor:"#475569"}}>v1.0</span>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 20,
+                fontWeight: 900,
+                background: "linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              💰 NBA BUDGET BALL{" "}
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "#475569",
+                  WebkitTextFillColor: "#475569",
+                }}
+              >
+                v1.0
+              </span>
             </h1>
-            <div style={{fontSize:10,color:"#475569",marginTop:1}}>{playerPool.length} players · Budget ${BUDGET} · {SEASON_LENGTH}-game season · Play-in + Playoffs</div>
+            <div
+              style={{
+                fontSize: 10,
+                color: "#475569",
+                marginTop: 1,
+              }}
+            >
+              {playerPool.length} players · Budget ${BUDGET} · {SEASON_LENGTH}
+              -game season · Play-in + Playoffs
+            </div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"flex-end",flex:1}}>
-            <div style={{display:"flex",gap:4,alignItems:"center"}}>
-              <span style={{fontSize:9,color:"#475569",fontWeight:700,letterSpacing:1}}>DIFFICULTY</span>
-              <div style={{display:"flex",gap:3}}>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
+              flex: 1,
+            }}
+          >
+            {/* Difficulty */}
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <span
+                style={{
+                  fontSize: 9,
+                  color: "#475569",
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                }}
+              >
+                DIFFICULTY
+              </span>
+              <div style={{ display: "flex", gap: 3 }}>
                 {[
-                  ["casual","CASUAL"],
-                  ["standard","STANDARD"],
-                  ["hardcore","HARDCORE"],
-                ].map(([val,label])=>(
+                  ["casual", "CASUAL"],
+                  ["standard", "STANDARD"],
+                  ["hardcore", "HARDCORE"],
+                ].map(([val, label]) => (
                   <button
                     key={val}
-                    onClick={()=>!inSeason&&setDifficulty(val)}
+                    onClick={() => !inSeason && setDifficulty(val)}
                     style={{
-                      background:difficulty===val?"#4b5563":"#111827",
-                      color:difficulty===val?"#fef3c7":"#9ca3af",
-                      border:"1px solid #374151",
-                      borderRadius:999,
-                      padding:"3px 8px",
-                      fontSize:9,
-                      fontWeight:700,
-                      cursor:inSeason?"not-allowed":"pointer",
+                      background:
+                        difficulty === val ? "#4b5563" : "#111827",
+                      color:
+                        difficulty === val ? "#fef3c7" : "#9ca3af",
+                      border: "1px solid #374151",
+                      borderRadius: 999,
+                      padding: "3px 8px",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      cursor: inSeason ? "not-allowed" : "pointer",
                     }}
                   >
                     {label}
@@ -2526,19 +2343,28 @@ if(phase==="teamSetup") return(
                 ))}
               </div>
             </div>
-            <div style={{display:"flex",gap:4}}>
+
+            {/* Share / New season */}
+            <div
+              style={{
+                display: "flex",
+                gap: 4,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 onClick={handleCopyTeamCode}
                 disabled={inSeason}
                 style={{
-                  background:"#0f172a",
-                  color:"#e2e8f0",
-                  border:"1px solid #1e293b",
-                  borderRadius:6,
-                  padding:"4px 8px",
-                  fontSize:10,
-                  fontWeight:700,
-                  cursor:inSeason?"not-allowed":"pointer",
+                  background: "#0f172a",
+                  color: "#e2e8f0",
+                  border: "1px solid #1e293b",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: inSeason ? "not-allowed" : "pointer",
                 }}
               >
                 🔗 Copy Code
@@ -2547,236 +2373,1035 @@ if(phase==="teamSetup") return(
                 onClick={handleShareLineup}
                 disabled={inSeason}
                 style={{
-                  background:"#0f172a",
-                  color:"#e2e8f0",
-                  border:"1px solid #1e293b",
-                  borderRadius:6,
-                  padding:"4px 8px",
-                  fontSize:10,
-                  fontWeight:700,
-                  cursor:inSeason?"not-allowed":"pointer",
+                  background: "#0f172a",
+                  color: "#e2e8f0",
+                  border: "1px solid #1e293b",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: inSeason ? "not-allowed" : "pointer",
                 }}
               >
                 📤 Share
               </button>
-              {shareImageStatus=== "message_copied"&&<span style={{fontSize:10,color:"#94a3b8",alignSelf:"center",display:"flex",alignItems:"center",gap:6}}>Message copied! <button type="button" onClick={handleCopyLineupImage} style={{background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,cursor:"pointer"}}>Copy image</button></span>}
-              {shareImageStatus&&shareImageStatus!=="message_copied"&&<span style={{fontSize:10,color:"#94a3b8",alignSelf:"center"}}>{shareImageStatus}</span>}
               <button
                 onClick={handleLoadTeamCode}
                 disabled={inSeason}
                 style={{
-                  background:"#0f172a",
-                  color:"#60a5fa",
-                  border:"1px solid #1e293b",
-                  borderRadius:6,
-                  padding:"4px 8px",
-                  fontSize:10,
-                  fontWeight:700,
-                  cursor:inSeason?"not-allowed":"pointer",
+                  background: "#0f172a",
+                  color: "#60a5fa",
+                  border: "1px solid #1e293b",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: inSeason ? "not-allowed" : "pointer",
                 }}
               >
                 📥 Load Code
               </button>
-            </div>
-          </div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-            {[["BUDGET",`$${rem}`,rem<15?"#ef4444":rem<30?"#f59e0b":"#22c55e"],["SPENT",`$${spent}`,"#94a3b8"],["CHEM",myCh>0?`+${myCh}`:"-","#f472b6"]].map(([l,v,c])=>(
-              <div key={l} style={{textAlign:"center",background:"#0f172a",borderRadius:7,padding:"4px 10px",border:"1px solid #1e293b"}}>
-                <div style={{fontSize:9,color:"#475569",letterSpacing:1}}>{l}</div>
-                <div style={{fontSize:15,fontWeight:900,color:c}}>{v}</div>
-              </div>
-            ))}
-            <div style={{background:"#0f172a",borderRadius:7,padding:"4px 10px",border:"1px solid #1e293b",minWidth:0}}>
-              <div style={{fontSize:9,color:"#475569",letterSpacing:1,marginBottom:1}}>TEAM CODE</div>
-              <div style={{fontSize:11,fontWeight:800,color:"#a78bfa",fontFamily:"monospace",wordBreak:"break-all"}}>{filled===5?POSITIONS.map(pos=>roster[pos]?.id??"").join("-"):"—"}</div>
+              <button
+                onClick={newSeason}
+                style={{
+                  background: "#111827",
+                  color: "#e5e7eb",
+                  border: "1px solid #374151",
+                  borderRadius: 999,
+                  padding: "4px 10px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                🔄 New Season
+              </button>
             </div>
           </div>
         </div>
-        <div style={{background:"#1e293b",borderRadius:4,height:5,marginBottom:12,overflow:"hidden"}}>
-          <div style={{height:"100%",width:`${Math.min((spent/BUDGET)*100,100)}%`,background:"linear-gradient(90deg,#3b82f6,#8b5cf6,#ec4899)",transition:"width 0.3s",borderRadius:4}}/>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"270px minmax(0,1fr)",gap:12}}>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #1e293b"}}>
-              <div style={{fontWeight:800,fontSize:10,letterSpacing:2,color:"#60a5fa",marginBottom:8}}>YOUR STARTING 5</div>
 
-              {POSITIONS.map(pos=>{
-                const p=roster[pos],m=p?posMult(p,pos):1,tier=p?getTier(p.cost):null,isActive=slotSel===pos;
-                return(
-                  <div key={pos} onClick={()=>!inSeason&&setSlotSel(slotSel===pos?null:pos)} style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,background:isActive?"#1a2a0a":p?"#0d2137":"#080f1e",borderRadius:8,padding:"7px 8px",border:`1px solid ${isActive?"#84cc16":p?"#1d4ed8":"#1e293b"}`,cursor:inSeason?"default":"pointer"}}>
-                    <div style={{width:24,height:24,borderRadius:5,background:isActive?"#365314":p?"#1e3a5f":"#1e293b",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:isActive?"#84cc16":"#60a5fa",flexShrink:0}}>{pos}</div>
-                    {p?(
+        {/* Budget row */}
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            alignItems: "center",
+            marginBottom: 8,
+          }}
+        >
+          {[
+            ["BUDGET", `$${rem}`, rem < 15 ? "#ef4444" : rem < 30 ? "#f59e0b" : "#22c55e"],
+            ["SPENT", `$${spent}`, "#94a3b8"],
+            ["CHEM", myCh > 0 ? `+${myCh}` : "-", "#f472b6"],
+            (() => {
+              const bal = myLineup ? getTeamBalance(myLineup) : null;
+              const arch = bal?.archetypeBonus ?? 0;
+              const archVal = arch > 0 ? `+${arch}` : arch < 0 ? String(arch) : "-";
+              return ["ARCH", archVal, "#a78bfa"];
+            })(),
+          ].map(([label, val, color]) => (
+            <div
+              key={label}
+              style={{
+                textAlign: "center",
+                background: "#0f172a",
+                borderRadius: 7,
+                padding: "4px 10px",
+                border: "1px solid #1e293b",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 9,
+                  color: "#475569",
+                  letterSpacing: 1,
+                }}
+              >
+                {label}
+              </div>
+              <div
+                style={{
+                  fontSize: 15,
+                  fontWeight: 900,
+                  color,
+                }}
+              >
+                {val}
+              </div>
+            </div>
+          ))}
+          <div
+            style={{
+              background: "#0f172a",
+              borderRadius: 7,
+              padding: "4px 10px",
+              border: "1px solid #1e293b",
+              minWidth: 0,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 9,
+                color: "#475569",
+                letterSpacing: 1,
+                marginBottom: 1,
+              }}
+            >
+              TEAM CODE
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 800,
+                color: "#a78bfa",
+                fontFamily: "monospace",
+                wordBreak: "break-all",
+              }}
+            >
+              {filled === 5
+                ? POSITIONS.map((pos) => roster[pos]?.id ?? "").join("-")
+                : "—"}
+            </div>
+          </div>
+        </div>
+
+        {/* Budget bar */}
+        <div
+          style={{
+            background: "#1e293b",
+            borderRadius: 4,
+            height: 5,
+            marginBottom: 12,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${Math.min((spent / BUDGET) * 100, 100)}%`,
+              background: "linear-gradient(90deg,#3b82f6,#8b5cf6,#ec4899)",
+              transition: "width 0.3s",
+              borderRadius: 4,
+            }}
+          />
+        </div>
+
+        {/* Main grid: lineup + player pool */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "270px minmax(0,1fr)",
+            gap: 12,
+          }}
+        >
+          {/* Left: lineup */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div
+              style={{
+                background: "#0f172a",
+                borderRadius: 12,
+                padding: 12,
+                border: "1px solid #1e293b",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 800,
+                  fontSize: 10,
+                  letterSpacing: 2,
+                  color: "#60a5fa",
+                  marginBottom: 6,
+                }}
+              >
+                YOUR STARTING 5
+              </div>
+
+              {/* Needs strip */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 6,
+                  gap: 6,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {POSITIONS.map((pos) => {
+                    const filledSlot = !!roster[pos];
+                    return (
+                      <div
+                        key={pos}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 3,
+                          padding: "2px 6px",
+                          borderRadius: 9999,
+                          background: filledSlot ? "#022c22" : "#020617",
+                          border: `1px solid ${
+                            filledSlot ? "#16a34a" : "#1f2937"
+                          }`,
+                          fontSize: 9,
+                          fontWeight: 700,
+                          color: filledSlot ? "#bbf7d0" : "#64748b",
+                        }}
+                      >
+                        <span>{pos}</span>
+                        <span>{filledSlot ? "✓" : "•"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {openPositions.length > 0 && (
+                  <div
+                    style={{
+                      fontSize: 9,
+                      color: "#e5e7eb",
+                      background: "#020617",
+                      borderRadius: 9999,
+                      padding: "2px 8px",
+                      border: "1px solid #1e293b",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Remaining/slot: ${remainingPerOpenSlot}
+                  </div>
+                )}
+              </div>
+
+              {/* Slots */}
+              {POSITIONS.map((pos) => {
+                const p = roster[pos];
+                const m = p ? posMult(p, pos) : 1;
+                const tier = p ? getTier(p.cost) : null;
+                const isActive = slotSel === pos;
+                return (
+                  <div
+                    key={pos}
+                    onClick={() =>
+                      !inSeason && setSlotSel(slotSel === pos ? null : pos)
+                    }
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      marginBottom: 5,
+                      background: isActive
+                        ? "#1a2a0a"
+                        : p
+                        ? "#0d2137"
+                        : "#080f1e",
+                      borderRadius: 8,
+                      padding: "7px 8px",
+                      border: `1px solid ${
+                        isActive
+                          ? "#84cc16"
+                          : p
+                          ? "#1d4ed8"
+                          : "#1e293b"
+                      }`,
+                      cursor: inSeason ? "default" : "pointer",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 5,
+                        background: isActive
+                          ? "#365314"
+                          : p
+                          ? "#1e3a5f"
+                          : "#1e293b",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 9,
+                        fontWeight: 800,
+                        color: isActive ? "#84cc16" : "#60a5fa",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {pos}
+                    </div>
+                    {p ? (
                       <>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:11,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
-                          <div style={{display:"flex",gap:3,marginTop:1,flexWrap:"wrap"}}>
-                            <Tag label={tier.label} color={tier.color} bg={tier.bg}/>
-                            {m<1&&<Tag label={`OOP ×${m}`} color="#fbbf24" bg="#78350f"/>}
-                            {myCh>0&&<Tag label="⚡CHEM" color="#f472b6" bg="#4a044e"/>}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {p.name}
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 3,
+                              marginTop: 1,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <Tag
+                              label={tier.label}
+                              color={tier.color}
+                              bg={tier.bg}
+                            />
+                            {m < 1 && (
+                              <Tag
+                                label={`OOP ×${m}`}
+                                color="#fbbf24"
+                                bg="#78350f"
+                              />
+                            )}
                           </div>
                         </div>
-                        <div style={{textAlign:"right",flexShrink:0}}><div style={{fontSize:13,color:"#fbbf24",fontWeight:900}}>${p.cost}</div></div>
-                        {!inSeason&&<button onClick={e=>{e.stopPropagation();drop(pos);}} style={{background:"#7f1d1d",border:"none",borderRadius:4,color:"#fca5a5",fontSize:11,width:18,height:18,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              color: "#fbbf24",
+                              fontWeight: 900,
+                            }}
+                          >
+                            ${p.cost}
+                          </div>
+                        </div>
+                        {!inSeason && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              drop(pos);
+                            }}
+                            style={{
+                              background: "#7f1d1d",
+                              border: "none",
+                              borderRadius: 4,
+                              color: "#fca5a5",
+                              fontSize: 11,
+                              width: 18,
+                              height: 18,
+                              cursor: "pointer",
+                              flexShrink: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            ✕
+                          </button>
+                        )}
                       </>
-                    ):(
-                      <div style={{fontSize:10,color:isActive?"#84cc16":"#334155",fontStyle:"italic"}}>{isActive?`Picking for ${pos} →`:`Click to set ${pos} →`}</div>
+                    ) : (
+                      <div
+                        style={{
+                          fontSize: 10,
+                          color: isActive ? "#84cc16" : "#334155",
+                          fontStyle: "italic",
+                        }}
+                      >
+                        {isActive
+                          ? `Picking for ${pos} →`
+                          : `Click to set ${pos} →`}
+                      </div>
                     )}
                   </div>
                 );
               })}
-              {myCh>0&&<div style={{fontSize:11,color:"#f472b6",textAlign:"center",margin:"4px 0",fontWeight:700}}>⚡ Chemistry Boost +{myCh}</div>}
-              {(()=>{
-                const bal=getTeamBalance(myLineup);if(!bal)return null;
-                return(
-                  <div style={{marginTop:6,background:"#080f1e",borderRadius:8,padding:"6px 8px",border:"1px solid #1e293b"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                      <div style={{fontSize:9,color:"#475569",fontWeight:700,letterSpacing:1}}>TEAM BALANCE</div>
-                      <div style={{fontSize:16,fontWeight:900,color:bal.color}}>{bal.grade}</div>
+
+              {myLineup && (() => {
+                const bal = getTeamBalance(myLineup);
+                if (!bal) return null;
+                return (
+                  <div style={{ marginTop: 6, background: "#080f1e", borderRadius: 8, padding: "6px 8px", border: "1px solid #1e293b" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, letterSpacing: 1 }}>TEAM BALANCE</div>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: bal.color }}>{bal.grade}</div>
                     </div>
-                    {bal.archetypeBonus!==0&&<div style={{fontSize:10,color:"#a78bfa",fontWeight:700,marginBottom:3}}>🧩 Archetype Bonus {bal.archetypeBonus>0?`+${bal.archetypeBonus}`:bal.archetypeBonus}</div>}
-                    {bal.missing.length>0&&<div style={{fontSize:9,color:"#f87171"}}>Missing: {bal.missing.join(", ")}</div>}
+                    {bal.archetypeBonus !== 0 && (
+                      <div style={{ fontSize: 10, color: bal.archetypeBonus > 0 ? "#22c55e" : "#ef4444", fontWeight: 700 }}>
+                        🧩 Archetype bonus: {bal.archetypeBonus > 0 ? "+" : ""}{bal.archetypeBonus}
+                      </div>
+                    )}
+                    {bal.missing?.length > 0 && (
+                      <div style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>Missing: {bal.missing.join(", ")}</div>
+                    )}
                   </div>
                 );
               })()}
-              <button onClick={startSeason} disabled={!full||inSeason} style={{width:"100%",marginTop:4,background:full&&!inSeason?"linear-gradient(135deg,#f59e0b,#d97706)":"#1e293b",color:full&&!inSeason?"white":"#374151",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:800,cursor:full&&!inSeason?"pointer":"not-allowed",transition:"all 0.2s"}}>
-                {full?"🏀 START SEASON":`${5-filled} SLOT${5-filled!==1?"S":""} REMAINING`}
-              </button>
-            </div>
 
-            <div style={{display:"flex",justifyContent:"flex-end",marginTop:6}}>
               <button
-                onClick={()=>setShowHelp(o=>!o)}
+                onClick={startSeason}
+                disabled={!full || inSeason}
                 style={{
-                  width:28,
-                  height:28,
-                  borderRadius:"50%",
-                  background:"#1e293b",
-                  border:"1px solid #334155",
-                  color:"#60a5fa",
-                  fontSize:14,
-                  fontWeight:900,
-                  cursor:"pointer",
-                  display:"flex",
-                  alignItems:"center",
-                  justifyContent:"center",
+                  width: "100%",
+                  marginTop: 6,
+                  background:
+                    full && !inSeason
+                      ? "linear-gradient(135deg,#f59e0b,#d97706)"
+                      : "#1e293b",
+                  color: full && !inSeason ? "white" : "#374151",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "10px",
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor:
+                    full && !inSeason ? "pointer" : "not-allowed",
                 }}
               >
-                ?
+                {full
+                  ? "🏀 START SEASON"
+                  : `${5 - filled} SLOT${5 - filled !== 1 ? "S" : ""} REMAINING`}
               </button>
-            </div>
-            {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginTop:6}}>
-              <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
-              <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
-              <div style={{marginBottom:2}}>• 30-team league (2 conferences, 6 divisions) — 82-game season</div>
-              <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
-              <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
-              <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
-              <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
-              <div>Adjacent ×0.82 · Wrong ×0.65</div>
-            </div>}
 
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginTop: 6,
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <button
+                  onClick={() => {
+                    if (inSeason) return;
+                    setRoster({
+                      PG: null,
+                      SG: null,
+                      SF: null,
+                      PF: null,
+                      C: null,
+                    });
+                    setSlotSel(null);
+                  }}
+                  disabled={inSeason || filled === 0}
+                  style={{
+                    background:
+                      filled === 0 || inSeason ? "#111827" : "#1f2937",
+                    color:
+                      filled === 0 || inSeason ? "#4b5563" : "#fca5a5",
+                    border: "1px solid #4b5563",
+                    borderRadius: 6,
+                    padding: "5px 10px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    cursor:
+                      filled === 0 || inSeason
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  ✕ Clear lineup
+                </button>
+                <button
+                  onClick={() => setShowHelp((o) => !o)}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    background: "#1e293b",
+                    border: "1px solid #334155",
+                    color: "#60a5fa",
+                    fontSize: 14,
+                    fontWeight: 900,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  ?
+                </button>
+              </div>
+              {showHelp && (
+                <div
+                  style={{
+                    background: "#0f172a",
+                    borderRadius: 10,
+                    padding: 10,
+                    border: "1px solid #334155",
+                    fontSize: 10,
+                    color: "#64748b",
+                    marginTop: 6,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 9,
+                      color: "#475569",
+                      letterSpacing: 1,
+                      marginBottom: 4,
+                    }}
+                  >
+                    HOW TO PLAY
+                  </div>
+                  <div style={{ marginBottom: 2 }}>
+                    • Build your team within ${BUDGET} budget
+                  </div>
+                  <div style={{ marginBottom: 2 }}>
+                    • 30-team league (2 conferences, 6 divisions) — 82-game
+                    season
+                  </div>
+                  <div style={{ marginBottom: 2 }}>
+                    • ⚡ Chemistry: real teammates same season+team
+                  </div>
+                  <div style={{ marginBottom: 2 }}>
+                    • 🧩 Archetypes: balance your roster for bonuses
+                  </div>
+                  <div style={{ marginBottom: 2 }}>
+                    • Top 6 direct · 7-10 play-in tournament
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Right: player pool */}
           <div>
-            <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-                <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                  {["ALL",...POSITIONS].map(f=>(
-                    <button key={f} onClick={()=>setPosF(f)} style={{background:posF===f?"#3b82f6":"#1e293b",color:posF===f?"white":"#94a3b8",border:"none",borderRadius:6,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{f}</button>
+            {/* Filters */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                marginBottom: 8,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: 5,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 3,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {["ALL", ...POSITIONS].map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setPosF(f)}
+                      style={{
+                        background:
+                          posF === f ? "#3b82f6" : "#1e293b",
+                        color: posF === f ? "white" : "#94a3b8",
+                        border: "none",
+                        borderRadius: 6,
+                        padding: "5px 10px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {f}
+                    </button>
                   ))}
                 </div>
-                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search..." style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"5px 10px",fontSize:11,color:"#e2e8f0",outline:"none",width:140}}/>
-                <div style={{marginLeft:"auto",display:"flex",gap:3}}>
-                  {[["cost","$"],["name","A–Z"]].map(([k,label])=>(
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="🔍 Search..."
+                  style={{
+                    background: "#1e293b",
+                    border: "1px solid #334155",
+                    borderRadius: 6,
+                    padding: "5px 10px",
+                    fontSize: 11,
+                    color: "#e2e8f0",
+                    outline: "none",
+                    width: 140,
+                  }}
+                />
+                <div
+                  style={{
+                    marginLeft: "auto",
+                    display: "flex",
+                    gap: 3,
+                  }}
+                >
+                  {[
+                    ["cost", "$"],
+                    ["name", "A–Z"],
+                  ].map(([k, label]) => (
                     <button
                       key={k}
-                      onClick={()=>{
-                        if(sortBy===k){
-                          setSortDir(d=>d==="desc"?"asc":"desc");
-                        }else{
+                      onClick={() => {
+                        if (sortBy === k) {
+                          setSortDir((d) =>
+                            d === "desc" ? "asc" : "desc"
+                          );
+                        } else {
                           setSortBy(k);
                           setSortDir("desc");
                         }
                       }}
                       style={{
-                        background:sortBy===k?"#4c1d95":"#1e293b",
-                        color:sortBy===k?"#c4b5fd":"#64748b",
-                        border:"none",
-                        borderRadius:5,
-                        padding:"4px 8px",
-                        fontSize:10,
-                        fontWeight:700,
-                        cursor:"pointer",
+                        background:
+                          sortBy === k ? "#4c1d95" : "#1e293b",
+                        color:
+                          sortBy === k ? "#c4b5fd" : "#64748b",
+                        border: "none",
+                        borderRadius: 5,
+                        padding: "4px 8px",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        cursor: "pointer",
                       }}
                     >
-                      {label}{sortBy===k ? (sortDir==="desc" ? " ↓" : " ↑") : ""}
+                      {label}
+                      {sortBy === k
+                        ? sortDir === "desc"
+                          ? " ↓"
+                          : " ↑"
+                        : ""}
                     </button>
                   ))}
                 </div>
               </div>
-              <div style={{display:"flex",gap:3,flexWrap:"wrap",paddingBottom:4}}>
-                {["ALL",...allArchetypes].map(f=>{
-                  const arch=f==="ALL"?null:playerPool.find(p=>getArchetype(p).label===f);
-                  const col=arch?getArchetype(arch).color:"#94a3b8";
-                  return(<button key={f} onClick={()=>setArchF(f)} style={{background:archF===f?"#1e293b":"#0f172a",color:archF===f?col:"#475569",border:`1px solid ${archF===f?col:"#1e293b"}`,borderRadius:6,padding:"3px 8px",fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{f}</button>);
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 3,
+                  flexWrap: "wrap",
+                  paddingBottom: 4,
+                }}
+              >
+                {["ALL", ...allArchetypes].map((f) => {
+                  const arch =
+                    f === "ALL"
+                      ? null
+                      : playerPool.find(
+                          (p) => getArchetype(p).label === f
+                        );
+                  const col = arch
+                    ? getArchetype(arch).color
+                    : "#94a3b8";
+                  return (
+                    <button
+                      key={f}
+                      onClick={() => setArchF(f)}
+                      style={{
+                        background:
+                          archF === f ? "#1e293b" : "#0f172a",
+                        color: archF === f ? col : "#475569",
+                        border: `1px solid ${
+                          archF === f ? col : "#1e293b"
+                        }`,
+                        borderRadius: 6,
+                        padding: "3px 8px",
+                        fontSize: 9,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {f}
+                    </button>
+                  );
                 })}
               </div>
-              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                <select value={yearF} onChange={e=>setYearF(e.target.value)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#e2e8f0",outline:"none"}}>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                <select
+                  value={yearF}
+                  onChange={(e) => setYearF(e.target.value)}
+                  style={{
+                    background: "#1e293b",
+                    border: "1px solid #334155",
+                    borderRadius: 6,
+                    padding: "5px 8px",
+                    fontSize: 11,
+                    color: "#e2e8f0",
+                    outline: "none",
+                  }}
+                >
                   <option value="ALL">All Years</option>
-                  {allYears.map(y=><option key={y} value={y}>{y}</option>)}
+                  {allYears.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
                 </select>
-                <select value={teamF} onChange={e=>setTeamF(e.target.value)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#e2e8f0",outline:"none"}}>
+                <select
+                  value={teamF}
+                  onChange={(e) => setTeamF(e.target.value)}
+                  style={{
+                    background: "#1e293b",
+                    border: "1px solid #334155",
+                    borderRadius: 6,
+                    padding: "5px 8px",
+                    fontSize: 11,
+                    color: "#e2e8f0",
+                    outline: "none",
+                  }}
+                >
                   <option value="ALL">All Teams</option>
-                  {allTeams.map(t=><option key={t} value={t}>{t}</option>)}
+                  {allTeams.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
                 </select>
-                {(archF!=="ALL"||yearF!=="ALL"||teamF!=="ALL"||search!=="")&&(
-                  <button onClick={()=>{setArchF("ALL");setYearF("ALL");setTeamF("ALL");setSearch("");}} style={{background:"#7f1d1d",color:"#fca5a5",border:"none",borderRadius:6,padding:"5px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}}>✕ Clear</button>
+                {(archF !== "ALL" ||
+                  yearF !== "ALL" ||
+                  teamF !== "ALL" ||
+                  search !== "") && (
+                  <button
+                    onClick={() => {
+                      setArchF("ALL");
+                      setYearF("ALL");
+                      setTeamF("ALL");
+                      setSearch("");
+                    }}
+                    style={{
+                      background: "#7f1d1d",
+                      color: "#fca5a5",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "5px 8px",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ✕ Clear
+                  </button>
                 )}
-                <div style={{fontSize:10,color:"#475569",marginLeft:"auto"}}>{display.length} players</div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "#475569",
+                    marginLeft: "auto",
+                  }}
+                >
+                  {display.length} players
+                </div>
               </div>
             </div>
-{topPicks.length > 0 && (
-  <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
-    <span style={{fontSize:9,color:"#f59e0b",fontWeight:800,letterSpacing:1}}>🔥 MOST DRAFTED</span>
-    {topPicks.map((p,i) => (
-      <span key={p.name} onClick={()=>setSearch(p.name)} style={{fontSize:9,background:"#1e293b",border:"1px solid #f59e0b44",borderRadius:6,padding:"3px 8px",color:"#e2e8f0",whiteSpace:"nowrap",cursor:"pointer"}}>
-        <span style={{color:"#475569",marginRight:3}}>#{i+1}</span>{p.name} <span style={{color:"#f59e0b",fontWeight:700}}>{p.picks}</span>
-      </span>
-    ))}
-  </div>
-)}
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fill,minmax(180px,1fr))",gap:6,minWidth:0}}>
-              {display.map(p=>{
-                const inR=myIds.has(p.id),targetSlot=slotSel||p.pos,prev=roster[targetSlot];
-                const delta=p.cost-(prev?.cost||0),afford=delta<=rem,tier=getTier(p.cost);
-                const wouldOop=slotSel&&slotSel!==p.pos,mult=slotSel?posMult(p,slotSel):1;
-                return(
-                  <div key={p.id} className={`player-card${inR?" in-roster":""}`} onClick={()=>!inSeason&&(inR?drop(Object.keys(roster).find(pos=>roster[pos]?.id===p.id)):afford&&pickPlayer(p))} style={{background:inR?"#0d2a0d":slotSel&&afford?"#131a2e":"#0f172a",border:`1px solid ${inR?"#22c55e":slotSel&&afford?"#6366f1":"#1e293b"}`,borderRadius:9,padding:9,cursor:inR||!afford||inSeason?"not-allowed":"pointer",opacity:(!afford&&!inR)||inSeason?0.45:1,transition:"all 0.12s"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:11,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
-                        <div style={{display:"flex",gap:2,marginTop:2,flexWrap:"wrap"}}>
-                          <Tag label={p.pos} color="#93c5fd" bg="#1e3a5f"/>
-                          <Tag label={tier.label} color={tier.color} bg={tier.bg}/>
-                          {wouldOop&&afford&&<Tag label={`×${mult}`} color="#fbbf24" bg="#78350f"/>}
+
+            {topPicks.length > 0 && (
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 9, color: "#f59e0b", fontWeight: 800, letterSpacing: 1 }}>🔥 MOST DRAFTED</span>
+                {topPicks.map((p, i) => (
+                  <span
+                    key={p.player_name || p.name || i}
+                    onClick={() => setSearch((p.player_name || p.name || "").trim())}
+                    style={{ fontSize: 9, background: "#1e293b", border: "1px solid rgba(245,158,11,0.27)", borderRadius: 6, padding: "3px 8px", color: "#e2e8f0", whiteSpace: "nowrap", cursor: "pointer" }}
+                  >
+                    <span style={{ color: "#475569", marginRight: 3 }}>#{i + 1}</span>
+                    {p.player_name || p.name}
+                    <span style={{ color: "#f59e0b", fontWeight: 700, marginLeft: 4 }}>{p.picks}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Player cards */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile
+                  ? "repeat(2,1fr)"
+                  : "repeat(auto-fill,minmax(180px,1fr))",
+                gap: 6,
+                minWidth: 0,
+              }}
+            >
+              {display.map((p) => {
+                const inR = myIds.has(p.id);
+                const targetSlot = slotSel || p.pos;
+                const prev = roster[targetSlot];
+                const delta = p.cost - (prev?.cost || 0);
+                const afford = delta <= rem;
+                const tier = getTier(p.cost);
+                const wouldOop = slotSel && slotSel !== p.pos;
+                const mult = slotSel ? posMult(p, slotSel) : 1;
+                const chemKey =
+                  p.tm && p.season ? `${p.tm}|${p.season}` : null;
+                const nameKey = p.fullName || p.name;
+                const duplicateOfRoster = Object.values(roster).some(
+                  (rp) =>
+                    rp &&
+                    (rp.fullName || rp.name) === nameKey &&
+                    rp.id !== p.id
+                );
+                const disabled =
+                  inSeason || (!inR && (!afford || duplicateOfRoster));
+                const isRosterHovered = inR && rosterHoverId === p.id;
+                const bgBase = inR
+                  ? (isRosterHovered ? "#2a0d0d" : "#0d2a0d")
+                  : slotSel && afford
+                  ? "#131a2e"
+                  : "#0f172a";
+                const bg = duplicateOfRoster ? "#020617" : bgBase;
+                const border = duplicateOfRoster
+                  ? "#111827"
+                  : inR
+                  ? (isRosterHovered ? "#ef4444" : "#22c55e")
+                  : slotSel && afford
+                  ? "#6366f1"
+                  : "#1e293b";
+
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => {
+                      if (disabled) return;
+                      if (!inSeason) {
+                        if (inR) {
+                          const posKey = Object.keys(roster).find(
+                            (pos) => roster[pos]?.id === p.id
+                          );
+                          if (posKey) drop(posKey);
+                        } else if (afford && !duplicateOfRoster) {
+                          pickPlayer(p);
+                        }
+                      }
+                    }}
+                    onMouseEnter={() => {
+                      if (chemKey) setChemHoverKey(chemKey);
+                      if (inR) setRosterHoverId(p.id);
+                    }}
+                    onMouseLeave={() => {
+                      setChemHoverKey(null);
+                      setRosterHoverId(null);
+                    }}
+                    onTouchStart={() => {
+                      if (chemKey) setChemHoverKey(chemKey);
+                      if (inR) setRosterHoverId((prev) => (prev === p.id ? null : p.id));
+                    }}
+                    onTouchEnd={() => { setChemHoverKey(null); setRosterHoverId(null); }}
+                    style={{
+                      background: bg,
+                      border: `1px solid ${border}`,
+                      borderRadius: 9,
+                      padding: 9,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      opacity: disabled ? 0.4 : 1,
+                      transition: "all 0.12s",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 800,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {p.name}
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 2,
+                            marginTop: 2,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <Tag
+                            label={p.pos}
+                            color="#93c5fd"
+                            bg="#1e3a5f"
+                          />
+                          <Tag
+                            label={tier.label}
+                            color={tier.color}
+                            bg={tier.bg}
+                          />
+                          {wouldOop && afford && (
+                            <Tag
+                              label={`×${mult}`}
+                              color="#fbbf24"
+                              bg="#78350f"
+                            />
+                          )}
                         </div>
                       </div>
-                      <div style={{textAlign:"right",flexShrink:0,marginLeft:5}}><div style={{fontSize:14,color:"#fbbf24",fontWeight:900}}>${p.cost}</div></div>
+                      <div
+                        style={{
+                          textAlign: "right",
+                          flexShrink: 0,
+                          marginLeft: 5,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 14,
+                            color: duplicateOfRoster
+                              ? "#4b5563"
+                              : "#fbbf24",
+                            fontWeight: 900,
+                          }}
+                        >
+                          ${p.cost}
+                        </div>
+                      </div>
                     </div>
-                    <div style={{marginTop:6,textAlign:"center"}}>
-                      <span style={{fontSize:10,fontWeight:800,background:"#1e293b",color:getArchetype(p).color,borderRadius:5,padding:"2px 8px",letterSpacing:1}}>{getArchetype(p).label}</span>
+                    <div
+                      style={{
+                        marginTop: 6,
+                        textAlign: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          background: "#1e293b",
+                          color: getArchetype(p).color,
+                          borderRadius: 5,
+                          padding: "2px 8px",
+                          letterSpacing: 1,
+                        }}
+                      >
+                        {getArchetype(p).label}
+                      </span>
                     </div>
-                    {p.tm&&p.season&&<div style={{marginTop:3,fontSize:8,color:"#334155",textAlign:"center"}}>{p.tm} · {p.season}</div>}
-<div style={{display:"flex",justifyContent:"center",gap:8,marginTop:4}}>
-  {[["PTS",p.pts],["REB",p.reb],["AST",p.ast]].map(([l,v])=>(
-    <div key={l} style={{textAlign:"center"}}>
-      <div style={{fontSize:9,color:"#475569"}}>{l}</div>
-      <div style={{fontSize:11,fontWeight:800,color:"#e2e8f0"}}>{rf(v,1)}</div>
-    </div>
-  ))}
-</div>
-                    {inR&&<div style={{marginTop:4,fontSize:9,color:"#22c55e",fontWeight:700,textAlign:"center"}}>✓ IN LINEUP</div>}
-                    {!afford&&!inR&&<div style={{marginTop:4,fontSize:9,color:"#ef4444",textAlign:"center"}}>+${delta-rem} over</div>}
+                    {p.tm && p.season && (
+                      <div
+                        style={{
+                          marginTop: 3,
+                          fontSize: 8,
+                          color: "#334155",
+                          textAlign: "center",
+                        }}
+                      >
+                        {p.tm} · {p.season}
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        gap: 8,
+                        marginTop: 4,
+                      }}
+                    >
+                      {[
+                        ["PTS", p.pts],
+                        ["REB", p.reb],
+                        ["AST", p.ast],
+                      ].map(([label, v]) => (
+                        <div key={label} style={{ textAlign: "center" }}>
+                          <div
+                            style={{
+                              fontSize: 9,
+                              color: "#475569",
+                            }}
+                          >
+                            {label}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 800,
+                              color: "#e2e8f0",
+                            }}
+                          >
+                            {rf(v, 1)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {inR && (
+                      <div
+                        style={{
+                          marginTop: 4,
+                          fontSize: 9,
+                          color: "#f87171",
+                          fontWeight: 700,
+                          textAlign: "center",
+                        }}
+                      >
+                        Click to remove
+                      </div>
+                    )}
+                    {!afford && !inR && (
+                      <div
+                        style={{
+                          marginTop: 4,
+                          fontSize: 9,
+                          color: "#ef4444",
+                          textAlign: "center",
+                        }}
+                      >
+                        {"+$" + (delta - rem) + " over"}
+                      </div>
+                    )}
                   </div>
                 );
               })}

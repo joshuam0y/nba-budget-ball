@@ -181,9 +181,9 @@ out["cost"] = ((5 + (out["rating"] - mn) / max(mx - mn, 1) * 35)).round().astype
 out["cost"] = out["cost"].clip(5, 40)
 
 # ── SORT & SAVE ──────────────────────────────────────────
+# Keep all eligible seasons; sorting by rating ensures the "best" version
+# appears first for any given name, and the UI can collapse/expand as needed.
 out = out.sort_values("rating", ascending=False).reset_index(drop=True)
-out = out.drop_duplicates(subset=["fullName"], keep="first")
-out = out.reset_index(drop=True)
 
 expected = ["name","fullName","pos","season","tm","pts","ast","reb","stl","blk","tov","fg","ts","tR","ftPct","ftRate","tpPct","rating","cost"]
 assert list(out.columns) == expected, f"Column mismatch!\nGot:      {list(out.columns)}\nExpected: {expected}"
