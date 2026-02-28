@@ -226,7 +226,6 @@ export default function App(){
   const [archF,setArchF]=useState("ALL");
   const [yearF,setYearF]=useState("ALL");
   const [teamF,setTeamF]=useState("ALL");
-  const [showAllSeasons,setShowAllSeasons]=useState(false); // false = 1 per player, true = all seasons when year/team set
   const [inSeason,setInSeason]=useState(false);
   const [bracket,setBracket]=useState(null);
   const [playoffResult,setPlayoffResult]=useState(null);
@@ -1420,7 +1419,6 @@ const newSeason = () => {
   setImportErr("");
   setYearF("ALL");
   setTeamF("ALL");
-  setShowAllSeasons(false);
   getTopPicks().then(setTopPicks);
 };
 
@@ -2191,9 +2189,9 @@ if(phase==="teamSetup") return(
     );
   });
 
-  // 1 per player: always collapse. All seasons: collapse only when year/team both ALL; when set, show dupes.
-  const shouldCollapse = !showAllSeasons || (yearF === "ALL" && teamF === "ALL");
-  const collapsedByName = shouldCollapse
+  // One row per player when year/team are both "All"; pick year or team to see all seasons (same player, different years).
+  const showOnePerPlayer = yearF === "ALL" && teamF === "ALL";
+  const collapsedByName = showOnePerPlayer
     ? (() => {
         const byName = new Map();
         for (const p of filteredPool) {
@@ -3124,41 +3122,11 @@ if(phase==="teamSetup") return(
                     </option>
                   ))}
                 </select>
-                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                  <span style={{ fontSize: 9, color: "#475569" }}>View:</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowAllSeasons(false)}
-                    style={{
-                      background: !showAllSeasons ? "#1e3a5f" : "#0f172a",
-                      color: !showAllSeasons ? "#93c5fd" : "#64748b",
-                      border: `1px solid ${!showAllSeasons ? "#3b82f6" : "#334155"}`,
-                      borderRadius: 6,
-                      padding: "4px 8px",
-                      fontSize: 9,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    1/player
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAllSeasons(true)}
-                    style={{
-                      background: showAllSeasons ? "#1e3a5f" : "#0f172a",
-                      color: showAllSeasons ? "#93c5fd" : "#64748b",
-                      border: `1px solid ${showAllSeasons ? "#3b82f6" : "#334155"}`,
-                      borderRadius: 6,
-                      padding: "4px 8px",
-                      fontSize: 9,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    All seasons
-                  </button>
-                </div>
+                {showOnePerPlayer && (
+                  <span style={{ fontSize: 9, color: "#475569", fontStyle: "italic" }}>
+                    Pick year or team to compare seasons
+                  </span>
+                )}
                 {(archF !== "ALL" ||
                   yearF !== "ALL" ||
                   teamF !== "ALL" ||
