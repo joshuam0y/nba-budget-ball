@@ -5,7 +5,7 @@ const FACTOR_36 = 0.75;
 const fmt1 = (v) => (v ?? 0).toFixed(1);
 const fmt0 = (v) => Math.round(v ?? 0);
 
-export function TeamStatsPanel({ teamName, playerSeasonRows, playerPlayoffRows, perMode, onPerModeChange, showPlayoff, isMobile }) {
+export function TeamStatsPanel({ teamName, playerSeasonRows, playerPlayoffRows, perMode, onPerModeChange, showPlayoff, isMobile, seasonNumber }) {
   const [sortKey, setSortKey] = useState("pts");
   const [sortAsc, setSortAsc] = useState(false);
 

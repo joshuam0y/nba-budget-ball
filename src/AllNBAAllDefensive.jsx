@@ -14,7 +14,7 @@ const isFrontcourt = (pos) => pos === "SF" || pos === "PF" || pos === "C";
  * Score = teamWinPct * 3 + (ppg/maxPpg)*3 + (rpg/maxRpg)*1.2 + (apg/maxApg)*2 + (fgPct/max)*1 + (tpPct/max)*0.5 - (tpg/max)*0.5.
  * Then take top 1 C, top 2 F, top 2 G for 1st team; repeat for 2nd and 3rd.
  */
-function buildAllNBATeams(players, teamWinPct) {
+export function buildAllNBATeams(players, teamWinPct) {
   const byPos = { guard: [], forward: [], center: [] };
   players.forEach((p) => {
     const pos = (p.pos || "").toUpperCase();
@@ -71,7 +71,7 @@ function buildAllNBATeams(players, teamWinPct) {
  * Score = teamWinPct * 1 + (spg/max)*2.5 + (bpg/max)*2.5 + (rpg/max)*1.
  * Top 2 guards, top 3 frontcourt for 1st team; next 2 guards, next 3 frontcourt for 2nd.
  */
-function buildAllDefensiveTeams(players, teamWinPct) {
+export function buildAllDefensiveTeams(players, teamWinPct) {
   const guards = [];
   const frontcourt = [];
   players.forEach((p) => {

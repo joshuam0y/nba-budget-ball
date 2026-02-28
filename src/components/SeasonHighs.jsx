@@ -1,4 +1,7 @@
-export function SeasonHighs({ highs, myTeamName, title }) {
+import { useState } from "react";
+
+export function SeasonHighs({ highs, careerHighs, myTeamName, title, seasonNumber }) {
+  const [view, setView] = useState("season"); // "season" | "alltime"
   const defs = [
     ["pts", "POINTS"],
     ["reb", "REBOUNDS"],
@@ -10,22 +13,28 @@ export function SeasonHighs({ highs, myTeamName, title }) {
     ["ftm", "FT MADE"],
     ["tov", "TURNOVERS"],
   ];
-  const rows = defs.map(([key, label]) => {
-    const h = highs[key];
-    return { key, label, ...h };
+  const seasonRows = defs.map(([key, label]) => {
+    const h = highs?.[key];
+    return { key, label, val: h?.val, name: h?.name, team: h?.team, pos: h?.pos, season: null };
   });
-  const hasAny = rows.some((r) => r && r.val != null);
-  if (!hasAny) return null;
-  return (
-    <div style={{ background: "#020617", borderRadius: 10, border: "1px solid #1e293b", padding: 10 }}>
-      <div style={{ fontWeight: 800, fontSize: 10, letterSpacing: 2, color: "#22c55e", marginBottom: 6 }}>
-        {title || "📈 SEASON HIGHS (SINGLE GAME)"}
-      </div>
+  const allTimeRows = defs.map(([key, label]) => {
+    const h = careerHighs?.[key];
+    return { key, label, val: h?.val, name: h?.name, team: h?.team, pos: h?.pos, season: h?.season };
+  });
+  const hasSeason = seasonRows.some((r) => r && r.val != null);
+  const hasAllTime = careerHighs && Object.keys(careerHighs).length > 0 && allTimeRows.some((r) => r && r.val != null);
+  const showTabs = hasAllTime;
+
+  const renderTable = (rows, showSeasonCol) => {
+    const hasAny = rows.some((r) => r && r.val != null);
+    if (!hasAny) return null;
+    const headers = showSeasonCol ? ["STAT", "PLAYER", "TEAM", "VALUE", "SEASON"] : ["STAT", "PLAYER", "TEAM", "VALUE"];
+    return (
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, minWidth: 420 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, minWidth: showSeasonCol ? 480 : 420 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #1e293b" }}>
-              {["STAT", "PLAYER", "TEAM", "VALUE"].map((h) => (
+              {headers.map((h) => (
                 <th
                   key={h}
                   style={{ padding: "4px 6px", textAlign: h === "VALUE" ? "center" : "left", color: "#475569", fontSize: 9 }}
@@ -45,6 +54,7 @@ export function SeasonHighs({ highs, myTeamName, title }) {
                     <td style={{ padding: "4px 6px", color: "#4b5563" }}>—</td>
                     <td style={{ padding: "4px 6px", color: "#4b5563" }}>—</td>
                     <td style={{ padding: "4px 6px", textAlign: "center", color: "#4b5563" }}>—</td>
+                    {showSeasonCol && <td style={{ padding: "4px 6px", color: "#4b5563" }}>—</td>}
                   </tr>
                 );
               }
@@ -60,12 +70,65 @@ export function SeasonHighs({ highs, myTeamName, title }) {
                   <td style={{ padding: "4px 6px", color: isMine ? "#a7f3d0" : "#e5e7eb", fontWeight: 700 }}>{r.name}</td>
                   <td style={{ padding: "4px 6px", color: isMine ? "#6ee7b7" : "#9ca3af" }}>{r.team}</td>
                   <td style={{ padding: "4px 6px", textAlign: "center", color: "#fbbf24", fontWeight: 800 }}>{r.val}</td>
+                  {showSeasonCol && <td style={{ padding: "4px 6px", color: "#94a3b8", fontSize: 9 }}>{r.season != null ? `S${r.season}` : "—"}</td>}
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+    );
+  };
+
+  if (!hasSeason && !hasAllTime) return null;
+  return (
+    <div style={{ background: "#020617", borderRadius: 10, border: "1px solid #1e293b", padding: 10 }}>
+      <div style={{ fontWeight: 800, fontSize: 10, letterSpacing: 2, color: "#22c55e", marginBottom: 6 }}>
+        {title || "📈 LEAGUE HIGHS (SINGLE GAME)"}
+      </div>
+      {showTabs && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+          <button
+            type="button"
+            onClick={() => setView("season")}
+            style={{
+              padding: "4px 10px",
+              fontSize: 10,
+              fontWeight: 700,
+              borderRadius: 6,
+              border: "1px solid #334155",
+              background: view === "season" ? "#1e3a5f" : "#1e293b",
+              color: view === "season" ? "#93c5fd" : "#94a3b8",
+              cursor: "pointer",
+            }}
+          >
+            This season
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("alltime")}
+            style={{
+              padding: "4px 10px",
+              fontSize: 10,
+              fontWeight: 700,
+              borderRadius: 6,
+              border: "1px solid #334155",
+              background: view === "alltime" ? "#1e3a5f" : "#1e293b",
+              color: view === "alltime" ? "#93c5fd" : "#94a3b8",
+              cursor: "pointer",
+            }}
+          >
+            All-time
+          </button>
+        </div>
+      )}
+      {(!showTabs || view === "season") && renderTable(seasonRows, false)}
+      {showTabs && view === "alltime" && (
+        <>
+          <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4 }}>Best single-game across all seasons (season achieved in table)</div>
+          {renderTable(allTimeRows, true)}
+        </>
+      )}
     </div>
   );
 }

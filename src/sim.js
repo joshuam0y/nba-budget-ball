@@ -195,11 +195,17 @@ export function teamEff(lineup, teamRoster) {
     (s, { player, slot }) => s + player.rating * posMult(player, slot),
     0
   );
-  return (
-    base +
-    chemBoost(lineup, teamRoster) +
-    (lineup.length === 5 ? archetypeChemBonus(lineup) : 0)
-  );
+  const archBonus = lineup.length === 5 ? archetypeChemBonus(lineup) : 0;
+  const { hasBig, hasPlaymaker, hasDefense, hasScoring } = getBalanceFlags(lineup);
+  const missingCount = [hasBig, hasPlaymaker, hasDefense, hasScoring].filter(Boolean).length;
+  const missing = 4 - missingCount;
+  const balanceMod =
+    lineup.length === 5
+      ? missing === 0
+        ? 6
+        : -4 * missing
+      : 0;
+  return base + chemBoost(lineup, teamRoster) + archBonus + balanceMod;
 }
 
 export function genLineup(excludeIds = new Set(), pool = [], excludeNames = new Set()) {
@@ -1187,10 +1193,10 @@ export function getActiveSynergies(lineup) {
   return list;
 }
 
-export function getTeamBalance(lineup) {
-  if (!lineup) return null;
+/** Returns balance flags for a lineup; used for UI (getTeamBalance) and for complete-team bonus in sim (teamEff). */
+function getBalanceFlags(lineup) {
+  if (!lineup || lineup.length !== 5) return { hasBig: false, hasPlaymaker: false, hasDefense: false, hasScoring: false };
   const archs = lineup.map(({ player }) => getArchetype(player).id);
-  const unique = new Set(archs).size;
   const hasBig =
     archs.some((a) =>
       ["rimProt", "paint", "glass", "pmBig", "stretch", "swiss"].includes(a)
@@ -1215,6 +1221,14 @@ export function getTeamBalance(lineup) {
       "scoringGuard",
     ].includes(a)
   );
+  return { hasBig, hasPlaymaker, hasDefense, hasScoring };
+}
+
+export function getTeamBalance(lineup) {
+  if (!lineup) return null;
+  const archs = lineup.map(({ player }) => getArchetype(player).id);
+  const unique = new Set(archs).size;
+  const { hasBig, hasPlaymaker, hasDefense, hasScoring } = getBalanceFlags(lineup);
   const bucketCount = archs.filter((a) =>
     ["bucket", "scoringGuard"].includes(a)
   ).length;
@@ -1227,20 +1241,28 @@ export function getTeamBalance(lineup) {
   if (hasScoring) score += 1;
   if (bucketCount >= 3) score -= 3;
   else if (bucketCount >= 2) score -= 1;
-  const grade =
-    score >= 6 ? "A+" : score >= 5 ? "A" : score >= 4 ? "B+" : score >= 3 ? "B" : score >= 2 ? "C" : "D";
-  const color =
-    score >= 5 ? "#22c55e" : score >= 3 ? "#fbbf24" : "#ef4444";
   const missing = [];
   if (!hasBig) missing.push("Big Man");
   if (!hasPlaymaker) missing.push("Playmaker");
   if (!hasDefense) missing.push("Defender");
   if (!hasScoring) missing.push("Scorer");
+  // Letter grade: if you're missing a category, cap the grade so it matches the "Missing: X" message
+  let grade =
+    score >= 6 ? "A+" : score >= 5 ? "A" : score >= 4 ? "B+" : score >= 3 ? "B" : score >= 2 ? "C" : "D";
+  if (missing.length > 0) {
+    const cap = { "A+": "A", "A": "B+", "B+": "B", "B": "C", "C": "D", "D": "D" };
+    grade = cap[grade] ?? grade;
+  }
+  const color =
+    grade === "A+" || grade === "A" ? "#22c55e" : grade === "B+" || grade === "B" ? "#fbbf24" : "#ef4444";
+  const balanceMod =
+    lineup.length === 5 ? (missing.length === 0 ? 6 : -4 * missing.length) : 0;
   return {
     grade,
     color,
     score,
     missing,
+    balanceMod,
     archetypeBonus: archetypeChemBonus(lineup),
     activeSynergies: getActiveSynergies(lineup),
   };

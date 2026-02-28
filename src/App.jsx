@@ -39,6 +39,7 @@ const LeagueLeadersLazy = lazy(() =>
 const AllNBAAllDefensiveLazy = lazy(() =>
   import("./AllNBAAllDefensive").then((m) => ({ default: m.AllNBAAllDefensive }))
 );
+import { buildAllNBATeams, buildAllDefensiveTeams } from "./AllNBAAllDefensive";
 const BracketDisplayLazy = lazy(() =>
   import("./components/bracket").then((m) => ({ default: m.BracketDisplay }))
 );
@@ -212,13 +213,28 @@ export default function App(){
   const [slotSel,setSlotSel]=useState(null);
   const [chemHoverKey, setChemHoverKey] = useState(null);
   const [rosterHoverId, setRosterHoverId] = useState(null);
-  const [soundOn, setSoundOn] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
   const [volume, setVolume] = useState(0.5);
   const [aiTeams,setAiTeams]=useState([]);
   const [schedule,setSchedule]=useState(null);
   const [result,setResult]=useState(null);
   const [season,setSeason]=useState(emptySeason());
   const [gameNum,setGameNum]=useState(1);
+  const [seasonNumber,setSeasonNumber]=useState(0);
+  const [careerStats,setCareerStats]=useState({
+    seasonsPlayed: 0,
+    totalWins: 0,
+    totalLosses: 0,
+    championships: 0,
+    finalsAppearances: 0,
+    playoffAppearances: 0,
+    bestSeasonWins: 0,
+  });
+  // Player awards: { playerName: [ { season, award } ] } — MVP, DPOY, NBA1, NBA2, NBA3, DEF1, DEF2, CHAMP, FINALSMVP
+  const [playerAwards, setPlayerAwards] = useState({});
+  const [currentSaveSlot, setCurrentSaveSlot] = useState(null); // null = single auto-save; 1|2|3 = slot
+  const [showLoadModal, setShowLoadModal] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
   const [posF,setPosF]=useState("ALL");
   const [sortBy,setSortBy]=useState("cost");
   const [sortDir,setSortDir]=useState("desc"); // desc | asc
@@ -244,12 +260,17 @@ export default function App(){
   const [teamStatsPerMode, setTeamStatsPerMode] = useState("game"); // "game" | "per36"
   const [teamSeasonHighs, setTeamSeasonHighs] = useState({});
   const [teamPlayoffHighs, setTeamPlayoffHighs] = useState({});
+  // Career best single-game highs for your roster (across all seasons): { [playerName]: { pts: { value, season }, ... } }
+  const [careerTeamHighs, setCareerTeamHighs] = useState({});
+  // League-wide all-time single-game highs: { pts: { val, name, team, pos, season }, ... } — same keys as seasonHighs
+  const [careerLeagueHighs, setCareerLeagueHighs] = useState({});
   const [topPicks, setTopPicks] = useState([]);
   const [myTeamName, setMyTeamName] = useState("Your Team");
   const [teamNameHistory, setTeamNameHistory] = useState([]);
   const [difficulty, setDifficulty] = useState("standard"); // casual | standard | hardcore
   const [inspectPlayer, setInspectPlayer] = useState(null);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
 
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
@@ -288,16 +309,23 @@ export default function App(){
     }
   }, []);
 
-  // Load saved team / season from localStorage (preferred), then fall back to URL roster once players are loaded
+  // Load saved team / season from localStorage (last-used key: default state or a slot), then fall back to URL roster
   useEffect(() => {
     if (typeof window === "undefined" || !playerPool.length) return;
     try {
-      const raw = window.localStorage.getItem("nba-budget-ball-state");
+      const lastKey = window.localStorage.getItem("nba_budget_ball_last_key") || "nba-budget-ball-state";
+      const raw = window.localStorage.getItem(lastKey);
       let restored = false;
       if (raw) {
         const saved = JSON.parse(raw);
+        if (saved.currentSaveSlot != null) setCurrentSaveSlot(saved.currentSaveSlot);
         if (saved.teamName) setMyTeamName(saved.teamName);
         if (saved.difficulty) setDifficulty(saved.difficulty);
+        if (typeof saved.seasonNumber === "number") setSeasonNumber(saved.seasonNumber);
+        if (saved.careerStats) setCareerStats(saved.careerStats);
+        if (saved.playerAwards && typeof saved.playerAwards === "object") setPlayerAwards(saved.playerAwards);
+        if (saved.careerTeamHighs && typeof saved.careerTeamHighs === "object") setCareerTeamHighs(saved.careerTeamHighs);
+        if (saved.careerLeagueHighs && typeof saved.careerLeagueHighs === "object") setCareerLeagueHighs(saved.careerLeagueHighs);
         if (saved.roster) {
           const next = { PG: null, SG: null, SF: null, PF: null, C: null };
           POSITIONS.forEach((pos) => {
@@ -409,15 +437,20 @@ export default function App(){
         teamStatsPerMode,
         teamSeasonHighs,
         teamPlayoffHighs,
+        seasonNumber,
+        careerStats,
+        playerAwards,
+        careerTeamHighs,
+        careerLeagueHighs,
+        currentSaveSlot,
       };
-      window.localStorage.setItem(
-        "nba-budget-ball-state",
-        JSON.stringify(payload)
-      );
+      const saveKey = currentSaveSlot ? `nba_budget_ball_save_${currentSaveSlot}` : "nba-budget-ball-state";
+      window.localStorage.setItem(saveKey, JSON.stringify(payload));
+      window.localStorage.setItem("nba_budget_ball_last_key", saveKey);
     } catch {
       // ignore localStorage issues
     }
-  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs]);
+  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot]);
 
   const rememberTeamName = useCallback((name) => {
     const trimmed = (name || "").trim();
@@ -435,7 +468,7 @@ export default function App(){
     });
   }, []);
 
-  // How to Play shows after New Season (when user lands on draft), not on initial load
+  // How to Play shows when user is on draft (e.g. after Let's Build), not on initial load
 
   const dismissTutorial = useCallback(() => {
     setShowTutorial(false);
@@ -479,6 +512,162 @@ export default function App(){
     }
     setRoster(next);
   }, [playerPool, inSeason]);
+
+  const getSaveKey = useCallback((slot) => `nba_budget_ball_save_${slot}`, []);
+
+  const getSlotSummaries = useCallback(() => {
+    if (typeof window === "undefined") return [];
+    return [1, 2, 3].map((slot) => {
+      try {
+        const raw = window.localStorage.getItem(getSaveKey(slot));
+        if (!raw) return { slot, empty: true };
+        const s = JSON.parse(raw);
+        const phase = s.phase || "";
+        const sn = s.seasonNumber ?? 0;
+        const gn = s.gameNum ?? 1;
+        const teamName = s.teamName || "—";
+        const w = s.season?.w ?? 0;
+        const l = s.season?.l ?? 0;
+        const gp = (s.season?.gp ?? 0) || (w + l);
+        const record = gp > 0 ? `${w}–${l}` : "—";
+        const chips = s.careerStats?.championships ?? 0;
+        return { slot, empty: false, seasonNumber: sn, gameNum: gn, phase, teamName, record, championships: chips };
+      } catch {
+        return { slot, empty: true };
+      }
+    });
+  }, [getSaveKey]);
+
+  const loadFromSlot = useCallback((slot) => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(getSaveKey(slot));
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (saved.currentSaveSlot != null) setCurrentSaveSlot(saved.currentSaveSlot);
+      if (saved.teamName) setMyTeamName(saved.teamName);
+      if (saved.difficulty) setDifficulty(saved.difficulty);
+      if (typeof saved.seasonNumber === "number") setSeasonNumber(saved.seasonNumber);
+      if (saved.careerStats) setCareerStats(saved.careerStats);
+      if (saved.playerAwards && typeof saved.playerAwards === "object") setPlayerAwards(saved.playerAwards);
+      if (saved.careerTeamHighs && typeof saved.careerTeamHighs === "object") setCareerTeamHighs(saved.careerTeamHighs);
+      if (saved.careerLeagueHighs && typeof saved.careerLeagueHighs === "object") setCareerLeagueHighs(saved.careerLeagueHighs);
+      if (saved.roster) {
+        const next = { PG: null, SG: null, SF: null, PF: null, C: null };
+        POSITIONS.forEach((pos) => {
+          const id = saved.roster[pos];
+          if (id != null) {
+            const player = playerPool.find((p) => p.id === id);
+            if (player) next[pos] = player;
+          }
+        });
+        setRoster(next);
+      }
+      if (saved.phase) setPhase(saved.phase);
+      if (saved.season) setSeason(saved.season);
+      if (saved.schedule) setSchedule(saved.schedule);
+      if (saved.aiTeams) setAiTeams(saved.aiTeams);
+      if (typeof saved.gameNum === "number") setGameNum(saved.gameNum);
+      if (typeof saved.inSeason === "boolean") setInSeason(saved.inSeason);
+      if (saved.bracket) setBracket(saved.bracket);
+      if (saved.playoffResult) setPlayoffResult(saved.playoffResult);
+      if (saved.activeMatchId != null) setActiveMatchId(saved.activeMatchId);
+      if (typeof saved.elimInPlayoffs === "boolean") setElimInPlayoffs(saved.elimInPlayoffs);
+      if (typeof saved.showStandings === "boolean") setShowStandings(saved.showStandings);
+      if (typeof saved.showLeaders === "boolean") setShowLeaders(saved.showLeaders);
+      if (saved.leagueLeaders) setLeagueLeaders(saved.leagueLeaders);
+      if (saved.seasonHighs) setSeasonHighs(saved.seasonHighs);
+      if (saved.playoffLeaders) setPlayoffLeaders(saved.playoffLeaders);
+      if (saved.playoffHighs) setPlayoffHighs(saved.playoffHighs);
+      if (saved.finalsLeaders) setFinalsLeaders(saved.finalsLeaders);
+      if (typeof saved.showPlayoffLeaders === "boolean") setShowPlayoffLeaders(saved.showPlayoffLeaders);
+      if (saved.playoffLeadersView) setPlayoffLeadersView(saved.playoffLeadersView);
+      if (saved.teamStatsPerMode) setTeamStatsPerMode(saved.teamStatsPerMode);
+      if (saved.teamSeasonHighs) setTeamSeasonHighs(saved.teamSeasonHighs);
+      if (saved.teamPlayoffHighs) setTeamPlayoffHighs(saved.teamPlayoffHighs);
+      seasonEndRecordedRef.current = !!saved.season?.gp && saved.phase === "seasonEnd";
+      playoffRecordedRef.current = !!saved.bracket?.champion;
+      seasonAwardsRecordedRef.current = !!saved.season?.gp && saved.phase === "seasonEnd";
+      restoredSessionRef.current = true;
+      setCurrentSaveSlot(slot);
+      setShowLoadModal(false);
+      if (typeof window.localStorage.setItem === "function") window.localStorage.setItem("nba_budget_ball_last_key", getSaveKey(slot));
+    } catch {
+      window.alert("Could not load save.");
+    }
+  }, [playerPool, getSaveKey]);
+
+  const goToMainMenu = useCallback(() => {
+    setCurrentSaveSlot(null); // so auto-save won't overwrite the user's slot; loading a slot restores it
+    setRoster({ PG: null, SG: null, SF: null, PF: null, C: null });
+    setSchedule(null);
+    setAiTeams([]);
+    setSeason(emptySeason());
+    setGameNum(1);
+    setResult(null);
+    setInSeason(false);
+    setBracket(null);
+    setPlayoffResult(null);
+    setPhase("teamSetup");
+    // Whole new save: reset career/franchise state so "Let's Build" starts at Season 1 with no prior records
+    setSeasonNumber(0);
+    setCareerStats({
+      seasonsPlayed: 0,
+      totalWins: 0,
+      totalLosses: 0,
+      championships: 0,
+      finalsAppearances: 0,
+      playoffAppearances: 0,
+      bestSeasonWins: 0,
+    });
+    setPlayerAwards({});
+    setCareerTeamHighs({});
+    setCareerLeagueHighs({});
+    setLeagueLeaders({});
+    setSeasonHighs({});
+    setTeamSeasonHighs({});
+    setTeamPlayoffHighs({});
+    setPlayoffLeaders({});
+    setPlayoffHighs({});
+    setFinalsLeaders({});
+  }, []);
+
+  const deleteSave = useCallback((slot) => {
+    if (typeof window === "undefined") return;
+    if (!window.confirm("Delete this save? This cannot be undone.")) return;
+    try {
+      window.localStorage.removeItem(getSaveKey(slot));
+      if (currentSaveSlot === slot) {
+        setCurrentSaveSlot(null);
+        const other = [1, 2, 3].find((s) => s !== slot && window.localStorage.getItem(getSaveKey(s)));
+        if (other != null) window.localStorage.setItem("nba_budget_ball_last_key", getSaveKey(other));
+        else window.localStorage.removeItem("nba_budget_ball_last_key");
+      }
+      setShowLoadModal(false);
+    } catch {
+      window.alert("Could not delete save.");
+    }
+  }, [currentSaveSlot, getSaveKey]);
+
+  const saveToSlot = useCallback((slot) => {
+    setCurrentSaveSlot(slot);
+    setShowSaveModal(false);
+    try {
+      if (typeof window === "undefined") return;
+      const rosterIds = {};
+      POSITIONS.forEach((pos) => { rosterIds[pos] = roster[pos]?.id ?? null; });
+      const payload = {
+        teamName: myTeamName, roster: rosterIds, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason,
+        bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs,
+        playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode,
+        teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot: slot,
+      };
+      window.localStorage.setItem(getSaveKey(slot), JSON.stringify(payload));
+      window.localStorage.setItem("nba_budget_ball_last_key", getSaveKey(slot));
+    } catch {
+      window.alert("Could not save.");
+    }
+  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, getSaveKey]);
 
   const [shareImageStatus, setShareImageStatus] = useState(null);
   const handleShareLineup = useCallback(async () => {
@@ -546,12 +735,145 @@ const soundtrackRef = useRef(null);
   const trackIndexRef = useRef(0);
   const soundOnRef = useRef(soundOn);
   const volumeRef = useRef(volume);
+  const seasonEndRecordedRef = useRef(false);
+  const playoffRecordedRef = useRef(false);
+  const seasonAwardsRecordedRef = useRef(false);
   const restoredSessionRef = useRef(false);
 
   const SOUNDTRACK_TRACKS = ["/1.mp3", "/2.mp3", "/3.mp3", "/4.mp3"];
 
   soundOnRef.current = soundOn;
   volumeRef.current = volume;
+
+  // Record career stats when season ends (one-time per season)
+  useEffect(() => {
+    if (phase !== "seasonEnd" || !season?.gp || !aiTeams?.length) return;
+    if (seasonEndRecordedRef.current) return;
+    seasonEndRecordedRef.current = true;
+    const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
+    const userRecord = { name: myTeamName, w: season.w, l: season.l, eff: 0, isPlayer: true, division: userMeta.division, conference: userMeta.conference };
+    const all = [userRecord, ...aiTeams.map((t) => ({ ...t, isPlayer: false }))];
+    const confTeams = all.filter((t) => t.conference === userMeta.conference).sort(standingsSort);
+    const myRankInConf = confTeams.findIndex((t) => t.isPlayer) + 1;
+    const madePlayoffs = myRankInConf <= 10;
+    setCareerStats((prev) => ({
+      ...prev,
+      seasonsPlayed: prev.seasonsPlayed + 1,
+      totalWins: prev.totalWins + (season.w || 0),
+      totalLosses: prev.totalLosses + (season.l || 0),
+      playoffAppearances: prev.playoffAppearances + (madePlayoffs ? 1 : 0),
+      bestSeasonWins: Math.max(prev.bestSeasonWins, season.w || 0),
+    }));
+  }, [phase, season, aiTeams, myTeamName]);
+
+  // Record player awards at season end (MVP, DPOY, NBA1/2/3, DEF1/2)
+  useEffect(() => {
+    if (phase !== "seasonEnd" || !season?.gp || !aiTeams?.length || !leagueLeaders || Object.keys(leagueLeaders).length === 0) return;
+    if (seasonAwardsRecordedRef.current) return;
+    seasonAwardsRecordedRef.current = true;
+    const teamWinPct = {};
+    aiTeams.forEach((t) => {
+      const gp = t.w + t.l;
+      teamWinPct[t.name] = gp > 0 ? t.w / gp : 0.4;
+    });
+    teamWinPct[myTeamName] = season.gp > 0 ? season.w / season.gp : 0.4;
+    const leaderEntries = Object.values(leagueLeaders);
+    const leagueRows = leaderEntries.map((p) => {
+      const gp = p.gp || 1;
+      return {
+        ...p,
+        name: p.name,
+        team: p.team,
+        pos: p.pos,
+        gp,
+        ppg: p.pts / gp,
+        rpg: p.reb / gp,
+        apg: p.ast / gp,
+        spg: p.stl / gp,
+        bpg: p.blk / gp,
+        tpg: p.tov / gp,
+        fgPct: p.fga > 0 ? (p.fgm / p.fga) * 100 : 0,
+        tpPct: p.tpa > 0 ? (p.tpm / p.tpa) * 100 : 0,
+        teamPct: teamWinPct[p.team] ?? 0.4,
+      };
+    });
+    const maxOf = (key) => Math.max(1, ...leagueRows.map((r) => r[key] || 0));
+    const maxPPG = maxOf("ppg"), maxRPG = maxOf("rpg"), maxAPG = maxOf("apg");
+    const maxSPG = maxOf("spg"), maxBPG = maxOf("bpg"), maxTPG = maxOf("tpg");
+    const maxFG = maxOf("fgPct"), max3P = maxOf("tpPct");
+    leagueRows.forEach((r) => {
+      r.mvpScore = (r.ppg / maxPPG) * 3 + (r.apg / maxAPG) * 2 + (r.rpg / maxRPG) * 1.2 + (r.fgPct / maxFG) * 1.5 + (r.tpPct / max3P) * 0.8 + r.teamPct * 3 - (r.tpg / maxTPG) * 1;
+      r.dpoyScore = (r.spg / maxSPG) * 2.5 + (r.bpg / maxBPG) * 2.5 + (r.rpg / maxRPG) * 1;
+    });
+    const leagueMVP = leagueRows.reduce((best, r) => (!best || r.mvpScore > best.mvpScore ? r : best), null);
+    const leagueDPOY = leagueRows.reduce((best, r) => (!best || r.dpoyScore > best.dpoyScore ? r : best), null);
+    const allNBA = buildAllNBATeams(leagueRows, teamWinPct);
+    const allDefensive = buildAllDefensiveTeams(leagueRows, teamWinPct);
+    const toAdd = [];
+    if (leagueMVP?.name) toAdd.push([leagueMVP.name, "MVP"]);
+    if (leagueDPOY?.name) toAdd.push([leagueDPOY.name, "DPOY"]);
+    allNBA.first.forEach((p) => toAdd.push([p.name, "NBA1"]));
+    allNBA.second.forEach((p) => toAdd.push([p.name, "NBA2"]));
+    allNBA.third.forEach((p) => toAdd.push([p.name, "NBA3"]));
+    allDefensive.first.forEach((p) => toAdd.push([p.name, "DEF1"]));
+    allDefensive.second.forEach((p) => toAdd.push([p.name, "DEF2"]));
+    setPlayerAwards((prev) => {
+      const next = { ...prev };
+      toAdd.forEach(([name, award]) => {
+        if (!name) return;
+        next[name] = [...(next[name] || []), { season: seasonNumber, award }];
+      });
+      return next;
+    });
+  }, [phase, season, aiTeams, myTeamName, leagueLeaders, seasonNumber]);
+
+  // Record championships/finals when playoffs end (one-time per playoff) + CHAMP & FINALSMVP awards
+  useEffect(() => {
+    if (phase !== "playoffs" || !bracket?.champion) return;
+    if (playoffRecordedRef.current) return;
+    playoffRecordedRef.current = true;
+    const wonChip = bracket.champion?.isPlayer === true;
+    const madeFinals = bracket.finals?.top?.isPlayer || bracket.finals?.bot?.isPlayer;
+    setCareerStats((prev) => ({
+      ...prev,
+      championships: prev.championships + (wonChip ? 1 : 0),
+      finalsAppearances: prev.finalsAppearances + (madeFinals ? 1 : 0),
+    }));
+    // CHAMP: every player on champion lineup; FINALSMVP: best from finals leaders (champion team only) or fallback
+    const champLineup = bracket.champion?.lineup || [];
+    const champPlayerNames = new Set();
+    champLineup.forEach(({ player }) => {
+      if (player?.fullName) champPlayerNames.add(player.fullName);
+      if (player?.name) champPlayerNames.add(player.name);
+    });
+    const toAdd = [];
+    champLineup.forEach(({ player }) => {
+      const name = player?.fullName || player?.name;
+      if (name) toAdd.push([name, "CHAMP"]);
+    });
+    let finalsMVPName = null;
+    const arr = Object.values(finalsLeaders || {}).filter((p) => p.team === bracket.champion?.name && champPlayerNames.has(p.name));
+    if (arr.length > 0) {
+      const withScore = arr.map((p) => {
+        const gp = p.gp || 1;
+        return { ...p, fmvpScore: (p.pts / gp) * 2 + (p.reb / gp) * 0.8 + (p.ast / gp) * 1.5 };
+      });
+      const best = withScore.reduce((a, b) => (a.fmvpScore > b.fmvpScore ? a : b));
+      if (champPlayerNames.has(best.name)) finalsMVPName = best.name;
+    }
+    if (!finalsMVPName && champLineup.length) {
+      const best = champLineup.reduce((a, b) => ((a?.player?.rating ?? 0) >= (b?.player?.rating ?? 0) ? a : b));
+      finalsMVPName = best?.player?.fullName || best?.player?.name;
+    }
+    if (finalsMVPName) toAdd.push([finalsMVPName, "FINALSMVP"]);
+    setPlayerAwards((prev) => {
+      const next = { ...prev };
+      toAdd.forEach(([name, award]) => {
+        next[name] = [...(next[name] || []), { season: seasonNumber, award }];
+      });
+      return next;
+    });
+  }, [phase, bracket, finalsLeaders, seasonNumber]);
 
   const pickNextTrack = useCallback((excludeIndex) => {
     const others = [0, 1, 2, 3].filter((i) => i !== excludeIndex);
@@ -737,24 +1059,49 @@ const soundtrackRef = useRef(null);
       };
       apply(res.myStats, teamALabel);
       apply(res.oppStats, teamBLabel);
+      setCareerLeagueHighs((cPrev) => {
+        const cNext = { ...cPrev };
+        Object.entries(next).forEach(([key, entry]) => {
+          if (!entry || entry.val == null) return;
+          const cur = cNext[key];
+          const curVal = cur?.val ?? -Infinity;
+          if (entry.val >= curVal) cNext[key] = { ...entry, season: seasonNumber };
+        });
+        return cNext;
+      });
       return next;
     });
     if (myTeam && (teamALabel === myTeam || teamBLabel === myTeam)) {
       const myStats = teamALabel === myTeam ? res.myStats : res.oppStats;
+      const statKeys = ["pts", "reb", "ast", "stl", "blk", "fgm", "tpm", "tov", "ftm"];
       setTeamSeasonHighs((prev) => {
         const next = { ...prev };
         myStats.forEach((s) => {
           if (!next[s.name]) next[s.name] = {};
           const p = next[s.name];
-          ["pts", "reb", "ast", "stl", "blk", "fgm", "tpm", "tov", "ftm"].forEach((key) => {
+          statKeys.forEach((key) => {
             const v = s[key];
             if (v != null && (p[key] == null || v > p[key])) p[key] = v;
           });
         });
+        setCareerTeamHighs((cPrev) => {
+          const cNext = { ...cPrev };
+          myStats.forEach((s) => {
+            if (!cNext[s.name]) cNext[s.name] = {};
+            statKeys.forEach((key) => {
+              const v = next[s.name]?.[key];
+              if (v == null) return;
+              const cur = cNext[s.name][key];
+              const curVal = cur && typeof cur.value === "number" ? cur.value : -Infinity;
+              if (v >= curVal) cNext[s.name][key] = { value: v, season: seasonNumber };
+            });
+          });
+          return cNext;
+        });
         return next;
       });
     }
-  }, []);
+  }, [seasonNumber]);
 
   const updatePlayoffLeaders = useCallback((res, teamALabel, teamBLabel) => {
     if (!res) return;
@@ -1072,9 +1419,9 @@ const soundtrackRef = useRef(null);
 
 const startSeason = async () => {
   if(!full) return;
+  setSeasonNumber((n) => (n <= 0 ? 1 : n + 1));
   const sched = buildSeasonSchedule();
   const teams = generateLeague(myLineup, playerPool, myTeamName);
-  // Initialize AI teams with empty 82-game logs; games will be added day-by-day.
   const ai = teams.slice(0, NUM_TEAMS - 1).map((t) => ({
     ...t,
     w: 0,
@@ -1091,9 +1438,55 @@ const startSeason = async () => {
   setBracket(null);
   setPlayoffResult(null);
   setElimInPlayoffs(false);
+  setLeagueLeaders({});
+  setSeasonHighs({});
+  setTeamSeasonHighs({});
+  seasonEndRecordedRef.current = false;
+  playoffRecordedRef.current = false;
+  seasonAwardsRecordedRef.current = false;
   await Promise.all(myLineup.map(({player})=>incrementPick(player.name)));
   getTopPicks().then(setTopPicks);
 };
+
+  const runItBack = () => {
+    if (!full || !myLineup) return;
+    setSeasonNumber((n) => n + 1);
+    const sched = buildSeasonSchedule();
+    // Keep same AI teams (names + lineups) so awards and league structure stay consistent across seasons
+    const ai =
+      aiTeams?.length >= NUM_TEAMS - 1
+        ? aiTeams.slice(0, NUM_TEAMS - 1).map((t) => ({
+            ...t,
+            w: 0,
+            l: 0,
+            gameLog: Array(SEASON_LENGTH).fill(null),
+          }))
+        : (() => {
+            const teams = generateLeague(myLineup, playerPool, myTeamName);
+            return teams.slice(0, NUM_TEAMS - 1).map((t) => ({
+              ...t,
+              w: 0,
+              l: 0,
+              gameLog: Array(SEASON_LENGTH).fill(null),
+            }));
+          })();
+    setSchedule(sched);
+    setAiTeams(ai);
+    setInSeason(true);
+    setSeason(emptySeason());
+    setGameNum(1);
+    setResult(null);
+    setPhase("game");
+    setBracket(null);
+    setPlayoffResult(null);
+    setElimInPlayoffs(false);
+    setLeagueLeaders({});
+    setSeasonHighs({});
+    setTeamSeasonHighs({});
+    seasonEndRecordedRef.current = false;
+    playoffRecordedRef.current = false;
+    seasonAwardsRecordedRef.current = false;
+  };
 
   const playGame = () => {
     if (!full || !schedule || gameNum > SEASON_LENGTH) return;
@@ -1123,7 +1516,10 @@ const startSeason = async () => {
   };
 
   const simGames = (count) => {
-    if (!full || !schedule || !aiTeams?.length || gameNum > SEASON_LENGTH) return;
+    if (!full || !schedule || !aiTeams?.length || gameNum > SEASON_LENGTH) {
+      setIsSimulating(false);
+      return;
+    }
     const toPlay = Math.min(count, SEASON_LENGTH - gameNum + 1);
     try {
       for (let k = 0; k < toPlay; k++) {
@@ -1147,7 +1543,15 @@ const startSeason = async () => {
       if (gameNum + toPlay > SEASON_LENGTH) setPhase("seasonEnd");
     } catch (err) {
       console.error("Sim games error:", err);
+    } finally {
+      setIsSimulating(false);
     }
+  };
+
+  const runSimGames = (count) => {
+    if (!full || !schedule || !aiTeams?.length || gameNum > SEASON_LENGTH || isSimulating) return;
+    setIsSimulating(true);
+    setTimeout(() => simGames(count), 0);
   };
 
   const buildPlayoffBracket = (finalSeason, finalAi) => {
@@ -1343,7 +1747,10 @@ const startSeason = async () => {
   };
 
   const simAllAIGames = useCallback(() => {
-    if (!bracket || !teamRoster) return;
+    if (!bracket || !teamRoster) {
+      setIsSimulating(false);
+      return;
+    }
     try {
       let b = JSON.parse(JSON.stringify(bracket));
 
@@ -1390,37 +1797,17 @@ const startSeason = async () => {
       setActiveMatchId(getNextPlayerMatchId(b) || null);
     } catch (err) {
       console.error("Sim CPU round error:", err);
+    } finally {
+      setIsSimulating(false);
     }
   }, [bracket, teamRoster, myLineup, difficulty]);
 
-const newSeason = () => {
-  setInSeason(false);
-  setSeason(emptySeason());
-  setGameNum(1);
-  setResult(null);
-  setPhase("teamSetup");
-  setBracket(null);
-  setPlayoffResult(null);
-  setAiTeams([]);
-  setSchedule(null);
-  setElimInPlayoffs(false);
-  setRoster({ PG: null, SG: null, SF: null, PF: null, C: null });
-  setShowLeaders(false);
-  setLeagueLeaders({});
-  setSeasonHighs({});
-  setPlayoffLeaders({});
-  setPlayoffHighs({});
-  setFinalsLeaders({});
-  setShowPlayoffLeaders(false);
-  setTeamSeasonHighs({});
-  setTeamPlayoffHighs({});
-  setShowTutorial(true);
-  setImportInfo("");
-  setImportErr("");
-  setYearF("ALL");
-  setTeamF("ALL");
-  getTopPicks().then(setTopPicks);
-};
+  const runSimAllAIGames = () => {
+    if (isSimulating || !bracket || !teamRoster) return;
+    if (typeof window !== "undefined" && isMobile && !window.confirm("Sim all CPU games in the current round?")) return;
+    setIsSimulating(true);
+    setTimeout(() => simAllAIGames(), 0);
+  };
 
 if(phase==="teamSetup") return(
   <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24,position:"relative"}}>
@@ -1478,6 +1865,26 @@ if(phase==="teamSetup") return(
           style={{width:"100%",background:myTeamName.trim()?"linear-gradient(135deg,#f59e0b,#d97706)":"#1e293b",color:myTeamName.trim()?"white":"#374151",border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:800,cursor:myTeamName.trim()?"pointer":"not-allowed"}}>
           🏀 LET'S BUILD
         </button>
+        <button type="button" onClick={()=>setShowLoadModal(true)} style={{marginTop:12,width:"100%",background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+          📂 Load save
+        </button>
+        {showLoadModal&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowLoadModal(false)}>
+            <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+              <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>Load save</div>
+              <p style={{fontSize:11,color:"#64748b",marginBottom:12}}>Pick a slot to continue that franchise. Your current progress will be replaced.</p>
+              {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships }) => (
+                <div key={slot} style={{display:"flex",gap:6,marginBottom:8,alignItems:"stretch"}}>
+                  <button type="button" onClick={()=>loadFromSlot(slot)} style={{flex:1,textAlign:"left",background:empty?"#1e293b":"#111827",border:"1px solid #334155",borderRadius:8,padding:12,color:empty?"#64748b":"#e2e8f0",fontSize:12,cursor:"pointer"}}>
+                    {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Season complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""}`}
+                  </button>
+                  {!empty && <button type="button" onClick={(e)=>{ e.stopPropagation(); deleteSave(slot); }} style={{background:"#7f1d1d",color:"#fca5a5",border:"1px solid #991b1b",borderRadius:8,padding:"12px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}} title="Delete save">🗑</button>}
+                </div>
+              ))}
+              <button type="button" onClick={()=>setShowLoadModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   </div>
@@ -1485,7 +1892,6 @@ if(phase==="teamSetup") return(
 
   if(phase==="import") return(
     <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24,position:"relative"}}>
-      <button onClick={newSeason} style={{position:"absolute",top:12,right:12,zIndex:50,background:"#111827",color:"#e5e7eb",border:"1px solid #374151",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🔄 New Season</button>
       <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
         <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
         <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
@@ -1517,7 +1923,13 @@ if(phase==="teamSetup") return(
     const finalAiRec = aiTeams;
     const nextPlayerMatchId = getNextPlayerMatchId(bracket) || null;
     const finalsMVP = champion && (() => {
-      const arr = Object.values(finalsLeaders || {}).filter((p) => p.team === champion.name);
+      const champName = champion.name;
+      const champPlayerNames = new Set();
+      (champion.lineup || []).forEach(({ player }) => {
+        if (player?.fullName) champPlayerNames.add(player.fullName);
+        if (player?.name) champPlayerNames.add(player.name);
+      });
+      const arr = Object.values(finalsLeaders || {}).filter((p) => p.team === champName && champPlayerNames.has(p.name));
       if (arr.length > 0) {
         const withScore = arr.map((p) => {
           const gp = p.gp || 1;
@@ -1526,9 +1938,9 @@ if(phase==="teamSetup") return(
           const apg = p.ast / gp;
           return { ...p, gp, ppg, rpg, apg, fmvpScore: ppg * 2 + rpg * 0.8 + apg * 1.5 };
         });
-        return withScore.reduce((best, p) => (!best || p.fmvpScore > best.fmvpScore ? p : best), null);
+        const best = withScore.reduce((best, p) => (!best || p.fmvpScore > best.fmvpScore ? p : best), null);
+        if (best && best.team === champName) return best;
       }
-      // Fallback: best player on champion lineup by rating when no Finals stats
       const lineup = champion.lineup;
       if (lineup && lineup.length) {
         const best = lineup.reduce((a, b) => ((a?.player?.rating ?? 0) >= (b?.player?.rating ?? 0) ? a : b));
@@ -1538,7 +1950,16 @@ if(phase==="teamSetup") return(
       return null;
     })();
     const btnBase = { border:"1px solid #334155", borderRadius:10, fontWeight:700, cursor:"pointer", minHeight: isMobile ? 44 : undefined };
+    const simulatingOverlayPlayoffs = isSimulating && (
+      <div style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(8,15,30,0.85)",flexDirection:"column",gap:16}}>
+        <style>{`@keyframes simSpin{to{transform:rotate(360deg);}}`}</style>
+        <div style={{width:48,height:48,border:"4px solid #334155",borderTopColor:"#60a5fa",borderRadius:"50%",animation:"simSpin 0.8s linear infinite"}}/>
+        <div style={{fontSize:14,fontWeight:700,color:"#94a3b8"}}>Simulating…</div>
+      </div>
+    );
     return(
+      <>
+        {simulatingOverlayPlayoffs}
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding: isMobile ? 12 : 16, paddingBottom: isMobile ? 96 : undefined}}>
         <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
           <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
@@ -1547,19 +1968,47 @@ if(phase==="teamSetup") return(
         </div>
         <div style={{maxWidth:1100,margin:"0 auto",minWidth:0,overflow:"hidden"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom: isMobile ? 14 : 16,flexWrap:"wrap",gap: isMobile ? 8 : 10}}>
-            <h2 style={{margin:0,fontSize: isMobile ? 18 : 20,fontWeight:900,color:"#f59e0b",letterSpacing:1}}>🏆 PLAYOFFS</h2>
+            <h2 style={{margin:0,fontSize: isMobile ? 18 : 20,fontWeight:900,color:"#f59e0b",letterSpacing:1}}>Season {seasonNumber} · 🏆 PLAYOFFS</h2>
             <div style={{display:"flex",gap: isMobile ? 6 : 8,alignItems:"center",flexWrap:"wrap"}}>
               {nextPlayerMatchId && (
                 <button onClick={()=>{ setActiveMatchId(nextPlayerMatchId); setPlayoffResult(null); }} style={{...btnBase,background:"#052e16",color:"#86efac",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,border:"1px solid #14532d"}}>⏭ Next game</button>
               )}
               <button onClick={()=>setShowStandings(s=>!s)} style={{...btnBase,background:showStandings?"#1e3a5f":"#1e293b",color:"#60a5fa",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>{showStandings?"Hide":"Show"} Standings</button>
               <button onClick={()=>setShowPlayoffLeaders(s=>!s)} style={{...btnBase,background:showPlayoffLeaders?"#431407":"#1e293b",color:"#f97316",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>{showPlayoffLeaders?"Hide":"Show"} Leaders</button>
-              {getNextAIMatchId(bracket)&&<button onClick={()=>{ if(typeof window!=="undefined" && isMobile){ if(!window.confirm("Sim all CPU games in the current round?")) return; } simAllAIGames(); }} style={{...btnBase,background:"linear-gradient(135deg,#475569,#334155)",color:"#e2e8f0",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,boxShadow:"0 2px 8px rgba(0,0,0,0.2)"}}>⚡ Sim CPU round</button>}
+              {getNextAIMatchId(bracket)&&<button onClick={runSimAllAIGames} disabled={isSimulating} style={{...btnBase,background:isSimulating?"#374151":"linear-gradient(135deg,#475569,#334155)",color:"#e2e8f0",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,boxShadow:"0 2px 8px rgba(0,0,0,0.2)",opacity:isSimulating?0.8:1,cursor:isSimulating?"wait":"pointer"}}>⚡ Sim CPU round</button>}
               <button onClick={()=>setBracketDensity(d=>d==="compact"?"comfortable":"compact")} style={{...btnBase,background:bracketDensity==="compact"?"#111827":"#1e293b",color:"#e2e8f0",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>{bracketDensity==="compact"?"Compact ✓":"Compact"}</button>
-              <button onClick={newSeason} style={{...btnBase,background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"white",border:"none",padding: isMobile ? "10px 16px" : "6px 16px",fontSize: isMobile ? 12 : 11,fontWeight:800,boxShadow:"0 2px 10px rgba(99,102,241,0.3)"}}>🔄 New Season</button>
+              <button onClick={goToMainMenu} style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>🏠 Main menu</button>
+              <button onClick={()=>setShowSaveModal(true)} style={{...btnBase,background:"#1e293b",color:"#a78bfa",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>💾 Save</button>
+              <button onClick={()=>setShowLoadModal(true)} style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>📂 Load</button>
+              <button onClick={runItBack} style={{...btnBase,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:800}} title="Same roster, new AI opponents">🔄 Run it back</button>
               <button onClick={()=>setShowHelp(h=>!h)} style={{...btnBase,width: isMobile ? 40 : 32,height: isMobile ? 40 : 32,borderRadius:10,background:"#1e293b",color:"#60a5fa",fontSize:14,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>?</button>
             </div>
           </div>
+          {showSaveModal && (
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowSaveModal(false)}>
+              <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:320,width:"100%"}} onClick={e=>e.stopPropagation()}>
+                <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>💾 Save to slot</div>
+                {[1,2,3].map((slot)=>(<button key={slot} type="button" onClick={()=>saveToSlot(slot)} style={{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:10,marginBottom:8,color:"#a78bfa",fontSize:12,fontWeight:700,cursor:"pointer"}}>Save to Slot {slot}</button>))}
+                <button type="button" onClick={()=>setShowSaveModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {showLoadModal && (
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowLoadModal(false)}>
+              <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+                <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>📂 Load save</div>
+                {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships }) => (
+                  <div key={slot} style={{display:"flex",gap:6,marginBottom:8,alignItems:"stretch"}}>
+                    <button type="button" onClick={()=>loadFromSlot(slot)} style={{flex:1,textAlign:"left",background:empty?"#1e293b":"#111827",border:"1px solid #334155",borderRadius:8,padding:12,color:empty?"#64748b":"#e2e8f0",fontSize:12,cursor:"pointer"}}>
+                      {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""}`}
+                    </button>
+                    {!empty && <button type="button" onClick={(e)=>{ e.stopPropagation(); deleteSave(slot); }} style={{background:"#7f1d1d",color:"#fca5a5",border:"1px solid #991b1b",borderRadius:8,padding:"12px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}} title="Delete save">🗑</button>}
+                  </div>
+                ))}
+                <button type="button" onClick={()=>setShowLoadModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+              </div>
+            </div>
+          )}
           {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding: isMobile ? 12 : 10,border:"1px solid #334155",fontSize: isMobile ? 11 : 10,color:"#64748b",marginBottom:12,lineHeight:1.5}}>
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
             <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
@@ -1589,8 +2038,31 @@ if(phase==="teamSetup") return(
                   <div style={{fontSize: 12, color: "#64748b"}}>—</div>
                 )}
               </div>
+              {(careerStats.seasonsPlayed > 0 || careerStats.championships > 0) && (
+              <div style={{ fontSize: 11, color: "#a78bfa", marginBottom: 10, fontWeight: 700, textAlign: "center" }}>
+                Career: {careerStats.totalWins}–{careerStats.totalLosses} · {careerStats.championships} 🏆 · {careerStats.finalsAppearances} Finals · {careerStats.playoffAppearances} playoffs
+              </div>
+            )}
+              {(() => {
+                const rosterNames = new Set(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.name).concat(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.fullName).filter(Boolean)));
+                const myTeamAwards = Object.entries(playerAwards || {}).filter(([name]) => rosterNames.has(name)).filter(([, list]) => list && list.length > 0);
+                if (myTeamAwards.length === 0) return null;
+                return (
+                  <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:12,border:"1px solid #475569",textAlign:"left"}}>
+                    <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:6}}>🏅 YOUR TEAM'S AWARDS</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                      {myTeamAwards.map(([name, list]) => (
+                        <div key={name} style={{fontSize:10,display:"flex",flexWrap:"wrap",gap:4,alignItems:"baseline"}}>
+                          <span style={{fontWeight:700,color:"#e2e8f0",minWidth:100}}>{name}</span>
+                          <span style={{color:"#94a3b8"}}>{(list || []).map(({ season, award }) => `${award} (S${season})`).join(", ")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 12 }}>
-                <button onClick={newSeason} style={{ background: "linear-gradient(135deg,#3b82f6,#6366f1)", color: "white", border: "none", borderRadius: 10, padding: "12px 20px", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 2px 10px rgba(99,102,241,0.3)" }}>🔄 New Season</button>
+                <button onClick={runItBack} style={{ background: "linear-gradient(135deg,#22c55e,#16a34a)", color: "white", border: "none", borderRadius: 10, padding: "12px 20px", fontSize: 14, fontWeight: 800, cursor: "pointer" }} title="Same roster, new AI opponents">🔄 Run it back</button>
                 <button onClick={() => document.getElementById("playoff-bracket")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "#1e293b", color: "#e2e8f0", border: "1px solid #334155", borderRadius: 10, padding: "12px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>View Bracket</button>
               </div>
             </>
@@ -1695,18 +2167,19 @@ if(phase==="teamSetup") return(
                 <LeagueLeadersLazy leaders={playoffLeadersView==="playoff"?playoffLeaders:leagueLeaders} myTeamName={myTeamName}/>
               </Suspense>
               <div style={{marginTop:8}}>
-                <SeasonHighs highs={playoffLeadersView==="playoff"?playoffHighs:seasonHighs} myTeamName={myTeamName} title={playoffLeadersView==="playoff"?"📈 PLAYOFF HIGHS (SINGLE GAME)":"📈 SEASON HIGHS (SINGLE GAME)"}/>
+                <SeasonHighs highs={playoffLeadersView==="playoff"?playoffHighs:seasonHighs} careerHighs={playoffLeadersView==="season"?careerLeagueHighs:undefined} myTeamName={myTeamName} title={playoffLeadersView==="playoff"?"📈 PLAYOFF HIGHS (SINGLE GAME)":"📈 SEASON HIGHS (SINGLE GAME)"} seasonNumber={seasonNumber}/>
               </div>
             </div>
           )}
           <div style={{marginTop: isMobile ? 14 : 16,marginBottom:12}}>
-            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={true} isMobile={isMobile}/>
+            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={true} isMobile={isMobile} seasonNumber={seasonNumber}/>
             <div style={{marginTop:8}}>
-              <TeamHighs teamSeasonHighs={teamSeasonHighs} teamPlayoffHighs={teamPlayoffHighs} roster={roster} title="📈 TEAM HIGHS (SINGLE GAME)" showPlayoff={true}/>
+              <TeamHighs teamSeasonHighs={teamSeasonHighs} careerTeamHighs={careerTeamHighs} teamPlayoffHighs={teamPlayoffHighs} roster={roster} title="📈 TEAM HIGHS" showPlayoff={true}/>
             </div>
           </div>
         </div>
       </div>
+      </>
     );
   }
 
@@ -1843,9 +2316,38 @@ if(phase==="teamSetup") return(
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
         <div style={{position:"fixed",top:12,right:12,zIndex:50,display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={goToMainMenu} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🏠 Main menu</button>
           <button onClick={()=>setShowHelp(h=>!h)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>?</button>
-          <button onClick={newSeason} style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"white",border:"none",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:800,cursor:"pointer"}}>🔄 New Season</button>
+          <button onClick={()=>setShowSaveModal(true)} style={{background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>💾 Save</button>
+          <button onClick={()=>setShowLoadModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>📂 Load</button>
+          {!playoff && <button onClick={runItBack} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:800,cursor:"pointer"}} title="Same roster, new AI opponents">🔄 Run it back</button>}
+          {playoff && <span style={{fontSize:10,color:"#f59e0b",fontWeight:700}}>Play through playoffs first</span>}
         </div>
+        {showSaveModal && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowSaveModal(false)}>
+            <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:320,width:"100%"}} onClick={e=>e.stopPropagation()}>
+              <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>💾 Save to slot</div>
+              {[1,2,3].map((slot)=>(<button key={slot} type="button" onClick={()=>saveToSlot(slot)} style={{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:10,marginBottom:8,color:"#a78bfa",fontSize:12,fontWeight:700,cursor:"pointer"}}>Save to Slot {slot}</button>))}
+              <button type="button" onClick={()=>setShowSaveModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+            </div>
+          </div>
+        )}
+        {showLoadModal && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowLoadModal(false)}>
+            <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+              <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>📂 Load save</div>
+              {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships }) => (
+                <div key={slot} style={{display:"flex",gap:6,marginBottom:8,alignItems:"stretch"}}>
+                  <button type="button" onClick={()=>loadFromSlot(slot)} style={{flex:1,textAlign:"left",background:empty?"#1e293b":"#111827",border:"1px solid #334155",borderRadius:8,padding:12,color:empty?"#64748b":"#e2e8f0",fontSize:12,cursor:"pointer"}}>
+                    {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""}`}
+                  </button>
+                  {!empty && <button type="button" onClick={(e)=>{ e.stopPropagation(); deleteSave(slot); }} style={{background:"#7f1d1d",color:"#fca5a5",border:"1px solid #991b1b",borderRadius:8,padding:"12px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}} title="Delete save">🗑</button>}
+                </div>
+              ))}
+              <button type="button" onClick={()=>setShowLoadModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+            </div>
+          </div>
+        )}
         <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
           <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
           <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
@@ -1864,11 +2366,17 @@ if(phase==="teamSetup") return(
         </div>}
         <div style={{maxWidth:800,margin:"0 auto"}}>
           <div style={{textAlign:"center",padding:"16px",background:"#0f172a",borderRadius:16,border:`2px solid ${mySeed<=6?"#22c55e":playoff?"#f59e0b":"#ef4444"}`,marginBottom:14}}>
+            <div style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1,marginBottom:4}}>Season {seasonNumber} · Complete</div>
             <div style={{fontSize:36}}>{mySeed<=6?"🏆":playoff?"🎟":"💀"}</div>
             <div style={{fontSize:22,fontWeight:900,color:mySeed<=6?"#22c55e":playoff?"#f59e0b":"#ef4444",letterSpacing:2}}>
               {mySeed<=6?`PLAYOFFS BOUND — SEED #${mySeed}`:playoff?`PLAY-IN TOURNAMENT — SEED #${mySeed}`:"MISSED THE PLAYOFFS"}
             </div>
             <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>Final Record: {season.w}–{season.l} · PPG {ppg} · OPP {papg}</div>
+            {(careerStats.seasonsPlayed > 0 || careerStats.championships > 0) && (
+              <div style={{fontSize:10,color:"#a78bfa",marginTop:6,fontWeight:700}}>
+                Career: {careerStats.totalWins}–{careerStats.totalLosses} · {careerStats.championships} 🏆 · {careerStats.finalsAppearances} Finals · {careerStats.playoffAppearances} playoffs
+              </div>
+            )}
           </div>
           <div style={{marginBottom:14}}>
             <StandingsTable aiTeams={finalAi} myRecord={myRecord} myName={myTeamName} highlight/>
@@ -1911,6 +2419,24 @@ if(phase==="teamSetup") return(
               )}
             </div>
           )}
+          {(() => {
+            const rosterNames = new Set(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.name).concat(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.fullName).filter(Boolean)));
+            const myTeamAwards = Object.entries(playerAwards || {}).filter(([name]) => rosterNames.has(name)).filter(([, list]) => list && list.length > 0);
+            if (myTeamAwards.length === 0) return null;
+            return (
+              <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #475569"}}>
+                <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>🏅 YOUR TEAM'S AWARDS</div>
+                <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                  {myTeamAwards.map(([name, list]) => (
+                    <div key={name} style={{fontSize:10,display:"flex",flexWrap:"wrap",gap:4,alignItems:"baseline"}}>
+                      <span style={{fontWeight:700,color:"#e2e8f0",minWidth:120}}>{name}</span>
+                      <span style={{color:"#94a3b8"}}>{(list || []).map(({ season, award }) => `${award} (S${season})`).join(", ")}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           <div style={{display:"flex",justifyContent:"flex-end",gap:6,marginBottom:8,flexWrap:"wrap"}}>
             <button
               onClick={()=>setShowLeaders(s=>!s)}
@@ -1927,9 +2453,9 @@ if(phase==="teamSetup") return(
             </div>
           )}
           <div style={{marginBottom:14}}>
-            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false} isMobile={isMobile}/>
+            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false} isMobile={isMobile} seasonNumber={seasonNumber}/>
             <div style={{marginTop:8}}>
-              <TeamHighs teamSeasonHighs={teamSeasonHighs} teamPlayoffHighs={teamPlayoffHighs} roster={roster} title="📈 TEAM HIGHS (SINGLE GAME)" showPlayoff={false}/>
+              <TeamHighs teamSeasonHighs={teamSeasonHighs} careerTeamHighs={careerTeamHighs} teamPlayoffHighs={teamPlayoffHighs} roster={roster} title="📈 TEAM HIGHS" showPlayoff={false}/>
             </div>
           </div>
           {mvp&&(
@@ -1945,13 +2471,13 @@ if(phase==="teamSetup") return(
             </div>
           )}
           <div style={{marginBottom:14}}>
-            <SeasonHighs highs={seasonHighs} myTeamName={myTeamName} title="📈 SEASON HIGHS (SINGLE GAME)"/>
+            <SeasonHighs highs={seasonHighs} careerHighs={careerLeagueHighs} myTeamName={myTeamName} title="📈 SEASON HIGHS (SINGLE GAME)" seasonNumber={seasonNumber}/>
           </div>
-          <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+          <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
             {playoff&&<button onClick={()=>buildPlayoffBracket(season,finalAi)} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"white",border:"none",borderRadius:10,padding:"12px 28px",fontSize:14,fontWeight:800,cursor:"pointer",boxShadow:"0 4px 18px rgba(245,158,11,0.3)"}}>
               {playIn?"🎟 START PLAY-IN":"🏆 START PLAYOFFS"}
             </button>}
-            <button onClick={newSeason} style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"white",border:"none",borderRadius:10,padding:"12px 28px",fontSize:14,fontWeight:800,cursor:"pointer"}}>🔄 NEW SEASON</button>
+            {!playoff&&<button onClick={runItBack} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding:"12px 28px",fontSize:14,fontWeight:800,cursor:"pointer"}} title="Same roster, new AI opponents">🔄 Run it back</button>}
           </div>
         </div>
       </div>
@@ -1980,7 +2506,16 @@ if(phase==="teamSetup") return(
         : "Lottery-level opponent"
       : null;
     const won = result ? result.myScore > result.oppScore : false;
+    const simulatingOverlay = isSimulating && (
+      <div style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(8,15,30,0.85)",flexDirection:"column",gap:16}}>
+        <style>{`@keyframes simSpin{to{transform:rotate(360deg);}}`}</style>
+        <div style={{width:48,height:48,border:"4px solid #334155",borderTopColor:"#60a5fa",borderRadius:"50%",animation:"simSpin 0.8s linear infinite"}}/>
+        <div style={{fontSize:14,fontWeight:700,color:"#94a3b8"}}>Simulating…</div>
+      </div>
+    );
     return(
+      <>
+        {simulatingOverlay}
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
         <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
           <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
@@ -1989,7 +2524,7 @@ if(phase==="teamSetup") return(
         </div>
         <div style={{maxWidth:1040,margin:"0 auto"}}>
           <div style={{background:"#0f172a",borderRadius:10,padding:"10px 14px",marginBottom:10,border:"1px solid #1e293b",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-            <div style={{fontSize:11,fontWeight:800,color:"#64748b"}}>GAME {gameNum} / {SEASON_LENGTH}</div>
+            <div style={{fontSize:11,fontWeight:800,color:"#64748b"}}>Season {seasonNumber} · Game {gameNum} / {SEASON_LENGTH}</div>
             <div style={{flex:1,background:"#1e293b",borderRadius:4,height:5,minWidth:80}}>
               <div style={{height:"100%",width:`${((result?gameNum:gameNum-1)/SEASON_LENGTH)*100}%`,background:"linear-gradient(90deg,#3b82f6,#8b5cf6)",borderRadius:4,transition:"width 0.3s"}}/>
             </div>
@@ -2012,9 +2547,38 @@ if(phase==="teamSetup") return(
 })()}
             <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
             <button onClick={()=>setShowLeaders(s=>!s)} style={{background:"#1e293b",color:"#f97316",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showLeaders?"Hide":"Show"} Leaders</button>
-            <button onClick={newSeason} style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"white",border:"none",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:800,cursor:"pointer"}}>🔄 New Season</button>
+            <button onClick={goToMainMenu} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🏠 Main menu</button>
+            <button onClick={()=>setShowSaveModal(true)} style={{background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Save to a slot">💾 Save</button>
+            <button onClick={()=>setShowLoadModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>📂 Load</button>
             <button onClick={()=>setShowHelp(h=>!h)} style={{width:26,height:26,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:12,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
           </div>
+          {showSaveModal && (
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowSaveModal(false)}>
+              <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:320,width:"100%"}} onClick={e=>e.stopPropagation()}>
+                <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>💾 Save to slot</div>
+                <p style={{fontSize:11,color:"#64748b",marginBottom:12}}>Overwrites that slot. You can load it later from draft or here.</p>
+                {[1,2,3].map((slot)=>(<button key={slot} type="button" onClick={()=>saveToSlot(slot)} style={{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:10,marginBottom:8,color:"#a78bfa",fontSize:12,fontWeight:700,cursor:"pointer"}}>Save to Slot {slot}</button>))}
+                <button type="button" onClick={()=>setShowSaveModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {showLoadModal && (
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowLoadModal(false)}>
+              <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+                <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>📂 Load save</div>
+                <p style={{fontSize:11,color:"#64748b",marginBottom:12}}>Pick a slot. Current progress will be replaced.</p>
+                {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships }) => (
+                  <div key={slot} style={{display:"flex",gap:6,marginBottom:8,alignItems:"stretch"}}>
+                    <button type="button" onClick={()=>loadFromSlot(slot)} style={{flex:1,textAlign:"left",background:empty?"#1e293b":"#111827",border:"1px solid #334155",borderRadius:8,padding:12,color:empty?"#64748b":"#e2e8f0",fontSize:12,cursor:"pointer"}}>
+                      {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""}`}
+                    </button>
+                    {!empty && <button type="button" onClick={(e)=>{ e.stopPropagation(); deleteSave(slot); }} style={{background:"#7f1d1d",color:"#fca5a5",border:"1px solid #991b1b",borderRadius:8,padding:"12px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}} title="Delete save">🗑</button>}
+                  </div>
+                ))}
+                <button type="button" onClick={()=>setShowLoadModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+              </div>
+            </div>
+          )}
           {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:10}}>
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
             <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
@@ -2061,12 +2625,30 @@ if(phase==="teamSetup") return(
             </div>
           )}
           <div style={{marginBottom:10}}>
-            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false} isMobile={isMobile}/>
+            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false} isMobile={isMobile} seasonNumber={seasonNumber}/>
             <div style={{marginTop:8}}>
-              <TeamHighs teamSeasonHighs={teamSeasonHighs} teamPlayoffHighs={{}} roster={roster} title="📈 TEAM HIGHS (SINGLE GAME)" showPlayoff={false}/>
+              <TeamHighs teamSeasonHighs={teamSeasonHighs} careerTeamHighs={careerTeamHighs} teamPlayoffHighs={{}} roster={roster} title="📈 TEAM HIGHS" showPlayoff={false}/>
             </div>
+            {(() => {
+              const rosterNames = new Set(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.name).concat(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.fullName).filter(Boolean)));
+              const myTeamAwards = Object.entries(playerAwards || {}).filter(([name]) => rosterNames.has(name)).filter(([, list]) => list && list.length > 0);
+              if (myTeamAwards.length === 0) return null;
+              return (
+                <div style={{marginTop:8,background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #475569"}}>
+                  <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:6}}>🏅 YOUR TEAM'S AWARDS</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                    {myTeamAwards.map(([name, list]) => (
+                      <div key={name} style={{fontSize:10,display:"flex",flexWrap:"wrap",gap:4,alignItems:"baseline"}}>
+                        <span style={{fontWeight:700,color:"#e2e8f0",minWidth:100}}>{name}</span>
+                        <span style={{color:"#94a3b8"}}>{(list || []).map(({ season, award }) => `${award} (S${season})`).join(", ")}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
-          <SeasonHighs highs={seasonHighs} myTeamName={myTeamName} title="📈 SEASON HIGHS (SINGLE GAME)"/>
+          <SeasonHighs highs={seasonHighs} careerHighs={careerLeagueHighs} myTeamName={myTeamName} title="📈 SEASON HIGHS (SINGLE GAME)" seasonNumber={seasonNumber}/>
           {!result?(
             <div style={{background:"#0f172a",borderRadius:16,padding:24,border:"1px solid #1e293b",textAlign:"center",marginBottom:10}}>
               <div style={{fontSize:13,color:"#64748b",marginBottom:14,fontWeight:700,letterSpacing:1}}>GAME {gameNum} vs {opp?.name}</div>
@@ -2114,20 +2696,23 @@ if(phase==="teamSetup") return(
                 {gameNum < SEASON_LENGTH && (
                   <>
                     <button
-                      onClick={()=>simGames(10)}
-                      style={{background:"#4b5563",color:"white",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:"pointer"}}
+                      onClick={()=>runSimGames(10)}
+                      disabled={isSimulating}
+                      style={{background:isSimulating?"#374151":"#4b5563",color:"white",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:isSimulating?"wait":"pointer",opacity:isSimulating?0.8:1}}
                     >
                       ⏩ SIM 10 GAMES
                     </button>
                     <button
-                      onClick={()=>simGames(41)}
-                      style={{background:"#475569",color:"white",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:"pointer"}}
+                      onClick={()=>runSimGames(41)}
+                      disabled={isSimulating}
+                      style={{background:isSimulating?"#374151":"#475569",color:"white",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:isSimulating?"wait":"pointer",opacity:isSimulating?0.8:1}}
                     >
                       ⏩ SIM 41 GAMES
                     </button>
                     <button
-                      onClick={()=>simGames(SEASON_LENGTH - gameNum + 1)}
-                      style={{background:"#334155",color:"#94a3b8",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:"pointer"}}
+                      onClick={()=>runSimGames(SEASON_LENGTH - gameNum + 1)}
+                      disabled={isSimulating}
+                      style={{background:isSimulating?"#374151":"#334155",color:"#94a3b8",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:isSimulating?"wait":"pointer",opacity:isSimulating?0.8:1}}
                     >
                       ⏭ SIM REST
                     </button>
@@ -2172,6 +2757,7 @@ if(phase==="teamSetup") return(
           )}
         </div>
       </div>
+      </>
     );
   }
 
@@ -2357,6 +2943,23 @@ if(phase==="teamSetup") return(
                 flexWrap: "wrap",
               }}
             >
+              {phase !== "teamSetup" && (
+                <button
+                  onClick={goToMainMenu}
+                  style={{
+                    background: "#1e293b",
+                    color: "#94a3b8",
+                    border: "1px solid #334155",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  🏠 Main menu
+                </button>
+              )}
               <button
                 onClick={handleCopyTeamCode}
                 disabled={inSeason}
@@ -2405,21 +3008,6 @@ if(phase==="teamSetup") return(
               >
                 📥 Load Code
               </button>
-              <button
-                onClick={newSeason}
-                style={{
-                  background: "#111827",
-                  color: "#e5e7eb",
-                  border: "1px solid #374151",
-                  borderRadius: 999,
-                  padding: "4px 10px",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                🔄 New Season
-              </button>
             </div>
           </div>
         </div>
@@ -2443,6 +3031,13 @@ if(phase==="teamSetup") return(
               const arch = bal?.archetypeBonus ?? 0;
               const archVal = arch > 0 ? `+${arch}` : arch < 0 ? String(arch) : "-";
               return ["ARCH", archVal, "#a78bfa"];
+            })(),
+            (() => {
+              const bal = myLineup ? getTeamBalance(myLineup) : null;
+              const b = bal?.balanceMod ?? 0;
+              const balanceVal = b > 0 ? `+${b}` : b < 0 ? String(b) : "-";
+              const balanceColor = b > 0 ? "#22c55e" : b < 0 ? "#f87171" : "#94a3b8";
+              return ["TEAM BALANCE", balanceVal, balanceColor];
             })(),
           ].map(([label, val, color]) => (
             <div
@@ -3363,6 +3958,11 @@ if(phase==="teamSetup") return(
                         }}
                       >
                         {p.tm} · {p.season}
+                      </div>
+                    )}
+                    {((playerAwards[p.name] || playerAwards[p.fullName] || []).length > 0) && (
+                      <div style={{ marginTop: 3, fontSize: 8, color: "#eab308", textAlign: "center", fontWeight: 700 }}>
+                        {(playerAwards[p.name] || playerAwards[p.fullName] || []).map(({ season, award }) => `${award} (S${season})`).join(", ")}
                       </div>
                     )}
                     <div
