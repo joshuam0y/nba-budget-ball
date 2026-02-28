@@ -226,6 +226,7 @@ export default function App(){
   const [archF,setArchF]=useState("ALL");
   const [yearF,setYearF]=useState("ALL");
   const [teamF,setTeamF]=useState("ALL");
+  const [showAllSeasons,setShowAllSeasons]=useState(false); // false = 1 per player, true = all seasons when year/team set
   const [inSeason,setInSeason]=useState(false);
   const [bracket,setBracket]=useState(null);
   const [playoffResult,setPlayoffResult]=useState(null);
@@ -1419,6 +1420,7 @@ const newSeason = () => {
   setImportErr("");
   setYearF("ALL");
   setTeamF("ALL");
+  setShowAllSeasons(false);
   getTopPicks().then(setTopPicks);
 };
 
@@ -2189,21 +2191,21 @@ if(phase==="teamSetup") return(
     );
   });
 
-  // When not filtering by specific year/team, show only the best-rated season per player (fullName).
-  const collapsedByName =
-    yearF === "ALL" && teamF === "ALL"
-      ? (() => {
-          const byName = new Map();
-          for (const p of filteredPool) {
-            const key = p.fullName || p.name;
-            const existing = byName.get(key);
-            if (!existing || (p.rating || 0) > (existing.rating || 0)) {
-              byName.set(key, p);
-            }
+  // 1 per player: always collapse. All seasons: collapse only when year/team both ALL; when set, show dupes.
+  const shouldCollapse = !showAllSeasons || (yearF === "ALL" && teamF === "ALL");
+  const collapsedByName = shouldCollapse
+    ? (() => {
+        const byName = new Map();
+        for (const p of filteredPool) {
+          const key = p.fullName || p.name;
+          const existing = byName.get(key);
+          if (!existing || (p.rating || 0) > (existing.rating || 0)) {
+            byName.set(key, p);
           }
-          return Array.from(byName.values());
-        })()
-      : filteredPool;
+        }
+        return Array.from(byName.values());
+      })()
+    : filteredPool;
 
   const display = collapsedByName.slice().sort((a, b) => {
     if (sortBy === "cost") {
@@ -3122,6 +3124,41 @@ if(phase==="teamSetup") return(
                     </option>
                   ))}
                 </select>
+                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  <span style={{ fontSize: 9, color: "#475569" }}>View:</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSeasons(false)}
+                    style={{
+                      background: !showAllSeasons ? "#1e3a5f" : "#0f172a",
+                      color: !showAllSeasons ? "#93c5fd" : "#64748b",
+                      border: `1px solid ${!showAllSeasons ? "#3b82f6" : "#334155"}`,
+                      borderRadius: 6,
+                      padding: "4px 8px",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    1/player
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSeasons(true)}
+                    style={{
+                      background: showAllSeasons ? "#1e3a5f" : "#0f172a",
+                      color: showAllSeasons ? "#93c5fd" : "#64748b",
+                      border: `1px solid ${showAllSeasons ? "#3b82f6" : "#334155"}`,
+                      borderRadius: 6,
+                      padding: "4px 8px",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    All seasons
+                  </button>
+                </div>
                 {(archF !== "ALL" ||
                   yearF !== "ALL" ||
                   teamF !== "ALL" ||
