@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { supabase } from "./supabase";
 import { LeagueLeaders } from "./LeagueLeaders";
+import { AllNBAAllDefensive } from "./AllNBAAllDefensive";
 import {
   POSITIONS,
   BUDGET,
@@ -381,6 +382,255 @@ function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
   );
 }
 
+const FACTOR_36 = 0.75;
+const fmt1 = (v) => (v ?? 0).toFixed(1);
+const fmt0 = (v) => Math.round(v ?? 0);
+
+function TeamStatsPanel({ teamName, playerSeasonRows, playerPlayoffRows, perMode, onPerModeChange, showPlayoff }) {
+  const [sortKey, setSortKey] = useState("pts");
+  const [sortAsc, setSortAsc] = useState(false);
+
+  const handleSort = (key) => {
+    if (key === sortKey) {
+      setSortAsc((asc) => !asc);
+      return;
+    }
+    setSortKey(key);
+    setSortAsc(false); // default to descending on new stat
+  };
+
+  const renderTable = (rows, label) => {
+    if (!rows || rows.length === 0) return null;
+    const mult = perMode === "per36" ? FACTOR_36 : 1;
+
+    const valueFor = (r, key) => {
+      const gp = r.gp > 0 ? r.gp : 1;
+      const pg = (k) => (r[k] ?? 0) / gp;
+      if (["pts", "reb", "ast", "stl", "blk", "tov", "fgm", "fga", "tpm", "tpa", "ftm", "fta"].includes(key))
+        return pg(key) * mult;
+      if (key === "fgPct") return r.fga > 0 ? r.fgm / r.fga : 0;
+      if (key === "tpPct") return r.tpa > 0 ? r.tpm / r.tpa : 0;
+      if (key === "ftPct") return r.fta > 0 ? r.ftm / r.fta : 0;
+      return 0;
+    };
+
+    const sorted = [...rows].sort((a, b) => {
+      const av = valueFor(a, sortKey);
+      const bv = valueFor(b, sortKey);
+      return sortAsc ? av - bv : bv - av;
+    });
+
+    return (
+      <div key={label} style={{ marginBottom: showPlayoff ? 12 : 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: "#60a5fa", letterSpacing: 1, marginBottom: 6 }}>{label}</div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, minWidth: 920 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #1e293b", background: "#0f172a" }}>
+                <th style={{ padding: "4px 6px", textAlign: "left", color: "#475569", fontSize: 9 }}>PLAYER</th>
+                <th style={{ padding: "4px 6px", textAlign: "center", color: "#475569", fontSize: 9 }}>POS</th>
+                <th style={{ padding: "4px 6px", textAlign: "center", color: "#475569", fontSize: 9 }}>GP</th>
+                <th colSpan={12} style={{ padding: "4px 8px", textAlign: "center", color: "#60a5fa", fontSize: 9, fontWeight: 800, borderLeft: "1px solid #334155", borderRight: "1px solid #334155" }}>PER GAME</th>
+                <th colSpan={6} style={{ padding: "4px 8px", textAlign: "center", color: "#22c55e", fontSize: 9, fontWeight: 800, borderRight: "1px solid #334155" }}>TOTALS</th>
+                <th colSpan={3} style={{ padding: "4px 8px", textAlign: "center", color: "#475569", fontSize: 9, fontWeight: 800 }}>%</th>
+              </tr>
+              <tr style={{ borderBottom: "1px solid #1e293b" }}>
+                {["PLAYER", "POS", "GP", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FGM", "FGA", "3PM", "3PA", "FTM", "FTA", "FGM", "FGA", "3PM", "3PA", "FTM", "FTA", "FG%", "3P%", "FT%"].map((h, idx) => (
+                  <th key={idx} style={{ padding: "4px 6px", textAlign: h === "PLAYER" ? "left" : "center", color: "#475569", fontSize: 9 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((r) => {
+                const gp = r.gp > 0 ? r.gp : 1;
+                const pg = (k) => (r[k] ?? 0) / gp;
+                const val = (k) => fmt1(pg(k) * mult);
+                const fgPct = r.fga > 0 ? rf((r.fgm / r.fga) * 100, 1) : "—";
+                const tpPct = r.tpa > 0 ? rf((r.tpm / r.tpa) * 100, 1) : "—";
+                const ftPct = r.fta > 0 ? rf((r.ftm / r.fta) * 100, 1) : "—";
+                return (
+                  <tr key={r.name} style={{ borderBottom: "1px solid #0d1626" }}>
+                    <td style={{ padding: "4px 6px", fontWeight: 700, color: "#e2e8f0" }}>{r.name}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center", color: "#64748b" }}>{r.pos || "—"}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center", color: "#64748b" }}>{fmt0(r.gp || 0)}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center", borderLeft: "1px solid #334155" }}>{val("pts")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("reb")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("ast")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("stl")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("blk")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("tov")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("fgm")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("fga")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("tpm")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{val("tpa")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center", borderRight: "1px solid #334155" }}>{val("ftm")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center", borderRight: "1px solid #334155" }}>{val("fta")}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fmt0(r.fgm || 0)}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fmt0(r.fga || 0)}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fmt0(r.tpm || 0)}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fmt0(r.tpa || 0)}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fmt0(r.ftm || 0)}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center", borderRight: "1px solid #334155" }}>{fmt0(r.fta || 0)}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{fgPct}{typeof fgPct === "number" ? "%" : ""}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{tpPct}{typeof tpPct === "number" ? "%" : ""}</td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>{ftPct}{typeof ftPct === "number" ? "%" : ""}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const hasSeason = playerSeasonRows && playerSeasonRows.length > 0;
+  const hasPlayoff = showPlayoff && playerPlayoffRows && playerPlayoffRows.length > 0;
+  if (!hasSeason && !hasPlayoff) return null;
+  return (
+    <div style={{ background: "#0f172a", borderRadius: 10, border: "1px solid #1e293b", padding: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontWeight: 800, fontSize: 11, letterSpacing: 2, color: "#60a5fa" }}>📊 {teamName} — PLAYER STATS</span>
+        <div style={{ display: "flex", gap: 4 }}>
+          {["PER G", "PER 36"].map((m) => (
+            <button
+              key={m}
+              onClick={() => onPerModeChange(m === "PER 36" ? "per36" : "game")}
+              style={{
+                background: perMode === (m === "PER 36" ? "per36" : "game") ? "#334155" : "#1e293b",
+                color: "#e2e8f0",
+                border: "1px solid #334155",
+                borderRadius: 6,
+                padding: "4px 8px",
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8, fontSize: 9 }}>
+        {[
+          ["pts", "PTS"],
+          ["reb", "REB"],
+          ["ast", "AST"],
+          ["stl", "STL"],
+          ["blk", "BLK"],
+          ["tov", "TOV"],
+          ["fgm", "FGM"],
+          ["fga", "FGA"],
+          ["tpm", "3PM"],
+          ["tpa", "3PA"],
+          ["ftm", "FTM"],
+          ["fta", "FTA"],
+          ["fgPct", "FG%"],
+          ["tpPct", "3P%"],
+          ["ftPct", "FT%"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => handleSort(key)}
+            style={{
+              background: sortKey === key ? "#1d4ed8" : "#0f172a",
+              color: sortKey === key ? "#e5e7eb" : "#9ca3af",
+              border: "1px solid #1e293b",
+              borderRadius: 999,
+              padding: "2px 8px",
+              fontSize: 9,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            {label}{sortKey === key ? (sortAsc ? " ↑" : " ↓") : ""}
+          </button>
+        ))}
+      </div>
+      {hasSeason && renderTable(playerSeasonRows, "SEASON")}
+      {hasPlayoff && renderTable(playerPlayoffRows, "PLAYOFFS")}
+    </div>
+  );
+}
+
+function TeamHighs({ teamSeasonHighs, teamPlayoffHighs, roster, title, showPlayoff }) {
+  const defs = [
+    ["pts", "PTS"],
+    ["reb", "REB"],
+    ["ast", "AST"],
+    ["stl", "STL"],
+    ["blk", "BLK"],
+    ["fgm", "FGM"],
+    ["tpm", "3PM"],
+    ["ftm", "FT"],
+    ["tov", "TOV"],
+  ];
+  const myNames = new Set(Object.values(roster || {}).filter(Boolean).map((p) => p.name));
+  const buildRows = (highs) => {
+    if (!highs || Object.keys(highs).length === 0) return [];
+    return defs.map(([key, label]) => {
+      let best = null;
+      myNames.forEach((name) => {
+        const v = highs[name] && highs[name][key];
+        if (v != null && (!best || v > best.val)) best = { name, val: v };
+      });
+      return { key, label, ...best };
+    });
+  };
+  const seasonRows = buildRows(teamSeasonHighs);
+  const playoffRows = showPlayoff ? buildRows(teamPlayoffHighs) : [];
+  const hasAny = seasonRows.some((r) => r.val != null) || playoffRows.some((r) => r.val != null);
+  if (!hasAny) return null;
+  return (
+    <div style={{ background: "#020617", borderRadius: 10, border: "1px solid #1e293b", padding: 10 }}>
+      <div style={{ fontWeight: 800, fontSize: 10, letterSpacing: 2, color: "#22c55e", marginBottom: 6 }}>{title || "📈 TEAM HIGHS (SINGLE GAME)"}</div>
+      {seasonRows.some((r) => r.val != null) && (
+        <>
+          <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4 }}>Season</div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, marginBottom: 8 }}>
+            <thead><tr style={{ borderBottom: "1px solid #1e293b" }}>
+              {["STAT", "PLAYER", "VALUE"].map((h) => (
+                <th key={h} style={{ padding: "4px 6px", textAlign: h === "VALUE" ? "center" : "left", color: "#475569", fontSize: 9 }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {seasonRows.map((r) => (
+                <tr key={r.key} style={{ borderBottom: "1px solid #0b1220" }}>
+                  <td style={{ padding: "4px 6px", color: "#e5e7eb", fontWeight: 700 }}>{r.label}</td>
+                  <td style={{ padding: "4px 6px", color: "#a7f3d0", fontWeight: 700 }}>{r.name || "—"}</td>
+                  <td style={{ padding: "4px 6px", textAlign: "center", color: "#fbbf24", fontWeight: 800 }}>{r.val != null ? r.val : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+      {showPlayoff && playoffRows.some((r) => r.val != null) && (
+        <>
+          <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4 }}>Playoffs</div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+            <thead><tr style={{ borderBottom: "1px solid #1e293b" }}>
+              {["STAT", "PLAYER", "VALUE"].map((h) => (
+                <th key={h} style={{ padding: "4px 6px", textAlign: h === "VALUE" ? "center" : "left", color: "#475569", fontSize: 9 }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {playoffRows.map((r) => (
+                <tr key={r.key} style={{ borderBottom: "1px solid #0b1220" }}>
+                  <td style={{ padding: "4px 6px", color: "#e5e7eb", fontWeight: 700 }}>{r.label}</td>
+                  <td style={{ padding: "4px 6px", color: "#a7f3d0", fontWeight: 700 }}>{r.name || "—"}</td>
+                  <td style={{ padding: "4px 6px", textAlign: "center", color: "#fbbf24", fontWeight: 800 }}>{r.val != null ? r.val : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  );
+}
+
 function SeasonHighs({ highs, myTeamName, title }) {
   const defs = [
     ["pts", "POINTS"],
@@ -630,6 +880,10 @@ export default function App(){
   const [playoffLeaders,setPlayoffLeaders]=useState({});
   const [playoffHighs,setPlayoffHighs]=useState({});
   const [showPlayoffLeaders,setShowPlayoffLeaders]=useState(false);
+  const [playoffLeadersView, setPlayoffLeadersView] = useState("playoff"); // "playoff" | "season" — which leaders/highs to show when on playoffs screen
+  const [teamStatsPerMode, setTeamStatsPerMode] = useState("game"); // "game" | "per36"
+  const [teamSeasonHighs, setTeamSeasonHighs] = useState({});
+  const [teamPlayoffHighs, setTeamPlayoffHighs] = useState({});
   const [topPicks, setTopPicks] = useState([]);
   const [myTeamName, setMyTeamName] = useState("Your Team");
   const [teamNameHistory, setTeamNameHistory] = useState([]);
@@ -746,15 +1000,12 @@ export default function App(){
     });
   }, []);
 
-  // First-time tutorial: show when entering draft if never seen
+  // Show How to Play on every page load/refresh (not when clicking New Season)
   useEffect(() => {
-    if (typeof window === "undefined" || phase !== "draft") return;
-    const seen = window.localStorage.getItem("nba-budget-ball-tutorial-seen");
-    if (!seen) setShowTutorial(true);
-  }, [phase]);
+    if (typeof window !== "undefined") setShowTutorial(true);
+  }, []);
 
   const dismissTutorial = useCallback(() => {
-    if (typeof window !== "undefined") window.localStorage.setItem("nba-budget-ball-tutorial-seen", "1");
     setShowTutorial(false);
   }, []);
 
@@ -934,6 +1185,83 @@ const volumeSlider = (
   const myCh=myLineup?chemBoost(myLineup,teamRoster):0;
   const myRecord={w:season.w,l:season.l,eff:myEffVal||0};
 
+  const teamSeasonStats = (() => {
+    const players = season.players || {};
+    const names = Object.values(roster).filter(Boolean).map((p) => p.name);
+    if (!season.gp || names.length === 0) return null;
+    const tot = { gp: season.gp, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0 };
+    names.forEach((name) => {
+      const p = players[name];
+      if (!p) return;
+      tot.pts += p.pts || 0;
+      tot.reb += p.reb || 0;
+      tot.ast += p.ast || 0;
+      tot.stl += p.stl || 0;
+      tot.blk += p.blk || 0;
+      tot.tov += p.tov || 0;
+      tot.fgm += p.fgm || 0;
+      tot.fga += p.fga || 0;
+      tot.tpm += p.tpm || 0;
+      tot.tpa += p.tpa || 0;
+      tot.ftm += p.ftm || 0;
+      tot.fta += p.fta || 0;
+    });
+    return tot;
+  })();
+
+  const teamPlayoffStats = (() => {
+    const list = Object.values(playoffLeaders || {}).filter((p) => p.team === myTeamName);
+    if (list.length === 0) return null;
+    const gp = list[0]?.gp || 0;
+    if (!gp) return null;
+    const tot = { gp, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0 };
+    list.forEach((p) => {
+      tot.pts += p.pts || 0;
+      tot.reb += p.reb || 0;
+      tot.ast += p.ast || 0;
+      tot.stl += p.stl || 0;
+      tot.blk += p.blk || 0;
+      tot.tov += p.tov || 0;
+      tot.fgm += p.fgm || 0;
+      tot.fga += p.fga || 0;
+      tot.tpm += p.tpm || 0;
+      tot.tpa += p.tpa || 0;
+      tot.ftm += p.ftm || 0;
+      tot.fta += p.fta || 0;
+    });
+    return tot;
+  })();
+
+  const playerSeasonRows = (() => {
+    const players = season.players || {};
+    return POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => {
+      const s = players[p.name];
+      if (!s || !s.gp) return null;
+      return { name: p.name, pos: p.pos || pos, gp: s.gp, pts: s.pts, reb: s.reb, ast: s.ast, stl: s.stl, blk: s.blk, tov: s.tov, fgm: s.fgm, fga: s.fga, tpm: s.tpm, tpa: s.tpa, ftm: s.ftm, fta: s.fta };
+    }).filter(Boolean);
+  })();
+
+  const playerPlayoffRows = (() => {
+    const list = Object.values(playoffLeaders || {}).filter((p) => p.team === myTeamName);
+    return list.map((p) => ({
+      name: p.name,
+      pos: p.pos,
+      gp: p.gp || 1,
+      pts: p.pts || 0,
+      reb: p.reb || 0,
+      ast: p.ast || 0,
+      stl: p.stl || 0,
+      blk: p.blk || 0,
+      tov: p.tov || 0,
+      fgm: p.fgm || 0,
+      fga: p.fga || 0,
+      tpm: p.tpm || 0,
+      tpa: p.tpa || 0,
+      ftm: p.ftm || 0,
+      fta: p.fta || 0,
+    }));
+  })();
+
   const getPlayerSeasonLine = useCallback(
     (name, teamLabel) => {
       const key = `${name}|${teamLabel}`;
@@ -948,7 +1276,7 @@ const volumeSlider = (
     [leagueLeaders]
   );
 
-  const updateSeasonHighs = useCallback((res, teamALabel, teamBLabel) => {
+  const updateSeasonHighs = useCallback((res, teamALabel, teamBLabel, myTeam) => {
     if (!res) return;
     setSeasonHighs((prev) => {
       const next = { ...prev };
@@ -978,6 +1306,21 @@ const volumeSlider = (
       apply(res.oppStats, teamBLabel);
       return next;
     });
+    if (myTeam && (teamALabel === myTeam || teamBLabel === myTeam)) {
+      const myStats = teamALabel === myTeam ? res.myStats : res.oppStats;
+      setTeamSeasonHighs((prev) => {
+        const next = { ...prev };
+        myStats.forEach((s) => {
+          if (!next[s.name]) next[s.name] = {};
+          const p = next[s.name];
+          ["pts", "reb", "ast", "stl", "blk", "fgm", "tpm", "tov", "ftm"].forEach((key) => {
+            const v = s[key];
+            if (v != null && (p[key] == null || v > p[key])) p[key] = v;
+          });
+        });
+        return next;
+      });
+    }
   }, []);
 
   const updatePlayoffLeaders = useCallback((res, teamALabel, teamBLabel) => {
@@ -1030,7 +1373,7 @@ const volumeSlider = (
     });
   }, []);
 
-  const updatePlayoffHighs = useCallback((res, teamALabel, teamBLabel) => {
+  const updatePlayoffHighs = useCallback((res, teamALabel, teamBLabel, myTeam) => {
     if (!res) return;
     setPlayoffHighs((prev) => {
       const next = { ...prev };
@@ -1060,6 +1403,21 @@ const volumeSlider = (
       apply(res.oppStats, teamBLabel);
       return next;
     });
+    if (myTeam && (teamALabel === myTeam || teamBLabel === myTeam)) {
+      const myStats = teamALabel === myTeam ? res.myStats : res.oppStats;
+      setTeamPlayoffHighs((prev) => {
+        const next = { ...prev };
+        myStats.forEach((s) => {
+          if (!next[s.name]) next[s.name] = {};
+          const p = next[s.name];
+          ["pts", "reb", "ast", "stl", "blk", "fgm", "tpm", "tov", "ftm"].forEach((key) => {
+            const v = s[key];
+            if (v != null && (p[key] == null || v > p[key])) p[key] = v;
+          });
+        });
+        return next;
+      });
+    }
   }, []);
 
   const updateLeagueLeaders = useCallback((res, myTeamLabel, oppTeamLabel, dayIndex) => {
@@ -1240,7 +1598,7 @@ const startSeason = async () => {
     const dayIndex = gameNum - 1;
     applyDayResults(dayIndex, oppIndex, won);
     updateLeagueLeaders(res, myTeamName, opp?.name || "Opponent", dayIndex);
-    updateSeasonHighs(res, myTeamName, opp?.name || "Opponent");
+    updateSeasonHighs(res, myTeamName, opp?.name || "Opponent", myTeamName);
     setResult(res);
   };
 
@@ -1269,7 +1627,7 @@ const startSeason = async () => {
       setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
       applyDayResults(dayIndex, oppIndex, won);
       updateLeagueLeaders(res, myTeamName, opp?.name || "Opponent", dayIndex);
-      updateSeasonHighs(res, myTeamName, opp?.name || "Opponent");
+      updateSeasonHighs(res, myTeamName, opp?.name || "Opponent", myTeamName);
     }
     const nextGameNum = Math.min(gameNum + toPlay, SEASON_LENGTH);
     setGameNum(nextGameNum);
@@ -1338,7 +1696,7 @@ const startSeason = async () => {
       const myTeamLabel = pTop ? matchup.top.name : matchup.bot.name;
       const oppTeamLabel = pTop ? matchup.bot.name : matchup.top.name;
       updatePlayoffLeaders(res, myTeamLabel, oppTeamLabel);
-      updatePlayoffHighs(res, myTeamLabel, oppTeamLabel);
+      updatePlayoffHighs(res, myTeamLabel, oppTeamLabel, myTeamName);
     } else {
       // AI vs AI playoff game: use full simulate so we get stats.
       res = simulate(matchup.top.lineup, matchup.bot.lineup, { ...tr, _playoff: true }, { difficulty: diff });
@@ -1352,7 +1710,9 @@ const startSeason = async () => {
     if (wTop === 1 || wBot === 1) {
       matchup.winner = wTop === 1 ? matchup.top : matchup.bot;
       const w = matchup.winner;
-      playerEliminated = (topIsPlayer && wBot === 1) || (botIsPlayer && wTop === 1);
+      const playerLost = (topIsPlayer && wBot === 1) || (botIsPlayer && wTop === 1);
+      // Play-in pi1 (7v8): loser gets another chance in pi3 — not eliminated yet. pi2/pi3 and all later rounds: loser is out.
+      if (playerLost && slot !== "pi1") playerEliminated = true;
       if (slot === "pi1") { sub.firstRound[1].bot = w; sub.playIn[2].top = wTop === 1 ? sub.playIn[0].bot : sub.playIn[0].top; }
       else if (slot === "pi2") sub.playIn[2].bot = w;
       else if (slot === "pi3") sub.firstRound[0].bot = w;
@@ -1368,8 +1728,9 @@ const startSeason = async () => {
         else if (conf === "finals") { b.finals.winner = w; b.champion = w; }
       }
     }
+    const aiOnlyGame = !topIsPlayer && !botIsPlayer;
     const result = res
-      ? { ...res, playerIsTop: topIsPlayer, matchId, seriesOver: !!matchup.winner, winner: matchup.winner, topName: matchup.top.name, botName: matchup.bot.name }
+      ? { ...res, playerIsTop: topIsPlayer, matchId, seriesOver: !!matchup.winner, winner: matchup.winner, topName: matchup.top.name, botName: matchup.bot.name, aiOnly: aiOnlyGame }
       : { aiOnly: true, matchId, seriesOver: !!matchup.winner, winner: matchup.winner, topName: matchup.top?.name, botName: matchup.bot?.name };
     return { bracket: b, result, playerEliminated };
   }
@@ -1486,6 +1847,9 @@ const newSeason = () => {
   setPlayoffLeaders({});
   setPlayoffHighs({});
   setShowPlayoffLeaders(false);
+  setTeamSeasonHighs({});
+  setTeamPlayoffHighs({});
+  setShowTutorial(false);
   setImportInfo("");
   setImportErr("");
   getTopPicks().then(setTopPicks);
@@ -1599,12 +1963,22 @@ if(phase==="teamSetup") return(
           {showStandings&&<div style={{marginBottom:12}}><StandingsTable aiTeams={finalAiRec} myRecord={myRecord} myName={myTeamName} highlight/></div>}
           {showPlayoffLeaders&&(
             <div style={{marginBottom:12}}>
-              <LeagueLeaders leaders={playoffLeaders} myTeamName={myTeamName}/>
+              <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+                <button onClick={()=>setPlayoffLeadersView("playoff")} style={{background:playoffLeadersView==="playoff"?"#f97316":"#1e293b",color:playoffLeadersView==="playoff"?"#fff":"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>Playoff leaders</button>
+                <button onClick={()=>setPlayoffLeadersView("season")} style={{background:playoffLeadersView==="season"?"#f97316":"#1e293b",color:playoffLeadersView==="season"?"#fff":"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>Season leaders</button>
+              </div>
+              <LeagueLeaders leaders={playoffLeadersView==="playoff"?playoffLeaders:leagueLeaders} myTeamName={myTeamName}/>
               <div style={{marginTop:8}}>
-                <SeasonHighs highs={playoffHighs} myTeamName={myTeamName} title="📈 PLAYOFF HIGHS (SINGLE GAME)"/>
+                <SeasonHighs highs={playoffLeadersView==="playoff"?playoffHighs:seasonHighs} myTeamName={myTeamName} title={playoffLeadersView==="playoff"?"📈 PLAYOFF HIGHS (SINGLE GAME)":"📈 SEASON HIGHS (SINGLE GAME)"}/>
               </div>
             </div>
           )}
+          <div style={{marginBottom:12}}>
+            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={true}/>
+            <div style={{marginTop:8}}>
+              <TeamHighs teamSeasonHighs={teamSeasonHighs} teamPlayoffHighs={teamPlayoffHighs} roster={roster} title="📈 TEAM HIGHS (SINGLE GAME)" showPlayoff={true}/>
+            </div>
+          </div>
           {champion&&(
             <div style={{textAlign:"center",padding:16,background:playerWon?"linear-gradient(135deg,#78350f,#92400e)":"#0f172a",borderRadius:16,border:`2px solid ${playerWon?"#fbbf24":"#475569"}`,marginBottom:12}}>
               <div style={{fontSize:36}}>{playerWon?"🏆":"👑"}</div>
@@ -1652,8 +2026,13 @@ if(phase==="teamSetup") return(
                   </>);
                 })()}
                 {playoffResult?.aiOnly&&playoffResult.matchId===activeMatchId&&(
-                  <div style={{textAlign:"center",padding:10,background:"#0f172a",borderRadius:10,border:"1px solid #334155"}}>
-                    <div style={{fontSize:12,color:"#94a3b8"}}>{playoffResult.seriesOver?`✓ ${playoffResult.winner?.name} win the series!`:"Game simulated."}</div>
+                  <div style={{textAlign:"center",padding:12,background:"#0f172a",borderRadius:12,border:"1px solid #334155",marginBottom:10}}>
+                    <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>Simulated game (not your team)</div>
+                    <div style={{display:"flex",justifyContent:"center",gap:24,marginTop:6}}>
+                      <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#94a3b8",fontWeight:700}}>{playoffResult.topName}</div><div style={{fontSize:28,fontWeight:900,color:"#94a3b8"}}>{playoffResult.myScore ?? 0}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#94a3b8",fontWeight:700}}>{playoffResult.botName}</div><div style={{fontSize:28,fontWeight:900,color:"#94a3b8"}}>{playoffResult.oppScore ?? 0}</div></div>
+                    </div>
+                    <div style={{fontSize:12,color:"#22c55e",fontWeight:700,marginTop:6}}>✓ {playoffResult.winner?.name} advance{playoffResult.seriesOver ? " — series over" : ""}</div>
                   </div>
                 )}
               </div>
@@ -1676,25 +2055,54 @@ if(phase==="teamSetup") return(
     const mySeed = myRankInConf;
     const ppg=season.gp>0?rf(season.ptsFor/season.gp):0,papg=season.gp>0?rf(season.ptsAgainst/season.gp):0;
     const gpSafe = (s) => (s.gp > 0 ? s.gp : 1);
-    let playerRows = Object.entries(season.players || {}).map(([name, s]) => ({
-      name,
-      gp: s.gp,
-      pos: s.pos || null,
-      ppg: rf(s.pts / gpSafe(s)),
-      apg: rf(s.ast / gpSafe(s)),
-      rpg: rf(s.reb / gpSafe(s)),
-      spg: rf(s.stl / gpSafe(s)),
-      bpg: rf(s.blk / gpSafe(s)),
-      tpg: rf(s.tov / gpSafe(s)),
-      fgPct: s.fga > 0 ? rf((s.fgm / s.fga) * 100) : 0,
-      tpPct: s.tpa > 0 ? rf((s.tpm / s.tpa) * 100) : 0,
-      ftPct: s.fta > 0 ? rf((s.ftm / s.fta) * 100) : 0,
-    })).sort((a, b) => b.ppg - a.ppg);
+    let playerRows = Object.entries(season.players || {}).map(([name, s]) => {
+      const gp = gpSafe(s);
+      const ppg = s.pts / gp;
+      const rpg = s.reb / gp;
+      const apg = s.ast / gp;
+      const spg = s.stl / gp;
+      const bpg = s.blk / gp;
+      const tpg = s.tov / gp;
+      const fgmPerG = s.fgm / gp;
+      const fgaPerG = s.fga / gp;
+      const tpmPerG = s.tpm / gp;
+      const tpaPerG = s.tpa / gp;
+      const ftmPerG = s.ftm / gp;
+      const ftaPerG = s.fta / gp;
+      return {
+        name,
+        gp: s.gp,
+        pos: s.pos || null,
+        ppg,
+        apg,
+        rpg,
+        spg,
+        bpg,
+        tpg,
+        fgmPerG,
+        fgaPerG,
+        tpmPerG,
+        tpaPerG,
+        ftmPerG,
+        ftaPerG,
+        fgm: s.fgm,
+        fga: s.fga,
+        tpm: s.tpm,
+        tpa: s.tpa,
+        ftm: s.ftm,
+        fta: s.fta,
+        fgPct: s.fga > 0 ? (s.fgm / s.fga) * 100 : 0,
+        tpPct: s.tpa > 0 ? (s.tpm / s.tpa) * 100 : 0,
+        ftPct: s.fta > 0 ? (s.ftm / s.fta) * 100 : 0,
+      };
+    }).sort((a, b) => b.ppg - a.ppg);
     if (playerRows.length === 0 && myLineup && season.gp > 0) {
       playerRows = myLineup.map(({ player }) => ({
         name: player.name,
         gp: season.gp,
         ppg: 0, apg: 0, rpg: 0, spg: 0, bpg: 0, tpg: 0,
+        fgmPerG: 0, fgaPerG: 0, tpmPerG: 0, tpaPerG: 0, ftmPerG: 0, ftaPerG: 0,
+        fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0,
         fgPct: 0, tpPct: 0, ftPct: 0,
       }));
     }
@@ -1790,6 +2198,16 @@ if(phase==="teamSetup") return(
             <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>Final Record: {season.w}–{season.l} · PPG {ppg} · OPP {papg}</div>
           </div>
           <div style={{marginBottom:14}}><StandingsTable aiTeams={finalAi} myRecord={myRecord} myName={myTeamName} highlight/></div>
+          {(() => {
+            const teamRecords = {};
+            finalAi.forEach((t) => { teamRecords[t.name] = { w: t.w, l: t.l }; });
+            teamRecords[myTeamName] = myRecord;
+            return (
+              <div style={{marginBottom:14}}>
+                <AllNBAAllDefensive leaders={leagueLeaders} teamRecords={teamRecords} myTeamName={myTeamName}/>
+              </div>
+            );
+          })()}
           {leagueMVP && (
             <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:10,marginBottom:14}}>
               <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #fbbf24",textAlign:"center"}}>
@@ -1816,7 +2234,7 @@ if(phase==="teamSetup") return(
               )}
             </div>
           )}
-          <div style={{display:"flex",justifyContent:"flex-end",gap:6,marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:6,marginBottom:8,flexWrap:"wrap"}}>
             <button
               onClick={()=>setShowLeaders(s=>!s)}
               style={{background:"#1e293b",color:"#f97316",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}
@@ -1829,6 +2247,12 @@ if(phase==="teamSetup") return(
               <LeagueLeaders leaders={leagueLeaders} myTeamName={myTeamName}/>
             </div>
           )}
+          <div style={{marginBottom:14}}>
+            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false}/>
+            <div style={{marginTop:8}}>
+              <TeamHighs teamSeasonHighs={teamSeasonHighs} teamPlayoffHighs={teamPlayoffHighs} roster={roster} title="📈 TEAM HIGHS (SINGLE GAME)" showPlayoff={false}/>
+            </div>
+          </div>
           {mvp&&(
             <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #fbbf24",textAlign:"center"}}>
               <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:2,marginBottom:4}}>
@@ -1836,41 +2260,11 @@ if(phase==="teamSetup") return(
               </div>
               <div style={{fontSize:18,fontWeight:900}}>{mvp.name}</div>
               <div style={{fontSize:11,color:"#9ca3af",marginTop:2}}>
-                {mvp.pos || "—"} · {mvp.gp} GP
+                {mvp.pos || "—"} · {fmt0(mvp.gp)} GP
               </div>
-              <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{mvp.ppg} PPG · {mvp.apg} APG · {mvp.rpg} RPG</div>
+              <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{fmt1(mvp.ppg)} PPG · {fmt1(mvp.apg)} APG · {fmt1(mvp.rpg)} RPG</div>
             </div>
           )}
-          <div style={{background:"#0f172a",borderRadius:12,overflow:"hidden",border:"1px solid #1e293b",marginBottom:14}}>
-            <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>    
-              <div style={{padding:"8px 12px",background:"#1e293b",fontWeight:800,fontSize:10,letterSpacing:2,color:"#60a5fa"}}>SEASON AVERAGES</div>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-                <thead><tr style={{borderBottom:"1px solid #1e293b"}}>
-                  {[["PLAYER","left"],["POS","c"],["GP","c"],["PPG","c"],["RPG","c"],["APG","c"],["SPG","c"],["BPG","c"],["TPG","c"],["FG%","c"],["3P%","c"],["FT%","c"]].map(([h,a])=>(
-                    <th key={h} style={{padding:"6px 8px",textAlign:a==="c"?"center":"left",color:"#475569",fontSize:10}}>{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {playerRows.map((s,i)=>(
-                    <tr key={i} style={{borderBottom:"1px solid #0d1626"}}>
-                      <td style={{padding:"6px 8px",fontWeight:700}}>{i===0?"🏅 ":""}{s.name}</td>
-                      <td style={{textAlign:"center",color:"#64748b"}}>{s.pos||"-"}</td>
-                      <td style={{textAlign:"center",color:"#64748b"}}>{s.gp}</td>
-                      <td style={{textAlign:"center",background:cellBg("pts",s.ppg*1.5),padding:"5px 4px",fontWeight:700}}>{s.ppg}</td>
-                      <td style={{textAlign:"center",background:cellBg("reb",s.rpg*1.5),padding:"5px 4px"}}>{s.rpg}</td>
-                      <td style={{textAlign:"center",background:cellBg("ast",s.apg*1.5),padding:"5px 4px"}}>{s.apg}</td>
-                      <td style={{textAlign:"center",background:cellBg("stl",s.spg*2),padding:"5px 4px"}}>{s.spg}</td>
-                      <td style={{textAlign:"center",background:cellBg("blk",s.bpg*2),padding:"5px 4px"}}>{s.bpg}</td>
-                      <td style={{textAlign:"center",background:cellBg("tov",s.tpg*1.5),padding:"5px 4px"}}>{s.tpg}</td>
-                      <td style={{textAlign:"center",background:cellBg("fgPct",s.fgPct),padding:"5px 4px"}}>{s.fgPct}%</td>
-                      <td style={{textAlign:"center",background:cellBg("tpPct",s.tpPct),padding:"5px 4px"}}>{s.tpPct}%</td>
-                      <td style={{textAlign:"center",background:cellBg("ftPct",s.ftPct),padding:"5px 4px"}}>{s.ftPct}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
           <div style={{marginBottom:14}}>
             <SeasonHighs highs={seasonHighs} myTeamName={myTeamName} title="📈 SEASON HIGHS (SINGLE GAME)"/>
           </div>
@@ -1937,6 +2331,12 @@ if(phase==="teamSetup") return(
               <LeagueLeaders leaders={leagueLeaders} myTeamName={myTeamName}/>
             </div>
           )}
+          <div style={{marginBottom:10}}>
+            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false}/>
+            <div style={{marginTop:8}}>
+              <TeamHighs teamSeasonHighs={teamSeasonHighs} teamPlayoffHighs={{}} roster={roster} title="📈 TEAM HIGHS (SINGLE GAME)" showPlayoff={false}/>
+            </div>
+          </div>
           <SeasonHighs highs={seasonHighs} myTeamName={myTeamName} title="📈 SEASON HIGHS (SINGLE GAME)"/>
           {!result?(
             <div style={{background:"#0f172a",borderRadius:16,padding:24,border:"1px solid #1e293b",textAlign:"center",marginBottom:10}}>
@@ -2329,7 +2729,7 @@ if(phase==="teamSetup") return(
                   <option value="ALL">All Teams</option>
                   {allTeams.map(t=><option key={t} value={t}>{t}</option>)}
                 </select>
-                {(archF!=="ALL"||yearF!=="ALL"||teamF!=="ALL")&&(
+                {(archF!=="ALL"||yearF!=="ALL"||teamF!=="ALL"||search!=="")&&(
                   <button onClick={()=>{setArchF("ALL");setYearF("ALL");setTeamF("ALL");setSearch("");}} style={{background:"#7f1d1d",color:"#fca5a5",border:"none",borderRadius:6,padding:"5px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}}>✕ Clear</button>
                 )}
                 <div style={{fontSize:10,color:"#475569",marginLeft:"auto"}}>{display.length} players</div>

@@ -7,13 +7,18 @@ export const SEASON_LENGTH = 82;
 export const POOL_SIZE = 150;
 export const NUM_TEAMS = 30;
 
-// 2024-25 NBA: ~100 poss/team, league avg team PPG ~112–114
+// Team scoring; slight bump up for PTS
 const TARGET_POSS_PER_TEAM_MIN = 98;
 const TARGET_POSS_PER_TEAM_MAX = 104;
-const TARGET_TEAM_PTS_MEAN = 113;
-const TARGET_TEAM_PTS_SD = 7;
-const TARGET_TEAM_PTS_MIN = 98;
-const TARGET_TEAM_PTS_MAX = 128;
+const TARGET_TEAM_PTS_MEAN = 114;
+const TARGET_TEAM_PTS_SD = 6;
+const TARGET_TEAM_PTS_MIN = 99;
+const TARGET_TEAM_PTS_MAX = 129;
+// Not every miss = player rebound; slight bump so REB a little higher
+const REB_CREDIT_RATE = 0.98;
+// Offensive rebounds: we split ORB vs DRB. Real NBA ~22–26% of rebounds are ORB.
+const ORB_PROB = 0.26; // on a missed shot, prob that offense gets the board
+const DEF_REB_AFTER_BLOCK = 0.80; // after a block, prob that defense gets the board (20% ORB)
 
 export const NBA_DIVISIONS = {
   Atlantic: ["Boston Celtics", "Toronto Raptors", "Philadelphia 76ers", "Brooklyn Nets", "New York Knicks"],
@@ -502,13 +507,15 @@ export function simulate(
     const offV = isMy ? myVar : oppVar;
     const offL = isMy ? myLineup : oppLineup;
     const defL = isMy ? oppLineup : myLineup;
-    const si = wIdx(offS, (_, j) =>
-      Math.max(
+    // Weight shot selection by usage (CSV pts): low-usage bigs shoot less, stars shoot more
+    const si = wIdx(offS, (_, j) => {
+      const p = offL[j].player;
+      const usage = clamp((p.pts || 18) / 22, 0.5, 1.35);
+      return Math.max(
         0.01,
-        offL[j].player.rating * posMult(offL[j].player, offL[j].slot) *
-          offV[j]
-      )
-    );
+        p.rating * posMult(p, offL[j].slot) * offV[j] * usage
+      );
+    });
     const shooter = offS[si];
     const sp = offL[si].player;
     const m = posMult(sp, offL[si].slot);
@@ -542,29 +549,30 @@ export function simulate(
     const archVar =
       offArch.id === "spotUp" ? 1.8 : offArch.id === "role" ? 0.8 : 1.2;
 
-    // Shooting: 2025-ish league FG% ~46%; 2P higher, 3P in range
+    // Shooting: nudge FG% and 3P% up a little (no change to points/pace)
     const raw = base * clutchMult + gauss(archVar);
     const fgPct = clamp(
       raw,
-      is3 ? 28 : 40,   // min % (bump so FG% isn't too low)
-      is3 ? 48 : 65    // max %
+      is3 ? 38 : 50,
+      is3 ? 52 : 72
     ) / 100;
     const adjFg = clamp(
       fgPct * defFactor,
-      is3 ? 0.30 : 0.48,
-      is3 ? 0.44 : 0.68
+      is3 ? 0.40 : 0.56,
+      is3 ? 0.50 : 0.76
     );
-    // Turnovers: ~12–15 team TOV per game; not so high that Westbrook goes 8+
+    // Turnovers: raise so TOV/STL aren't too low
     const tovChance = clamp(
-      ((sp.tov / 40) * offV[si] * 1.05) / clutchMult,
-      0.035,
-      0.18
+      ((sp.tov / 40) * offV[si] * 1.28) / clutchMult,
+      0.045,
+      0.21
     );
-    const blkChance = clamp(dp.blk * dm * 0.04, 0, 0.12);
+    // Raise block rate so BLK isn't too low; elite ~2–3.5 per 36
+    const blkChance = clamp(dp.blk * dm * 0.058, 0, 0.16);
     if (Math.random() < tovChance) {
       shooter.tov++;
-      // In real NBA only ~half of TOV are steals; rest are bad pass, lost ball, etc.
-      if (Math.random() < 0.52) {
+      // Slight bump: more TOV credited as steals
+      if (Math.random() < 0.78) {
         defS[
           wIdx(defS, (_, j) =>
             Math.max(
@@ -577,16 +585,19 @@ export function simulate(
     } else if (!is3 && Math.random() < blkChance) {
       shooter.fga++;
       defender.blk++;
-      const rebSide = Math.random() < 0.8 ? defS : offS;
-      const rebL = Math.random() < 0.8 ? defL : offL;
-      rebSide[
-        wIdx(rebSide, (_, j) =>
-          Math.max(
-            0.01,
-            rebL[j].player.reb * posMult(rebL[j].player, rebL[j].slot)
+      if (Math.random() < REB_CREDIT_RATE) {
+        const isDefReb = Math.random() < DEF_REB_AFTER_BLOCK;
+        const rebSide = isDefReb ? defS : offS;
+        const rebL = isDefReb ? defL : offL;
+        rebSide[
+          wIdx(rebSide, (_, j) =>
+            Math.max(
+              0.01,
+              rebL[j].player.reb * posMult(rebL[j].player, rebL[j].slot)
+            )
           )
-        )
-      ].reb++;
+        ].reb++;
+      }
     } else if (Math.random() < adjFg) {
       shooter.fga++;
       shooter.fgm++;
@@ -609,7 +620,8 @@ export function simulate(
         shooter.ftm += made;
       }
       shooter.pts += pts;
-      if (Math.random() < 0.65)
+      // Assist credit so AST isn't too low
+      if (Math.random() < 0.64)
         offS[
           wIdx(offS, (s, j) =>
             j === si
@@ -634,24 +646,27 @@ export function simulate(
         shooter.ftm += f1 + f2;
         shooter.pts += f1 + f2;
       }
-      if (Math.random() < 0.27)
-        offS[
-          wIdx(offS, (_, j) =>
-            Math.max(
-              0.01,
-              offL[j].player.reb * posMult(offL[j].player, offL[j].slot)
+      // Credit rebound (account for ORB: ORB_PROB to offense, rest to defense)
+      if (Math.random() < REB_CREDIT_RATE) {
+        if (Math.random() < ORB_PROB)
+          offS[
+            wIdx(offS, (_, j) =>
+              Math.max(
+                0.01,
+                offL[j].player.reb * posMult(offL[j].player, offL[j].slot)
+              )
             )
-          )
-        ].reb++;
-      else
-        defS[
-          wIdx(defS, (_, j) =>
-            Math.max(
-              0.01,
-              defL[j].player.reb * posMult(defL[j].player, defL[j].slot)
+          ].reb++;
+        else
+          defS[
+            wIdx(defS, (_, j) =>
+              Math.max(
+                0.01,
+                defL[j].player.reb * posMult(defL[j].player, defL[j].slot)
+              )
             )
-          )
-        ].reb++;
+          ].reb++;
+      }
     }
   }
 
