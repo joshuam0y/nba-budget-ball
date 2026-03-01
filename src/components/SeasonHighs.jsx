@@ -15,7 +15,7 @@ export function SeasonHighs({ highs, careerHighs, myTeamName, title, seasonNumbe
   ];
   const seasonRows = defs.map(([key, label]) => {
     const h = highs?.[key];
-    return { key, label, val: h?.val, name: h?.name, team: h?.team, pos: h?.pos, season: null };
+    return { key, label, val: h?.val, name: h?.name, team: h?.team, pos: h?.pos, season: h?.season ?? null };
   });
   const allTimeRows = defs.map(([key, label]) => {
     const h = careerHighs?.[key];
@@ -28,10 +28,11 @@ export function SeasonHighs({ highs, careerHighs, myTeamName, title, seasonNumbe
   const renderTable = (rows, showSeasonCol) => {
     const hasAny = rows.some((r) => r && r.val != null);
     if (!hasAny) return null;
-    const headers = showSeasonCol ? ["STAT", "PLAYER", "TEAM", "VALUE", "SEASON"] : ["STAT", "PLAYER", "TEAM", "VALUE"];
+    const withSeason = showSeasonCol || rows.some((r) => r && r.season != null);
+    const headers = withSeason ? ["STAT", "PLAYER", "TEAM", "VALUE", "SEASON"] : ["STAT", "PLAYER", "TEAM", "VALUE"];
     return (
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, minWidth: showSeasonCol ? 480 : 420 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, minWidth: withSeason ? 480 : 420 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #1e293b" }}>
               {headers.map((h) => (
@@ -54,7 +55,7 @@ export function SeasonHighs({ highs, careerHighs, myTeamName, title, seasonNumbe
                     <td style={{ padding: "4px 6px", color: "#4b5563" }}>—</td>
                     <td style={{ padding: "4px 6px", color: "#4b5563" }}>—</td>
                     <td style={{ padding: "4px 6px", textAlign: "center", color: "#4b5563" }}>—</td>
-                    {showSeasonCol && <td style={{ padding: "4px 6px", color: "#4b5563" }}>—</td>}
+                    {withSeason && <td style={{ padding: "4px 6px", color: "#4b5563" }}>—</td>}
                   </tr>
                 );
               }
@@ -70,7 +71,7 @@ export function SeasonHighs({ highs, careerHighs, myTeamName, title, seasonNumbe
                   <td style={{ padding: "4px 6px", color: isMine ? "#a7f3d0" : "#e5e7eb", fontWeight: 700 }}>{r.name}</td>
                   <td style={{ padding: "4px 6px", color: isMine ? "#6ee7b7" : "#9ca3af" }}>{r.team}</td>
                   <td style={{ padding: "4px 6px", textAlign: "center", color: "#fbbf24", fontWeight: 800 }}>{r.val}</td>
-                  {showSeasonCol && <td style={{ padding: "4px 6px", color: "#94a3b8", fontSize: 9 }}>{r.season != null ? `S${r.season}` : "—"}</td>}
+                  {withSeason && <td style={{ padding: "4px 6px", color: "#94a3b8", fontSize: 9 }}>{r.season != null ? `S${r.season}` : "—"}</td>}
                 </tr>
               );
             })}

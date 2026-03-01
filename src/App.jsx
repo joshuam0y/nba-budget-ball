@@ -1564,7 +1564,7 @@ const soundtrackRef = useRef(null);
             if (val == null) return;
             const cur = next[key];
             if (!cur || val > cur.val) {
-              next[key] = { val, name: s.name, team, pos: s.pos };
+              next[key] = { val, name: s.name, team, pos: s.pos, season: seasonNumber };
             }
           });
         });
@@ -1588,7 +1588,7 @@ const soundtrackRef = useRef(null);
         return next;
       });
     }
-  }, []);
+  }, [seasonNumber]);
 
   const updateLeagueLeaders = useCallback((res, myTeamLabel, oppTeamLabel, dayIndex) => {
     if (!res || dayIndex == null) return;
@@ -3089,6 +3089,10 @@ if(phase==="teamSetup") return(
               const diff = (r.myScore || 0) - (r.oppScore || 0);
               return !best || diff > ((best.myScore || 0) - (best.oppScore || 0)) ? r : best;
             }, null);
+            const toughestLoss = (seasonGameResults || []).filter((r) => r && !r.won && r.myScore != null && r.oppScore != null).reduce((worst, r) => {
+              const diff = (r.oppScore || 0) - (r.myScore || 0);
+              return !worst || diff > ((worst.oppScore || 0) - (worst.myScore || 0)) ? r : worst;
+            }, null);
             return (
               <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #475569"}}>
                 <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>📊 SEASON SUMMARY — {leagueName || "NBA"}</div>
@@ -3100,10 +3104,12 @@ if(phase==="teamSetup") return(
                 </div>
                 <div style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1,marginBottom:6}}>KEY MOMENTS</div>
                 <div style={{display:"flex",flexDirection:"column",gap:4,fontSize:11,color:"#e2e8f0"}}>
+                  {bestStreak >= 3 && <div>Longest win streak: {bestStreak} games</div>}
                   {leaderPts && <div>{leaderPts.name} led the team in points ({rf(leaderPts.ppg, 1)} PPG)</div>}
                   {leaderReb && <div>{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG)</div>}
                   {leaderAst && <div>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG)</div>}
                   {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name}>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</div> : null; })}
+                  {toughestLoss && <div>Toughest loss: {toughestLoss.myScore}–{toughestLoss.oppScore} vs the {toughestLoss.oppName || "Opponent"}</div>}
                   {bestWin && (() => {
               const oppLabel = (bestWin.oppName || "Opponent") + (bestWin.oppName ? (String(bestWin.oppName).endsWith("s") ? "'" : "'s") : "");
               const p = bestWin.pog;
@@ -3528,6 +3534,16 @@ if(phase==="teamSetup") return(
           {/* Game card at top: play/sim or result */}
           {!result?(
             <div style={{background:"#0f172a",borderRadius:16,padding:24,border:"1px solid #1e293b",textAlign:"center",marginBottom:16,boxShadow:"0 4px 20px rgba(0,0,0,0.25)"}}>
+              {(() => {
+                const results = seasonGameResults || [];
+                let curStreak = 0;
+                const curWon = results.length ? results[results.length - 1]?.won : null;
+                if (results.length && curWon != null) {
+                  for (let i = results.length - 1; i >= 0; i--) { if (results[i]?.won === curWon) curStreak++; else break; }
+                }
+                if (curStreak >= 3) return <div style={{fontSize:11,fontWeight:800,color:curWon?"#f59e0b":"#60a5fa",marginBottom:8}}>{curWon ? `🔥 Riding a ${curStreak}-game win streak` : `❄️ Looking to snap a ${curStreak}-game skid`}</div>;
+                return null;
+              })()}
               <div style={{fontSize:13,color:"#64748b",marginBottom:14,fontWeight:700,letterSpacing:1}}>GAME {gameNum} vs {opp?.name}</div>
               <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:32,marginBottom:18}}>
                 <div style={{textAlign:"center"}}><div style={{fontSize:12,color:"#60a5fa",fontWeight:800,marginBottom:4}}>{myTeamName}</div><div style={{fontSize:30,fontWeight:900,color:"#60a5fa"}}>{rf(teamEff(myLineup,teamRoster),0)}</div><div style={{fontSize:10,color:"#475569"}}>RTG</div></div>
@@ -3631,6 +3647,14 @@ if(phase==="teamSetup") return(
                       🏅 Player of the game: {pog.name} — {rf(pog.pts,0)} pts, {rf(pog.reb,0)} reb, {rf(pog.ast,0)} ast
                     </div>
                   );
+                })()}
+                {(() => {
+                  const margin = (result.myScore || 0) - (result.oppScore || 0);
+                  const winLines = margin >= 30 ? ["Statement win. They never had a chance.", "Obliterated. No mercy.", "That one’s going in the highlight reel."] : margin >= 20 ? ["Dominant. Total control.", "Blowout city.", "Ran away with it."] : margin >= 10 ? ["Solid W. Kept the foot on the gas.", "Comfortable win.", "Another one in the books."] : margin >= 5 ? ["Got it done. Too close for comfort.", "Nervy finish, but a W.", "Survived a scare."] : ["Too close for comfort!", "Survived by the skin of your teeth.", "Heart-stopper. But a W."];
+                  const lossLines = margin >= -5 ? ["Heartbreaker. Get the next one.", "So close. Bounce back.", "Brutal. One possession away."] : margin >= -15 ? ["Rough one. Back to the drawing board.", "Couldn’t get it going.", "Off night. Shake it off."] : ["Rough night. Bounce back next game.", "That one got away.", "No sugarcoating it — rough loss."];
+                  const lines = won ? winLines : lossLines;
+                  const oneLiner = lines[Math.floor(Math.random() * lines.length)];
+                  return <div style={{marginTop:8,fontSize:11,color:won?"#86efac":"#fca5a5",fontStyle:"italic"}}>"{oneLiner}"</div>;
                 })()}
               </div>
               <BoxScore stats={result.myStats} acc="#60a5fa" label={myTeamName}/>
