@@ -1232,8 +1232,13 @@ const soundtrackRef = useRef(null);
     if (wonChip && (careerStats?.championships ?? 0) + 1 >= 5 && unlockAchievementForSave("dynasty")) ach.push("dynasty");
     if (wonChip && playerPlayoffSeedThisYear >= 6 && playerPlayoffSeedThisYear <= 8 && unlockAchievementForSave("cinderella")) ach.push("cinderella");
     const rosterNames = new Set(POSITIONS.map((p) => roster[p]).filter(Boolean).map((p) => [p.name, p.fullName]).flat().filter(Boolean));
-    const hasMVPThisSeason = rosterNames.size > 0 && Object.entries(playerAwards || {}).some(([name, list]) => rosterNames.has(name) && list.some((e) => e.season === seasonNumber && e.award === "MVP"));
-    if (wonChip && hasMVPThisSeason && unlockAchievementForSave("triple_crown")) ach.push("triple_crown");
+    const hasMVPAndDPOYThisSeason = rosterNames.size > 0 && Object.entries(playerAwards || {}).some(([name, list]) => {
+      if (!rosterNames.has(name) || !list) return false;
+      const hasMVP = list.some((e) => e.season === seasonNumber && e.award === "MVP");
+      const hasDPOY = list.some((e) => e.season === seasonNumber && e.award === "DPOY");
+      return hasMVP && hasDPOY;
+    });
+    if (wonChip && hasMVPAndDPOYThisSeason && unlockAchievementForSave("triple_crown")) ach.push("triple_crown");
     const finalsLoser = bracket.finals?.top && bracket.champion ? (bracket.champion === bracket.finals.top ? bracket.finals.bot : bracket.finals.top) : null;
     if (wonChip && lastEliminatorTeamName && finalsLoser?.name === lastEliminatorTeamName && unlockAchievementForSave("revenge")) {
       ach.push("revenge");

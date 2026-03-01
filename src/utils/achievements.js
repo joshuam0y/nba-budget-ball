@@ -18,7 +18,7 @@ export const ACHIEVEMENTS = [
   { id: "winning_season", label: "Winning season", desc: "Finish above .500 for the first time", icon: "📊" },
   { id: "play_in_survivor", label: "Play-in survivor", desc: "Reach the first round after starting in the play-in (7–10 seed)", icon: "🔓" },
   { id: "all_defensive_winner", label: "All-Defensive on your team", desc: "Your player makes All-Defensive 1st or 2nd team", icon: "🛡️" },
-  { id: "triple_crown", label: "Triple crown", desc: "Your player wins MVP and you win the title in the same season", icon: "🌟" },
+  { id: "triple_crown", label: "Triple crown", desc: "Your player wins MVP and DPOY and you win the title in the same season", icon: "🌟" },
   { id: "cinderella", label: "Cinderella", desc: "Win the title as a 6, 7, or 8 seed", icon: "🎃" },
   { id: "no_sweep", label: "No sweep", desc: "Get eliminated but win at least one game in the series you lost", icon: "💪" },
   { id: "home_court", label: "Home court", desc: "Go undefeated at home in the regular season (41–0)", icon: "🏠" },
