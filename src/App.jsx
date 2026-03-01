@@ -735,6 +735,7 @@ const soundtrackRef = useRef(null);
   const trackIndexRef = useRef(0);
   const soundOnRef = useRef(soundOn);
   const volumeRef = useRef(volume);
+  const audioUnlockedRef = useRef(false);
   const seasonEndRecordedRef = useRef(false);
   const playoffRecordedRef = useRef(false);
   const seasonAwardsRecordedRef = useRef(false);
@@ -895,6 +896,8 @@ const soundtrackRef = useRef(null);
     if (typeof window === "undefined") return;
     const audio = new Audio(SOUNDTRACK_TRACKS[0]);
     audio.volume = volume;
+    audio.preload = "auto";
+    audio.load(); // start loading immediately so play() can start without delay
     const onEnded = () => {
       if (!soundOnRef.current) return;
       const next = pickNextTrack(trackIndexRef.current);
@@ -912,6 +915,23 @@ const soundtrackRef = useRef(null);
     };
   }, [pickNextTrack]);
 
+  // Unlock audio on first user interaction (browsers block autoplay until then)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const unlock = () => {
+      if (audioUnlockedRef.current) return;
+      const audio = soundtrackRef.current;
+      if (!audio || !soundOnRef.current) return;
+      audio.play().then(() => {
+        audioUnlockedRef.current = true;
+      }).catch(() => {});
+    };
+    const events = ["click", "touchstart", "keydown"];
+    const opts = { once: true, capture: true };
+    events.forEach((e) => document.addEventListener(e, unlock, opts));
+    return () => events.forEach((e) => document.removeEventListener(e, unlock, opts));
+  }, []);
+
   useEffect(() => {
     const audio = soundtrackRef.current;
     if (!audio) return;
@@ -924,7 +944,7 @@ const soundtrackRef = useRef(null);
     if (soundOn) {
       audio.src = SOUNDTRACK_TRACKS[trackIndexRef.current];
       audio.volume = volumeRef.current;
-      audio.play().catch(() => {});
+      audio.play().then(() => { audioUnlockedRef.current = true; }).catch(() => {});
     } else {
       audio.pause();
     }
