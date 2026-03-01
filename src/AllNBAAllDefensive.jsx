@@ -12,9 +12,9 @@ const isFrontcourt = (pos) => pos === "SF" || pos === "PF" || pos === "C";
 /**
  * All-NBA formula: record + counting stats, position-based (1 C, 2 F, 2 G per team).
  * Score = teamWinPct * 3 + (ppg/maxPpg)*3 + (rpg/maxRpg)*1.2 + (apg/maxApg)*2 + (fgPct/max)*1 + (tpPct/max)*0.5 - (tpg/max)*0.5.
- * Then take top 1 C, top 2 F, top 2 G for 1st team; repeat for 2nd and 3rd.
+ * When mvpVotes provided, MVP is guaranteed the 1st team slot at their position; rest filled by score.
  */
-export function buildAllNBATeams(players, teamWinPct) {
+export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
   const byPos = { guard: [], forward: [], center: [] };
   players.forEach((p) => {
     const pos = (p.pos || "").toUpperCase();
@@ -40,7 +40,7 @@ export function buildAllNBATeams(players, teamWinPct) {
     const fgN = ((r.fgPct || 0) / maxFg) * 0.5;
     const tpN = ((r.tpPct || 0) / max3p) * 0.3;
     const tovPen = (r.tpg || 0) / maxTpg * 0.5;
-    return teamPct * 3 + ppgN * 3 + rpgN * 1.2 + apgN * 2 + fgN + tpN - tovPen;
+    return teamPct * 1 + ppgN * 3 + rpgN * 1.2 + apgN * 2 + fgN + tpN - tovPen;
   };
 
   ["guard", "forward", "center"].forEach((key) => {
@@ -48,42 +48,95 @@ export function buildAllNBATeams(players, teamWinPct) {
     byPos[key].sort((a, b) => (b.allNbaScore || 0) - (a.allNbaScore || 0));
   });
 
+  let mvpPlayer = null;
+  let mvpPosKey = null; // "guard" | "forward" | "center"
+  if (mvpVotes && Object.keys(mvpVotes).length > 0) {
+    const mvpEntry = Object.entries(mvpVotes).reduce((best, [key, v]) =>
+      (!best || (Number(v) || 0) > (Number(best[1]) || 0) ? [key, v] : best), null);
+    if (mvpEntry) {
+      const [name, team] = mvpEntry[0].split("|");
+      for (const key of ["guard", "forward", "center"]) {
+        const found = byPos[key].find((r) => r.name === name && r.team === team);
+        if (found) {
+          mvpPlayer = found;
+          mvpPosKey = key;
+          break;
+        }
+      }
+    }
+  }
+
+  const pickFirst = (key, n) => {
+    const list = byPos[key];
+    if (!mvpPlayer || mvpPosKey !== key) return list.slice(0, n);
+    const rest = list.filter((r) => r !== mvpPlayer);
+    return [mvpPlayer, ...rest.slice(0, n - 1)];
+  };
+
   const first = [
-    ...byPos.guard.slice(0, 2),
-    ...byPos.forward.slice(0, 2),
-    ...byPos.center.slice(0, 1),
+    ...pickFirst("guard", 2),
+    ...pickFirst("forward", 2),
+    ...pickFirst("center", 1),
   ];
+  const firstSet = new Set(first.map((p) => `${p.name}|${p.team}`));
+  const restOf = (key, excludeSet, n) => {
+    return byPos[key].filter((r) => !excludeSet.has(`${r.name}|${r.team}`)).slice(0, n);
+  };
   const second = [
-    ...byPos.guard.slice(2, 4),
-    ...byPos.forward.slice(2, 4),
-    ...byPos.center.slice(1, 2),
+    ...restOf("guard", firstSet, 2),
+    ...restOf("forward", firstSet, 2),
+    ...restOf("center", firstSet, 1),
   ];
+  const secondSet = new Set([...firstSet, ...second.map((p) => `${p.name}|${p.team}`)]);
   const third = [
-    ...byPos.guard.slice(4, 6),
-    ...byPos.forward.slice(4, 6),
-    ...byPos.center.slice(2, 3),
+    ...restOf("guard", secondSet, 2),
+    ...restOf("forward", secondSet, 2),
+    ...restOf("center", secondSet, 1),
   ];
   return { first, second, third };
 }
 
 /**
- * All-Defensive formula: defensive stats + record, position-based (2 G, 3 F/C per team).
- * Score = teamWinPct * 1 + (spg/max)*2.5 + (bpg/max)*2.5 + (rpg/max)*1.
- * Top 2 guards, top 3 frontcourt for 1st team; next 2 guards, next 3 frontcourt for 2nd.
+ * All-Defensive: reflects DPOY race when dpoyVotes provided (2 G, 2 F, 1 C per team).
+ * With dpoyVotes: sort by vote total per position — DPOY winner = 1st team at his position, 2nd = 2nd team, etc.
+ * Without dpoyVotes: fallback to defensive stat score (2 G, 3 F/C).
  */
-export function buildAllDefensiveTeams(players, teamWinPct) {
+export function buildAllDefensiveTeams(players, teamWinPct, dpoyVotes = null) {
   const guards = [];
-  const frontcourt = [];
+  const forwards = [];
+  const centers = [];
   players.forEach((p) => {
     const pos = (p.pos || "").toUpperCase();
     if (isGuard(pos) || pos === "G") guards.push(p);
-    else if (isFrontcourt(pos) || pos === "F") frontcourt.push(p);
+    else if (isCenter(pos)) centers.push(p);
+    else if (isForward(pos) || pos === "F") forwards.push(p);
+    else forwards.push(p);
   });
 
+  const getVotes = (r) => (dpoyVotes && Number(dpoyVotes[`${r.name}|${r.team}`])) || 0;
+  const useVotes = dpoyVotes && Object.keys(dpoyVotes).length > 0;
+
+  if (useVotes) {
+    guards.sort((a, b) => getVotes(b) - getVotes(a));
+    forwards.sort((a, b) => getVotes(b) - getVotes(a));
+    centers.sort((a, b) => getVotes(b) - getVotes(a));
+    const first = [
+      ...guards.slice(0, 2),
+      ...forwards.slice(0, 2),
+      ...centers.slice(0, 1),
+    ];
+    const second = [
+      ...guards.slice(2, 4),
+      ...forwards.slice(2, 4),
+      ...centers.slice(1, 2),
+    ];
+    return { first, second };
+  }
+
+  const frontcourt = [...forwards, ...centers];
   const maxSpg = Math.max(0.01, ...players.map((r) => r.spg || 0));
   const maxBpg = Math.max(0.01, ...players.map((r) => r.bpg || 0));
   const maxRpg = Math.max(1, ...players.map((r) => r.rpg || 0));
-
   const score = (r) => {
     const teamPct = teamWinPct[r.team] ?? 0.4;
     const spgN = (r.spg || 0) / maxSpg;
@@ -91,12 +144,10 @@ export function buildAllDefensiveTeams(players, teamWinPct) {
     const rpgN = (r.rpg || 0) / maxRpg;
     return teamPct * 1 + spgN * 2.5 + bpgN * 2.5 + rpgN * 1;
   };
-
   guards.forEach((r) => { r.allDefScore = score(r); });
   guards.sort((a, b) => (b.allDefScore || 0) - (a.allDefScore || 0));
   frontcourt.forEach((r) => { r.allDefScore = score(r); });
   frontcourt.sort((a, b) => (b.allDefScore || 0) - (a.allDefScore || 0));
-
   const first = [...guards.slice(0, 2), ...frontcourt.slice(0, 3)];
   const second = [...guards.slice(2, 4), ...frontcourt.slice(3, 6)];
   return { first, second };
@@ -138,7 +189,7 @@ function DefensiveRow({ p, isMine }) {
   );
 }
 
-export function AllNBAAllDefensive({ leaders, teamRecords, myTeamName }) {
+export function AllNBAAllDefensive({ leaders, teamRecords, myTeamName, dpoyVotes, mvpVotes }) {
   const { allNBA, allDefensive, teamWinPct } = useMemo(() => {
     const arr = Object.values(leaders || {});
     const teamWinPct = { ...(teamRecords || {}) };
@@ -166,10 +217,10 @@ export function AllNBAAllDefensive({ leaders, teamRecords, myTeamName }) {
       };
     });
 
-    const allNBA = buildAllNBATeams(players, teamWinPct);
-    const allDefensive = buildAllDefensiveTeams(players, teamWinPct);
+    const allNBA = buildAllNBATeams(players, teamWinPct, mvpVotes);
+    const allDefensive = buildAllDefensiveTeams(players, teamWinPct, dpoyVotes);
     return { allNBA, allDefensive, teamWinPct };
-  }, [leaders, teamRecords]);
+  }, [leaders, teamRecords, dpoyVotes, mvpVotes]);
 
   const isMine = (p) => myTeamName && p.team === myTeamName;
 
@@ -207,7 +258,7 @@ export function AllNBAAllDefensive({ leaders, teamRecords, myTeamName }) {
         🏅 ALL-NBA & ALL-DEFENSIVE
       </div>
       <div style={{ fontSize: 9, color: "#64748b", marginBottom: 10 }}>
-        All-NBA: 1 C, 2 F, 2 G per team · record + PPG/RPG/APG/efficiency. All-Defensive: 2 G, 3 F/C · record + STL/BLK/REB. Green = your team.
+        All-NBA: 1 C, 2 F, 2 G per team · PPG/RPG/APG/efficiency + small record bump. All-Defensive: 2 G, 2 F, 1 C · follows DPOY race. Green = your team.
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

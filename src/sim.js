@@ -4,6 +4,7 @@
 export const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 export const BUDGET = 140;
 export const SEASON_LENGTH = 82;
+export const ALL_STAR_GAME_AT = 50;
 export const POOL_SIZE = 150;
 export const NUM_TEAMS = 30;
 
@@ -482,19 +483,19 @@ export function simulate(
     myE *= 0.88;
     oppE *= 1.14;
   }
-  oppE *= isPlayoffGame ? 1.08 : 1.0;
   const isPlayoff = !!teamRoster?._playoff;
-  const myOff = clamp(
-    myE / (myE + oppE),
-    isPlayoff ? 0.46 : 0.44,
-    isPlayoff ? 0.54 : 0.56
-  );
+  // Win prob per possession: standard = raw (no clamp); casual/hardcore = banded so outcomes stay reasonable.
+  const raw = myE / (myE + oppE);
+  const myOff =
+    difficulty === "standard"
+      ? raw
+      : clamp(raw, 0.30, 0.70);
   // Possession variance: casual = steadier outcomes, hardcore = swingier games.
   const possVariance = difficulty === "casual" ? 0.01 : difficulty === "hardcore" ? 0.045 : 0.03;
-  const pace = Math.round(
-    TARGET_POSS_PER_TEAM_MIN +
-    Math.random() * (TARGET_POSS_PER_TEAM_MAX - TARGET_POSS_PER_TEAM_MIN)
-  );
+  // Playoffs: fewer possessions per team (slower pace). Season: normal range.
+  const possMin = isPlayoff ? 90 : TARGET_POSS_PER_TEAM_MIN;
+  const possMax = isPlayoff ? 96 : TARGET_POSS_PER_TEAM_MAX;
+  const pace = Math.round(possMin + Math.random() * (possMax - possMin));
   const myVar = myLineup.map(({ player }) => gameVariance(player.rating));
   const oppVar = oppLineup.map(({ player }) => gameVariance(player.rating));
 
@@ -723,13 +724,16 @@ export function simulate(
   let ms = myStats.reduce((s, p) => s + p.pts, 0);
   let os = oppStats.reduce((s, p) => s + p.pts, 0);
 
-  // Scale box scores to NBA-like team totals (possessions already ~100; target ~108–115 PPG)
-  const targetMy = Math.round(
-    clamp(TARGET_TEAM_PTS_MEAN + gauss(TARGET_TEAM_PTS_SD), TARGET_TEAM_PTS_MIN, TARGET_TEAM_PTS_MAX)
+  // Scale to NBA-like totals while preserving who won (split one combined total by raw ratio).
+  // Same for standard/casual/hardcore; difficulty is already in ms/os via myOff (and clamp for casual/hardcore).
+  const totalRaw = ms + os;
+  const myShare = totalRaw > 0 ? clamp(ms / totalRaw, 0.05, 0.95) : 0.5;
+  const totalTarget = Math.round(
+    clamp(2 * (TARGET_TEAM_PTS_MEAN + gauss(TARGET_TEAM_PTS_SD * 0.5)), 2 * TARGET_TEAM_PTS_MIN, 2 * TARGET_TEAM_PTS_MAX)
   );
-  const targetOpp = Math.round(
-    clamp(TARGET_TEAM_PTS_MEAN + gauss(TARGET_TEAM_PTS_SD), TARGET_TEAM_PTS_MIN, TARGET_TEAM_PTS_MAX)
-  );
+  const targetMy = ri(totalTarget * myShare);
+  const targetOpp = totalTarget - targetMy;
+
   const scaleStat = (val, scale) => Math.max(0, ri(val * scale));
   const applyScale = (stats, scale) =>
     stats.map((s) => ({
@@ -786,6 +790,7 @@ function emptyPlayerStat() {
 }
 
 export function addToSeason(season, gameStats, won, myScore, oppScore, lineupWhenNoStats = null) {
+  if ((season.gp ?? 0) >= SEASON_LENGTH) return season;
   const next = { ...season, players: {}, gameLog: [...(season.gameLog || [])] };
   Object.entries(season.players).forEach(
     ([k, v]) => (next.players[k] = { ...v })
@@ -1205,7 +1210,7 @@ function getBalanceFlags(lineup) {
       ({ player }) => player.pos === "C" || player.pos === "PF"
     );
   const hasPlaymaker = archs.some((a) =>
-    ["fg", "playmaker", "swiss", "pmBig", "scoringGuard"].includes(a)
+    ["fg", "playmaker", "swiss", "pmBig", "scoringGuard", "pointForward"].includes(a)
   );
   const hasDefense = archs.some((a) =>
     ["lockdown", "threeD", "rimProt"].includes(a)

@@ -14,6 +14,7 @@ import {
   BUDGET,
   SEASON_LENGTH,
   NUM_TEAMS,
+  ALL_STAR_GAME_AT,
   rf,
   processCSV,
   chemBoost,
@@ -31,6 +32,7 @@ import {
   emptySeason,
   addToSeason,
 } from "./sim";
+import { buildAllStarSelections, computeAllStarVotesForGame, computeMvpVotesForGame, computeDpoyVotesForGame } from "./utils/allStarSelection";
 
 // Lazy-loaded heavy components for better initial bundle size
 const LeagueLeadersLazy = lazy(() =>
@@ -43,6 +45,71 @@ import { buildAllNBATeams, buildAllDefensiveTeams } from "./AllNBAAllDefensive";
 const BracketDisplayLazy = lazy(() =>
   import("./components/bracket").then((m) => ({ default: m.BracketDisplay }))
 );
+
+// Basketball Reference–style award labels (full names)
+const AWARD_LABELS = {
+  MVP: "MVP",
+  DPOY: "DPOY",
+  TMVP: "Team MVP",
+  "AS-E-S": "All-Star (East Starter)",
+  "AS-E-R": "All-Star (East Reserve)",
+  "AS-W-S": "All-Star (West Starter)",
+  "AS-W-R": "All-Star (West Reserve)",
+  NBA1: "All-NBA 1st Team",
+  NBA2: "All-NBA 2nd Team",
+  NBA3: "All-NBA 3rd Team",
+  DEF1: "All-Defensive 1st Team",
+  DEF2: "All-Defensive 2nd Team",
+  CHAMP: "Champion",
+  FINALSMVP: "Finals MVP",
+};
+
+/** Groups a player's award list by award type and returns [ { award, label, seasons } ] for BR-style display */
+function groupAwardsByType(list) {
+  if (!list || !list.length) return [];
+  const byAward = {};
+  list.forEach(({ season, award }) => {
+    if (!byAward[award]) byAward[award] = [];
+    byAward[award].push(season);
+  });
+  const order = ["MVP", "FINALSMVP", "CHAMP", "AS-E-S", "AS-E-R", "AS-W-S", "AS-W-R", "NBA1", "NBA2", "NBA3", "DPOY", "DEF1", "DEF2", "TMVP"];
+  return order.filter((a) => byAward[a]).map((award) => ({
+    award,
+    label: AWARD_LABELS[award] || award,
+    seasons: byAward[award].sort((a, b) => a - b),
+  }));
+}
+
+/** One row per roster player: merge awards from playerAwards[name] and playerAwards[fullName], dedupe by (season, award). */
+function getMyTeamAwardsByPlayer(roster, playerAwards) {
+  const awards = playerAwards || {};
+  const seen = new Set();
+  return POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => {
+    const list = [...(awards[p.name] || []), ...(awards[p.fullName] || []).filter((e) => e && p.name !== p.fullName)];
+    const deduped = list.filter(({ season, award }) => {
+      const key = `${p.name}|${season}|${award}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return { displayName: p.name, list: deduped };
+  }).filter(({ list }) => list && list.length > 0);
+}
+
+/** Resolve MVP/DPOY winner display name for a season from playerAwards; prefers roster display name when on our team. */
+function getSeasonAwardWinner(playerAwards, roster, awardKey, seasonNum) {
+  const awards = playerAwards || {};
+  let nameFromAwards = null;
+  for (const [key, list] of Object.entries(awards)) {
+    if (list.some((e) => e.season === seasonNum && e.award === awardKey)) {
+      nameFromAwards = key;
+      break;
+    }
+  }
+  if (!nameFromAwards) return null;
+  const rosterPlayer = POSITIONS.map((pos) => roster[pos]).find((p) => p && (p.name === nameFromAwards || p.fullName === nameFromAwards));
+  return rosterPlayer ? rosterPlayer.name : nameFromAwards;
+}
 
 async function incrementPick(playerName) {
   await supabase.rpc('increment_pick', { player_name: playerName });
@@ -214,7 +281,7 @@ export default function App(){
   const [chemHoverKey, setChemHoverKey] = useState(null);
   const [rosterHoverId, setRosterHoverId] = useState(null);
   const [soundOn, setSoundOn] = useState(true);
-  const [volume, setVolume] = useState(0.5);
+  const volume = 1;
   const [aiTeams,setAiTeams]=useState([]);
   const [schedule,setSchedule]=useState(null);
   const [result,setResult]=useState(null);
@@ -230,7 +297,7 @@ export default function App(){
     playoffAppearances: 0,
     bestSeasonWins: 0,
   });
-  // Player awards: { playerName: [ { season, award } ] } — MVP, DPOY, NBA1, NBA2, NBA3, DEF1, DEF2, CHAMP, FINALSMVP
+  // Player awards: { playerName: [ { season, award } ] } — MVP, DPOY, TMVP (team MVP), NBA1, NBA2, NBA3, DEF1, DEF2, CHAMP, FINALSMVP
   const [playerAwards, setPlayerAwards] = useState({});
   const [currentSaveSlot, setCurrentSaveSlot] = useState(null); // null = single auto-save; 1|2|3 = slot
   const [showLoadModal, setShowLoadModal] = useState(false);
@@ -257,6 +324,7 @@ export default function App(){
   const [finalsLeaders, setFinalsLeaders] = useState({});
   const [showPlayoffLeaders,setShowPlayoffLeaders]=useState(false);
   const [playoffLeadersView, setPlayoffLeadersView] = useState("playoff"); // "playoff" | "season" — which leaders/highs to show when on playoffs screen
+  const [playoffHighsPanelView, setPlayoffHighsPanelView] = useState("playoff"); // "playoff" | "season" — for always-visible league/playoff highs panel
   const [teamStatsPerMode, setTeamStatsPerMode] = useState("game"); // "game" | "per36"
   const [teamSeasonHighs, setTeamSeasonHighs] = useState({});
   const [teamPlayoffHighs, setTeamPlayoffHighs] = useState({});
@@ -271,6 +339,18 @@ export default function App(){
   const [inspectPlayer, setInspectPlayer] = useState(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [gamePogs, setGamePogs] = useState(() => Array(SEASON_LENGTH).fill(null));
+  const [allStarVotes, setAllStarVotes] = useState({});
+  const [mvpVotes, setMvpVotes] = useState({});
+  const [dpoyVotes, setDpoyVotes] = useState({});
+  const [allStarSelections, setAllStarSelections] = useState(null);
+  const [showAllStarSimThroughConfirm, setShowAllStarSimThroughConfirm] = useState(false);
+  const [showAllStarTab, setShowAllStarTab] = useState(false);
+  const [showMvpDpoyTab, setShowMvpDpoyTab] = useState(false);
+  const [allStarRetry, setAllStarRetry] = useState(0);
+  const simThroughBreakRequestedRef = useRef(false);
+  const allStarPendingSimCountRef = useRef(null);
+  const allStarResumeTimeoutRef = useRef(null);
 
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
@@ -367,6 +447,14 @@ export default function App(){
         if (saved.teamStatsPerMode) setTeamStatsPerMode(saved.teamStatsPerMode);
         if (saved.teamSeasonHighs) setTeamSeasonHighs(saved.teamSeasonHighs);
         if (saved.teamPlayoffHighs) setTeamPlayoffHighs(saved.teamPlayoffHighs);
+        if (Array.isArray(saved.gamePogs)) setGamePogs(saved.gamePogs);
+        if (saved.allStarVotes && typeof saved.allStarVotes === "object") setAllStarVotes(saved.allStarVotes);
+        if (saved.mvpVotes && typeof saved.mvpVotes === "object") setMvpVotes(saved.mvpVotes);
+        if (saved.dpoyVotes && typeof saved.dpoyVotes === "object") setDpoyVotes(saved.dpoyVotes);
+        if (saved.allStarSelections && typeof saved.allStarSelections === "object") {
+          setAllStarSelections(saved.allStarSelections);
+          if (saved.phase === "allStarBreak") allStarComputedRef.current = true;
+        }
 
         restored =
           !!saved.inSeason ||
@@ -443,6 +531,11 @@ export default function App(){
         careerTeamHighs,
         careerLeagueHighs,
         currentSaveSlot,
+        gamePogs,
+        allStarVotes,
+        allStarSelections,
+        mvpVotes,
+        dpoyVotes,
       };
       const saveKey = currentSaveSlot ? `nba_budget_ball_save_${currentSaveSlot}` : "nba-budget-ball-state";
       window.localStorage.setItem(saveKey, JSON.stringify(payload));
@@ -450,7 +543,7 @@ export default function App(){
     } catch {
       // ignore localStorage issues
     }
-  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot]);
+  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot, gamePogs, allStarVotes, allStarSelections, mvpVotes, dpoyVotes]);
 
   const rememberTeamName = useCallback((name) => {
     const trimmed = (name || "").trim();
@@ -585,6 +678,12 @@ export default function App(){
       if (saved.teamStatsPerMode) setTeamStatsPerMode(saved.teamStatsPerMode);
       if (saved.teamSeasonHighs) setTeamSeasonHighs(saved.teamSeasonHighs);
       if (saved.teamPlayoffHighs) setTeamPlayoffHighs(saved.teamPlayoffHighs);
+      if (Array.isArray(saved.gamePogs)) setGamePogs(saved.gamePogs);
+      if (saved.allStarVotes && typeof saved.allStarVotes === "object") setAllStarVotes(saved.allStarVotes);
+      if (saved.allStarSelections && typeof saved.allStarSelections === "object") {
+        setAllStarSelections(saved.allStarSelections);
+        if (saved.phase === "allStarBreak") allStarComputedRef.current = true;
+      }
       seasonEndRecordedRef.current = !!saved.season?.gp && saved.phase === "seasonEnd";
       playoffRecordedRef.current = !!saved.bracket?.champion;
       seasonAwardsRecordedRef.current = !!saved.season?.gp && saved.phase === "seasonEnd";
@@ -626,6 +725,12 @@ export default function App(){
     setLeagueLeaders({});
     setSeasonHighs({});
     setTeamSeasonHighs({});
+    setGamePogs(() => Array(SEASON_LENGTH).fill(null));
+    setAllStarVotes({});
+    setMvpVotes({});
+    setDpoyVotes({});
+    setAllStarSelections(null);
+    setAllStarRetry(0);
     setTeamPlayoffHighs({});
     setPlayoffLeaders({});
     setPlayoffHighs({});
@@ -661,13 +766,14 @@ export default function App(){
         bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs,
         playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode,
         teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot: slot,
+        gamePogs, allStarSelections,
       };
       window.localStorage.setItem(getSaveKey(slot), JSON.stringify(payload));
       window.localStorage.setItem("nba_budget_ball_last_key", getSaveKey(slot));
     } catch {
       window.alert("Could not save.");
     }
-  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, getSaveKey]);
+  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, gamePogs, allStarSelections, getSaveKey]);
 
   const [shareImageStatus, setShareImageStatus] = useState(null);
   const handleShareLineup = useCallback(async () => {
@@ -767,7 +873,7 @@ const soundtrackRef = useRef(null);
     }));
   }, [phase, season, aiTeams, myTeamName]);
 
-  // Record player awards at season end (MVP, DPOY, NBA1/2/3, DEF1/2)
+  // Record player awards at season end (MVP, DPOY by vote; NBA1/2/3, DEF1/2 by formula)
   useEffect(() => {
     if (phase !== "seasonEnd" || !season?.gp || !aiTeams?.length || !leagueLeaders || Object.keys(leagueLeaders).length === 0) return;
     if (seasonAwardsRecordedRef.current) return;
@@ -806,13 +912,25 @@ const soundtrackRef = useRef(null);
       r.mvpScore = (r.ppg / maxPPG) * 3 + (r.apg / maxAPG) * 2 + (r.rpg / maxRPG) * 1.2 + (r.fgPct / maxFG) * 1.5 + (r.tpPct / max3P) * 0.8 + r.teamPct * 3 - (r.tpg / maxTPG) * 1;
       r.dpoyScore = (r.spg / maxSPG) * 2.5 + (r.bpg / maxBPG) * 2.5 + (r.rpg / maxRPG) * 1;
     });
+    const voteLeader = (votesMap) => {
+      if (!votesMap || Object.keys(votesMap).length === 0) return null;
+      const ent = Object.entries(votesMap).reduce((best, [key, v]) => (!best || (Number(v) || 0) > (Number(best[1]) || 0) ? [key, v] : best), null);
+      return ent ? ent[0].split("|")[0] : null;
+    };
+    const mvpNameByVotes = voteLeader(mvpVotes);
+    const dpoyNameByVotes = voteLeader(dpoyVotes);
     const leagueMVP = leagueRows.reduce((best, r) => (!best || r.mvpScore > best.mvpScore ? r : best), null);
     const leagueDPOY = leagueRows.reduce((best, r) => (!best || r.dpoyScore > best.dpoyScore ? r : best), null);
-    const allNBA = buildAllNBATeams(leagueRows, teamWinPct);
-    const allDefensive = buildAllDefensiveTeams(leagueRows, teamWinPct);
+    const myTeamRows = leagueRows.filter((r) => r.team === myTeamName);
+    const teamMVP = myTeamRows.length > 0 ? myTeamRows.reduce((best, r) => (!best || r.mvpScore > best.mvpScore ? r : best), null) : null;
+    const allNBA = buildAllNBATeams(leagueRows, teamWinPct, mvpVotes);
+    const allDefensive = buildAllDefensiveTeams(leagueRows, teamWinPct, dpoyVotes);
     const toAdd = [];
-    if (leagueMVP?.name) toAdd.push([leagueMVP.name, "MVP"]);
-    if (leagueDPOY?.name) toAdd.push([leagueDPOY.name, "DPOY"]);
+    if (mvpNameByVotes) toAdd.push([mvpNameByVotes, "MVP"]);
+    else if (leagueMVP?.name) toAdd.push([leagueMVP.name, "MVP"]);
+    if (dpoyNameByVotes) toAdd.push([dpoyNameByVotes, "DPOY"]);
+    else if (leagueDPOY?.name) toAdd.push([leagueDPOY.name, "DPOY"]);
+    if (teamMVP?.name) toAdd.push([teamMVP.name, "TMVP"]);
     allNBA.first.forEach((p) => toAdd.push([p.name, "NBA1"]));
     allNBA.second.forEach((p) => toAdd.push([p.name, "NBA2"]));
     allNBA.third.forEach((p) => toAdd.push([p.name, "NBA3"]));
@@ -826,7 +944,78 @@ const soundtrackRef = useRef(null);
       });
       return next;
     });
-  }, [phase, season, aiTeams, myTeamName, leagueLeaders, seasonNumber]);
+  }, [phase, season, aiTeams, myTeamName, leagueLeaders, seasonNumber, mvpVotes, dpoyVotes]);
+
+  const allStarComputedRef = useRef(false);
+  useEffect(() => {
+    if (phase !== "allStarBreak" || gameNum !== ALL_STAR_GAME_AT) return;
+    // When user chose "sim through break", show the All-Star panel briefly then auto-continue.
+    // Do NOT clear this timeout in effect cleanup: re-runs (e.g. leagueLeaders update) would cancel it and we'd never continue.
+    if (simThroughBreakRequestedRef.current) {
+      if (!allStarResumeTimeoutRef.current) {
+        allStarResumeTimeoutRef.current = setTimeout(() => {
+          allStarResumeTimeoutRef.current = null;
+          simThroughBreakRequestedRef.current = false;
+          allStarPendingSimCountRef.current = SEASON_LENGTH - ALL_STAR_GAME_AT;
+          setPhase("game");
+          setGameNum(ALL_STAR_GAME_AT + 1);
+          setResult(null);
+        }, 2200);
+      }
+      return;
+    }
+    if (allStarComputedRef.current) return;
+    const run = () => {
+      const leaderEntries = Object.values(leagueLeaders || {}).filter((r) => r && (r.gp || 0) > 0);
+      if (leaderEntries.length === 0) {
+        if (allStarRetry < 15) setTimeout(() => setAllStarRetry((c) => c + 1), 80);
+        return;
+      }
+      const teamWinPct = {};
+      if (season?.gp) teamWinPct[myTeamName] = season.w / Math.max(season.gp, 1);
+      (aiTeams || []).forEach((t) => {
+        const gl = (t.gameLog || []).slice(0, ALL_STAR_GAME_AT);
+        const w = gl.filter((x) => x === 1).length;
+        const l = gl.filter((x) => x === 0).length;
+        const gp = w + l || 1;
+        teamWinPct[t.name] = w / gp;
+      });
+      const conferenceTeams = { East: [], West: [] };
+      const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
+      conferenceTeams[userMeta.conference].push(myTeamName);
+      (aiTeams || []).forEach((t) => {
+        if (t.conference && conferenceTeams[t.conference]) conferenceTeams[t.conference].push(t.name);
+      });
+      const selections = buildAllStarSelections(leaderEntries, gamePogs.slice(0, ALL_STAR_GAME_AT), teamWinPct, conferenceTeams, allStarVotes);
+      setAllStarSelections(selections);
+      const toAdd = [];
+      ["east", "west"].forEach((conf) => {
+        [...(selections[conf].starters || []), ...(selections[conf].reserves || [])].forEach((p) => {
+          if (p.name) toAdd.push([p.name, `AS-${conf === "east" ? "E" : "W"}-${p.allStarRole === "Starter" ? "S" : "R"}`]);
+        });
+      });
+      setPlayerAwards((prev) => {
+        const next = { ...prev };
+        toAdd.forEach(([name, award]) => {
+          if (!name) return;
+          const list = next[name] || [];
+          if (list.some((e) => e.season === seasonNumber && e.award === award)) return;
+          next[name] = [...list, { season: seasonNumber, award }];
+        });
+        return next;
+      });
+      allStarComputedRef.current = true;
+    };
+    setTimeout(run, 0);
+  }, [phase, gameNum, leagueLeaders, gamePogs, season, aiTeams, myTeamName, seasonNumber, allStarRetry, allStarVotes]);
+
+  // After "sim through break", we land at game 51 with a pending sim count; run it once state has updated
+  useEffect(() => {
+    if (phase !== "game" || gameNum !== ALL_STAR_GAME_AT + 1 || allStarPendingSimCountRef.current == null) return;
+    const count = allStarPendingSimCountRef.current;
+    allStarPendingSimCountRef.current = null;
+    runSimGames(count);
+  }, [phase, gameNum]);
 
   // Record championships/finals when playoffs end (one-time per playoff) + CHAMP & FINALSMVP awards
   useEffect(() => {
@@ -936,7 +1125,7 @@ const soundtrackRef = useRef(null);
     const audio = soundtrackRef.current;
     if (!audio) return;
     audio.volume = volume;
-  }, [volume]);
+  }, []);
 
   useEffect(() => {
     const audio = soundtrackRef.current;
@@ -1327,76 +1516,108 @@ const soundtrackRef = useRef(null);
   }, []);
 
   // Simulate all non-user games for a given game index (0-based).
+  // When currentAiTeams is passed (e.g. from simGames batch), returns { nextAiTeams, voteDeltas } so caller can merge AI votes into accVotes.
+  const computeOneDayResults = useCallback((prev, dayIndex, oppIndex, userWon) => {
+    if (!Array.isArray(prev) || prev.length === 0) return { nextAiTeams: prev, voteDeltas: {} };
+    const next = prev.map((t) => ({
+      ...t,
+      gameLog: [...(t.gameLog || Array(SEASON_LENGTH).fill(null))],
+    }));
+    if (oppIndex != null && next[oppIndex]) next[oppIndex].gameLog[dayIndex] = userWon ? 0 : 1;
+    const pool = [];
+    for (let i = 0; i < NUM_TEAMS - 1; i++) {
+      if (i === oppIndex) continue;
+      if (!next[i]) continue;
+      pool.push(i);
+    }
+    for (let k = pool.length - 1; k > 0; k--) {
+      const r = Math.floor(Math.random() * (k + 1));
+      [pool[k], pool[r]] = [pool[r], pool[k]];
+    }
+    const aiVoteDeltas = {};
+    const aiMvpDeltas = {};
+    const aiDpoyDeltas = {};
+    while (pool.length > 1) {
+      const a = pool.pop();
+      const b = pool.pop();
+      const teamA = next[a];
+      const teamB = next[b];
+      if (!teamA || !teamB || !Array.isArray(teamA.lineup) || !Array.isArray(teamB.lineup)) continue;
+      const res = simulate(teamA.lineup, teamB.lineup, teamRoster, { difficulty });
+      if (!res) continue;
+      const aWon = res.myScore > res.oppScore;
+      next[a].gameLog[dayIndex] = aWon ? 1 : 0;
+      next[b].gameLog[dayIndex] = aWon ? 0 : 1;
+      updateLeagueLeaders(res, teamA.name, teamB.name, dayIndex);
+      updateSeasonHighs(res, teamA.name, teamB.name);
+      const allStats = [
+        ...(res.myStats || []).map((s) => ({ ...s, team: teamA.name })),
+        ...(res.oppStats || []).map((s) => ({ ...s, team: teamB.name })),
+      ];
+      const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.5 + (s.ast || 0) * 0.5;
+      const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
+      const voteDeltas = computeAllStarVotesForGame(res, teamA.name, teamB.name, pog, aWon);
+      Object.entries(voteDeltas || {}).forEach(([key, v]) => { aiVoteDeltas[key] = (aiVoteDeltas[key] || 0) + (Number(v) || 0); });
+      const mvpD = computeMvpVotesForGame(res, teamA.name, teamB.name, pog, aWon);
+      Object.entries(mvpD || {}).forEach(([key, v]) => { aiMvpDeltas[key] = (aiMvpDeltas[key] || 0) + (Number(v) || 0); });
+      const dpoyD = computeDpoyVotesForGame(res, teamA.name, teamB.name, pog, aWon);
+      Object.entries(dpoyD || {}).forEach(([key, v]) => { aiDpoyDeltas[key] = (aiDpoyDeltas[key] || 0) + (Number(v) || 0); });
+    }
+    for (let i = 0; i < next.length; i++) {
+      const gl = next[i].gameLog || [];
+      next[i].w = gl.filter((x) => x === 1).length;
+      next[i].l = gl.filter((x) => x === 0).length;
+    }
+    return { nextAiTeams: next, voteDeltas: aiVoteDeltas, mvpDeltas: aiMvpDeltas, dpoyDeltas: aiDpoyDeltas };
+  }, [teamRoster, updateLeagueLeaders, updateSeasonHighs]);
+
   const applyDayResults = useCallback(
-    (dayIndex, oppIndex, userWon) => {
+    (dayIndex, oppIndex, userWon, currentAiTeams = null) => {
+      if (currentAiTeams != null) {
+        const { nextAiTeams, voteDeltas, mvpDeltas, dpoyDeltas } = computeOneDayResults(currentAiTeams, dayIndex, oppIndex, userWon);
+        setAiTeams(nextAiTeams);
+        if (Object.keys(voteDeltas || {}).length > 0) {
+          setAllStarVotes((prev) => {
+            const next = { ...prev };
+            Object.entries(voteDeltas).forEach(([key, v]) => { next[key] = (next[key] || 0) + (Number(v) || 0); });
+            return next;
+          });
+        }
+        return { nextAiTeams, voteDeltas, mvpDeltas: mvpDeltas || {}, dpoyDeltas: dpoyDeltas || {} };
+      }
       setAiTeams((prev) => {
         try {
-          if (!Array.isArray(prev) || prev.length === 0) return prev;
-
-          const USER_INDEX = NUM_TEAMS - 1;
-          const next = prev.map((t) => ({
-            ...t,
-            gameLog: [...(t.gameLog || Array(SEASON_LENGTH).fill(null))],
-          }));
-
-          // Record opponent's result vs user for this day.
-          if (oppIndex != null && next[oppIndex]) {
-            next[oppIndex].gameLog[dayIndex] = userWon ? 0 : 1;
-          }
-
-          // Build list of AI teams that still need a game this day (exclude user opponent).
-          const pool = [];
-          for (let i = 0; i < NUM_TEAMS - 1; i++) {
-            if (i === oppIndex) continue;
-            if (!next[i]) continue;
-            pool.push(i);
-          }
-
-          // Shuffle for randomness.
-          for (let k = pool.length - 1; k > 0; k--) {
-            const r = Math.floor(Math.random() * (k + 1));
-            [pool[k], pool[r]] = [pool[r], pool[k]];
-          }
-
-          // Pair off and simulate.
-          while (pool.length > 1) {
-            const a = pool.pop();
-            const b = pool.pop();
-            const teamA = next[a];
-            const teamB = next[b];
-            if (
-              !teamA ||
-              !teamB ||
-              !Array.isArray(teamA.lineup) ||
-              !Array.isArray(teamB.lineup)
-            ) {
-              continue;
-            }
-            const res = simulate(teamA.lineup, teamB.lineup, teamRoster, {
-              difficulty,
+          const { nextAiTeams, voteDeltas, mvpDeltas, dpoyDeltas } = computeOneDayResults(prev, dayIndex, oppIndex, userWon);
+          if (Object.keys(voteDeltas || {}).length > 0) {
+            setAllStarVotes((p) => {
+              const n = { ...p };
+              Object.entries(voteDeltas).forEach(([key, v]) => { n[key] = (n[key] || 0) + (Number(v) || 0); });
+              return n;
             });
-            if (!res) continue;
-            const aWon = res.myScore > res.oppScore;
-            next[a].gameLog[dayIndex] = aWon ? 1 : 0;
-            next[b].gameLog[dayIndex] = aWon ? 0 : 1;
-            updateLeagueLeaders(res, teamA.name, teamB.name, dayIndex);
-            updateSeasonHighs(res, teamA.name, teamB.name);
           }
-
-          // Recompute W/L from full log.
-          for (let i = 0; i < next.length; i++) {
-            const gl = next[i].gameLog || [];
-            next[i].w = gl.filter((x) => x === 1).length;
-            next[i].l = gl.filter((x) => x === 0).length;
+          if (Object.keys(mvpDeltas || {}).length > 0) {
+            setMvpVotes((p) => {
+              const n = { ...p };
+              Object.entries(mvpDeltas).forEach(([key, v]) => { n[key] = (n[key] || 0) + (Number(v) || 0); });
+              return n;
+            });
           }
-          return next;
+          if (Object.keys(dpoyDeltas || {}).length > 0) {
+            setDpoyVotes((p) => {
+              const n = { ...p };
+              Object.entries(dpoyDeltas).forEach(([key, v]) => { n[key] = (n[key] || 0) + (Number(v) || 0); });
+              return n;
+            });
+          }
+          return nextAiTeams;
         } catch (err) {
           console.error("applyDayResults error:", err);
           return prev;
         }
       });
+      return undefined;
     },
-    [teamRoster, updateLeagueLeaders, updateSeasonHighs]
+    [computeOneDayResults, setAllStarVotes]
   );
 
   useEffect(()=>{
@@ -1461,7 +1682,19 @@ const startSeason = async () => {
   setLeagueLeaders({});
   setSeasonHighs({});
   setTeamSeasonHighs({});
-  seasonEndRecordedRef.current = false;
+  setGamePogs(() => Array(SEASON_LENGTH).fill(null));
+    setAllStarVotes({});
+    setMvpVotes({});
+    setDpoyVotes({});
+    setAllStarSelections(null);
+    setAllStarRetry(0);
+    allStarComputedRef.current = false;
+    allStarPendingSimCountRef.current = null;
+    if (allStarResumeTimeoutRef.current) {
+      clearTimeout(allStarResumeTimeoutRef.current);
+      allStarResumeTimeoutRef.current = null;
+    }
+    seasonEndRecordedRef.current = false;
   playoffRecordedRef.current = false;
   seasonAwardsRecordedRef.current = false;
   await Promise.all(myLineup.map(({player})=>incrementPick(player.name)));
@@ -1503,6 +1736,18 @@ const startSeason = async () => {
     setLeagueLeaders({});
     setSeasonHighs({});
     setTeamSeasonHighs({});
+    setGamePogs(() => Array(SEASON_LENGTH).fill(null));
+    setAllStarVotes({});
+    setMvpVotes({});
+    setDpoyVotes({});
+    setAllStarSelections(null);
+    setAllStarRetry(0);
+    allStarComputedRef.current = false;
+    allStarPendingSimCountRef.current = null;
+    if (allStarResumeTimeoutRef.current) {
+      clearTimeout(allStarResumeTimeoutRef.current);
+      allStarResumeTimeoutRef.current = null;
+    }
     seasonEndRecordedRef.current = false;
     playoffRecordedRef.current = false;
     seasonAwardsRecordedRef.current = false;
@@ -1518,11 +1763,35 @@ const startSeason = async () => {
     const won = res.myScore > res.oppScore;
     const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
     setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
-    // Apply this day's results to all AI teams (including opponent vs user).
     const dayIndex = gameNum - 1;
     applyDayResults(dayIndex, oppIndex, won);
     updateLeagueLeaders(res, myTeamName, opp?.name || "Opponent", dayIndex);
     updateSeasonHighs(res, myTeamName, opp?.name || "Opponent", myTeamName);
+    const allStats = [
+      ...(res.myStats || []).map((s) => ({ ...s, team: myTeamName })),
+      ...(res.oppStats || []).map((s) => ({ ...s, team: opp?.name || "Opponent" })),
+    ];
+    const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.5 + (s.ast || 0) * 0.5;
+    const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
+    if (pog) setGamePogs((prev) => { const n = [...prev]; n[dayIndex] = { name: pog.name, team: pog.team }; return n; });
+    const voteDeltas = computeAllStarVotesForGame(res, myTeamName, opp?.name || "Opponent", pog, won);
+    setAllStarVotes((prev) => {
+      const next = { ...prev };
+      Object.entries(voteDeltas).forEach(([key, v]) => { next[key] = (next[key] || 0) + (Number(v) || 0); });
+      return next;
+    });
+    const mvpD = computeMvpVotesForGame(res, myTeamName, opp?.name || "Opponent", pog, won);
+    Object.keys(mvpD || {}).length > 0 && setMvpVotes((prev) => {
+      const next = { ...prev };
+      Object.entries(mvpD).forEach(([key, v]) => { next[key] = (next[key] || 0) + (Number(v) || 0); });
+      return next;
+    });
+    const dpoyD = computeDpoyVotesForGame(res, myTeamName, opp?.name || "Opponent", pog, won);
+    Object.keys(dpoyD || {}).length > 0 && setDpoyVotes((prev) => {
+      const next = { ...prev };
+      Object.entries(dpoyD).forEach(([key, v]) => { next[key] = (next[key] || 0) + (Number(v) || 0); });
+      return next;
+    });
     setResult(res);
   };
 
@@ -1531,8 +1800,57 @@ const startSeason = async () => {
       setPhase("seasonEnd");
       return;
     }
+    if (gameNum === ALL_STAR_GAME_AT) {
+      setPhase("allStarBreak");
+      return;
+    }
     setGameNum((g) => g + 1);
     setResult(null);
+  };
+
+  const mergeGameIntoLeaders = (acc, res, myTeamLabel, oppTeamLabel) => {
+    const applyTeam = (stats, teamLabel) => {
+      (stats || []).forEach((s) => {
+        const key = `${s.name}|${teamLabel}`;
+        const cur = acc[key] || {
+          name: s.name,
+          team: teamLabel,
+          pos: s.pos,
+          gp: 0,
+          pts: 0,
+          reb: 0,
+          ast: 0,
+          stl: 0,
+          blk: 0,
+          tov: 0,
+          fgm: 0,
+          fga: 0,
+          tpm: 0,
+          tpa: 0,
+          ftm: 0,
+          fta: 0,
+        };
+        acc[key] = {
+          ...cur,
+          pos: cur.pos || s.pos,
+          gp: cur.gp + 1,
+          pts: cur.pts + (s.pts || 0),
+          reb: cur.reb + (s.reb || 0),
+          ast: cur.ast + (s.ast || 0),
+          stl: cur.stl + (s.stl || 0),
+          blk: cur.blk + (s.blk || 0),
+          tov: cur.tov + (s.tov || 0),
+          fgm: cur.fgm + (s.fgm || 0),
+          fga: cur.fga + (s.fga || 0),
+          tpm: cur.tpm + (s.tpm || 0),
+          tpa: cur.tpa + (s.tpa || 0),
+          ftm: cur.ftm + (s.ftm || 0),
+          fta: cur.fta + (s.fta || 0),
+        };
+      });
+    };
+    applyTeam(res.myStats, myTeamLabel);
+    applyTeam(res.oppStats, oppTeamLabel);
   };
 
   const simGames = (count) => {
@@ -1540,27 +1858,113 @@ const startSeason = async () => {
       setIsSimulating(false);
       return;
     }
-    const toPlay = Math.min(count, SEASON_LENGTH - gameNum + 1);
+    let toPlay = Math.min(count, SEASON_LENGTH - gameNum + 1);
+    if (gameNum <= ALL_STAR_GAME_AT && gameNum + toPlay > ALL_STAR_GAME_AT && !simThroughBreakRequestedRef.current) {
+      toPlay = ALL_STAR_GAME_AT - gameNum + 1;
+    }
+    const accLeaders = {};
+    Object.entries(leagueLeaders || {}).forEach(([key, entry]) => {
+      if (entry && (entry.gp || 0) > 0) accLeaders[key] = { ...entry };
+    });
+    const accPogs = [...(gamePogs || Array(SEASON_LENGTH).fill(null))];
+    const accVotes = { ...(allStarVotes || {}) };
+    const accMvpVotes = { ...(mvpVotes || {}) };
+    const accDpoyVotes = { ...(dpoyVotes || {}) };
+    let accAiTeams = aiTeams ?? [];
+    let localW = season?.w ?? 0;
+    let localL = season?.l ?? 0;
+    let localGp = season?.gp ?? 0;
     try {
       for (let k = 0; k < toPlay; k++) {
         const g = gameNum + k;
         const USER_INDEX = NUM_TEAMS - 1;
         const oppIndex = schedule[USER_INDEX]?.[g - 1];
-        const opp = oppIndex != null ? aiTeams[oppIndex] : null;
+        const opp = oppIndex != null ? accAiTeams[oppIndex] : null;
         if (!opp?.lineup) continue;
         const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty });
         const won = res.myScore > res.oppScore;
         const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
         const dayIndex = g - 1;
         setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
-        applyDayResults(dayIndex, oppIndex, won);
+        const dayResult = applyDayResults(dayIndex, oppIndex, won, accAiTeams);
+        if (dayResult?.nextAiTeams) accAiTeams = dayResult.nextAiTeams;
+        if (dayResult?.voteDeltas && Object.keys(dayResult.voteDeltas).length > 0) {
+          Object.entries(dayResult.voteDeltas).forEach(([key, v]) => { accVotes[key] = (accVotes[key] || 0) + (Number(v) || 0); });
+        }
+        if (dayResult?.mvpDeltas && Object.keys(dayResult.mvpDeltas).length > 0) {
+          Object.entries(dayResult.mvpDeltas).forEach(([key, v]) => { accMvpVotes[key] = (accMvpVotes[key] || 0) + (Number(v) || 0); });
+        }
+        if (dayResult?.dpoyDeltas && Object.keys(dayResult.dpoyDeltas).length > 0) {
+          Object.entries(dayResult.dpoyDeltas).forEach(([key, v]) => { accDpoyVotes[key] = (accDpoyVotes[key] || 0) + (Number(v) || 0); });
+        }
         updateLeagueLeaders(res, myTeamName, opp?.name || "Opponent", dayIndex);
         updateSeasonHighs(res, myTeamName, opp?.name || "Opponent", myTeamName);
+        mergeGameIntoLeaders(accLeaders, res, myTeamName, opp?.name || "Opponent");
+        localGp++;
+        if (won) localW++; else localL++;
+        const allStats = [
+          ...(res.myStats || []).map((s) => ({ ...s, team: myTeamName })),
+          ...(res.oppStats || []).map((s) => ({ ...s, team: opp?.name || "Opponent" })),
+        ];
+        const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.5 + (s.ast || 0) * 0.5;
+        const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
+        if (pog) {
+          accPogs[dayIndex] = { name: pog.name, team: pog.team };
+          setGamePogs((prev) => { const n = [...prev]; n[dayIndex] = { name: pog.name, team: pog.team }; return n; });
+        }
+        const voteDeltas = computeAllStarVotesForGame(res, myTeamName, opp?.name || "Opponent", pog, won);
+        Object.entries(voteDeltas).forEach(([key, v]) => { accVotes[key] = (accVotes[key] || 0) + (Number(v) || 0); });
+        const mvpD = computeMvpVotesForGame(res, myTeamName, opp?.name || "Opponent", pog, won);
+        Object.entries(mvpD || {}).forEach(([key, v]) => { accMvpVotes[key] = (accMvpVotes[key] || 0) + (Number(v) || 0); });
+        const dpoyD = computeDpoyVotesForGame(res, myTeamName, opp?.name || "Opponent", pog, won);
+        Object.entries(dpoyD || {}).forEach(([key, v]) => { accDpoyVotes[key] = (accDpoyVotes[key] || 0) + (Number(v) || 0); });
+        setAllStarVotes((prev) => {
+          const next = { ...prev };
+          Object.entries(voteDeltas).forEach(([key, v]) => { next[key] = (next[key] || 0) + (Number(v) || 0); });
+          return next;
+        });
+        setMvpVotes(() => ({ ...accMvpVotes }));
+        setDpoyVotes(() => ({ ...accDpoyVotes }));
       }
       const nextGameNum = Math.min(gameNum + toPlay, SEASON_LENGTH);
-      setGameNum(nextGameNum);
+      const crossedAllStarBreak = gameNum <= ALL_STAR_GAME_AT && nextGameNum > ALL_STAR_GAME_AT;
+      if (crossedAllStarBreak) {
+        setGameNum(ALL_STAR_GAME_AT);
+      } else {
+        setGameNum(nextGameNum);
+      }
       setResult(null);
-      if (gameNum + toPlay > SEASON_LENGTH) setPhase("seasonEnd");
+      if (nextGameNum === ALL_STAR_GAME_AT || crossedAllStarBreak) {
+        const leaderEntries = Object.values(accLeaders).filter((r) => r && (r.gp || 0) > 0);
+        if (leaderEntries.length > 0) {
+          const teamWinPct = { [myTeamName]: localGp > 0 ? localW / localGp : 0.5 };
+          (aiTeams || []).forEach((t) => { teamWinPct[t.name] = 0.5; });
+          const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
+          const conferenceTeams = { East: [], West: [] };
+          conferenceTeams[userMeta.conference].push(myTeamName);
+          (aiTeams || []).forEach((t) => { if (t.conference && conferenceTeams[t.conference]) conferenceTeams[t.conference].push(t.name); });
+          const selections = buildAllStarSelections(leaderEntries, accPogs.slice(0, ALL_STAR_GAME_AT), teamWinPct, conferenceTeams, accVotes);
+          setAllStarSelections(selections);
+          const toAdd = [];
+          ["east", "west"].forEach((conf) => {
+            [...(selections[conf].starters || []), ...(selections[conf].reserves || [])].forEach((p) => {
+              if (p.name) toAdd.push([p.name, `AS-${conf === "east" ? "E" : "W"}-${p.allStarRole === "Starter" ? "S" : "R"}`]);
+            });
+          });
+          setPlayerAwards((prev) => {
+            const next = { ...prev };
+            toAdd.forEach(([name, award]) => {
+              if (!name) return;
+              next[name] = [...(next[name] || []), { season: seasonNumber, award }];
+            });
+            return next;
+          });
+          allStarComputedRef.current = true;
+        }
+        setPhase("allStarBreak");
+      } else if (gameNum + toPlay > SEASON_LENGTH) {
+        setPhase("seasonEnd");
+      }
     } catch (err) {
       console.error("Sim games error:", err);
     } finally {
@@ -1834,7 +2238,6 @@ if(phase==="teamSetup") return(
     <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
       <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
       <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
-      <input type="range" min="0" max="100" value={Math.round(volume*100)} onChange={(e)=>setVolume(Number(e.target.value)/100)} style={{width:80,accentColor:"#60a5fa"}} title="Volume" />
     </div>
     <div style={{maxWidth:400,width:"100%",textAlign:"center"}}>
       <div style={{fontSize:48,marginBottom:12}}>🏀</div>
@@ -1915,7 +2318,6 @@ if(phase==="teamSetup") return(
       <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
         <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
         <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
-        <input type="range" min="0" max="100" value={Math.round(volume*100)} onChange={(e)=>setVolume(Number(e.target.value)/100)} style={{width:80,accentColor:"#60a5fa"}} title="Volume" />
       </div>
       <div style={{maxWidth:400,width:"100%",textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:12}}>💰</div>
@@ -1984,12 +2386,12 @@ if(phase==="teamSetup") return(
         <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
           <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
           <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
-          <input type="range" min="0" max="100" value={Math.round(volume*100)} onChange={(e)=>setVolume(Number(e.target.value)/100)} style={{width:80,accentColor:"#60a5fa"}} title="Volume" />
         </div>
         <div style={{maxWidth:1100,margin:"0 auto",minWidth:0,overflow:"hidden"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom: isMobile ? 14 : 16,flexWrap:"wrap",gap: isMobile ? 8 : 10}}>
             <h2 style={{margin:0,fontSize: isMobile ? 18 : 20,fontWeight:900,color:"#f59e0b",letterSpacing:1}}>Season {seasonNumber} · 🏆 PLAYOFFS</h2>
             <div style={{display:"flex",gap: isMobile ? 6 : 8,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{fontSize:9,fontWeight:700,color:"#64748b",padding:"3px 8px",borderRadius:999,background:"#1e293b",border:"1px solid #334155",textTransform:"uppercase",letterSpacing:0.5}}>{difficulty === "casual" ? "Casual" : difficulty === "hardcore" ? "Hardcore" : "Standard"}</span>
               {nextPlayerMatchId && (
                 <button onClick={()=>{ setActiveMatchId(nextPlayerMatchId); setPlayoffResult(null); }} style={{...btnBase,background:"#052e16",color:"#86efac",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,border:"1px solid #14532d"}}>⏭ Next game</button>
               )}
@@ -2000,7 +2402,7 @@ if(phase==="teamSetup") return(
               <button onClick={goToMainMenu} style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>🏠 Main menu</button>
               <button onClick={()=>setShowSaveModal(true)} style={{...btnBase,background:"#1e293b",color:"#a78bfa",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>💾 Save</button>
               <button onClick={()=>setShowLoadModal(true)} style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>📂 Load</button>
-              <button onClick={runItBack} style={{...btnBase,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:800}} title="Same roster, new AI opponents">🔄 Run it back</button>
+              {(elimInPlayoffs || champion) && <button onClick={runItBack} style={{...btnBase,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:800}} title="Same roster, new AI opponents">🔄 Run it back</button>}
               <button onClick={()=>setShowHelp(h=>!h)} style={{...btnBase,width: isMobile ? 40 : 32,height: isMobile ? 40 : 32,borderRadius:10,background:"#1e293b",color:"#60a5fa",fontSize:14,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>?</button>
             </div>
           </div>
@@ -2064,19 +2466,27 @@ if(phase==="teamSetup") return(
               </div>
             )}
               {(() => {
-                const rosterNames = new Set(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.name).concat(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.fullName).filter(Boolean)));
-                const myTeamAwards = Object.entries(playerAwards || {}).filter(([name]) => rosterNames.has(name)).filter(([, list]) => list && list.length > 0);
+                const myTeamAwards = getMyTeamAwardsByPlayer(roster, playerAwards);
                 if (myTeamAwards.length === 0) return null;
                 return (
                   <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:12,border:"1px solid #475569",textAlign:"left"}}>
-                    <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:6}}>🏅 YOUR TEAM'S AWARDS</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                      {myTeamAwards.map(([name, list]) => (
-                        <div key={name} style={{fontSize:10,display:"flex",flexWrap:"wrap",gap:4,alignItems:"baseline"}}>
-                          <span style={{fontWeight:700,color:"#e2e8f0",minWidth:100}}>{name}</span>
-                          <span style={{color:"#94a3b8"}}>{(list || []).map(({ season, award }) => `${award} (S${season})`).join(", ")}</span>
-                        </div>
-                      ))}
+                    <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>🏅 YOUR TEAM'S AWARDS</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      {myTeamAwards.map(({ displayName, list }) => {
+                        const grouped = groupAwardsByType(list);
+                        return (
+                          <div key={displayName} style={{fontSize:11}}>
+                            <div style={{fontWeight:700,color:"#e2e8f0",marginBottom:4}}>{displayName}</div>
+                            <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
+                              {grouped.map(({ label, seasons }) => (
+                                <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
+                                  {label} ({seasons.map((s) => `S${s}`).join(", ")})
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -2177,6 +2587,20 @@ if(phase==="teamSetup") return(
             );
           })()}
           {showStandings&&<div style={{marginTop:16,marginBottom:12}}><StandingsTable aiTeams={finalAiRec} myRecord={myRecord} myName={myTeamName} highlight/></div>}
+          {(() => {
+            const mvpName = getSeasonAwardWinner(playerAwards, roster, "MVP", seasonNumber);
+            const dpoyName = getSeasonAwardWinner(playerAwards, roster, "DPOY", seasonNumber);
+            if (!mvpName && !dpoyName) return null;
+            return (
+              <div style={{marginTop:12,marginBottom:12,background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #475569"}}>
+                <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:6}}>🏅 SEASON AWARDS (S{seasonNumber})</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"center"}}>
+                  {mvpName && <span style={{fontSize:11,color:"#e2e8f0"}}><span style={{color:"#fbbf24",fontWeight:700}}>MVP:</span> {mvpName}</span>}
+                  {dpoyName && <span style={{fontSize:11,color:"#e2e8f0"}}><span style={{color:"#22c55e",fontWeight:700}}>DPOY:</span> {dpoyName}</span>}
+                </div>
+              </div>
+            );
+          })()}
           {showPlayoffLeaders&&(
             <div style={{marginTop: isMobile ? 14 : 16,marginBottom:12}}>
               <div style={{display:"flex",gap: isMobile ? 8 : 6,marginBottom: isMobile ? 10 : 8,flexWrap:"wrap"}}>
@@ -2197,6 +2621,13 @@ if(phase==="teamSetup") return(
               <TeamHighs teamSeasonHighs={teamSeasonHighs} careerTeamHighs={careerTeamHighs} teamPlayoffHighs={teamPlayoffHighs} roster={roster} title="📈 TEAM HIGHS" showPlayoff={true}/>
             </div>
           </div>
+          <div style={{marginTop: isMobile ? 14 : 16,marginBottom:12}}>
+            <div style={{display:"flex",gap: isMobile ? 8 : 6,marginBottom: isMobile ? 10 : 8,flexWrap:"wrap"}}>
+              <button onClick={()=>setPlayoffHighsPanelView("playoff")} style={{background:playoffHighsPanelView==="playoff"?"#f97316":"#1e293b",color:playoffHighsPanelView==="playoff"?"#fff":"#94a3b8",border:"1px solid #334155",borderRadius:8,padding: isMobile ? "10px 14px" : "4px 10px",fontSize: isMobile ? 12 : 10,fontWeight:700,cursor:"pointer"}}>Playoff highs</button>
+              <button onClick={()=>setPlayoffHighsPanelView("season")} style={{background:playoffHighsPanelView==="season"?"#f97316":"#1e293b",color:playoffHighsPanelView==="season"?"#fff":"#94a3b8",border:"1px solid #334155",borderRadius:8,padding: isMobile ? "10px 14px" : "4px 10px",fontSize: isMobile ? 12 : 10,fontWeight:700,cursor:"pointer"}}>Season + All-time highs</button>
+            </div>
+            <SeasonHighs highs={playoffHighsPanelView==="playoff"?playoffHighs:seasonHighs} careerHighs={playoffHighsPanelView==="season"?careerLeagueHighs:undefined} myTeamName={myTeamName} title={playoffHighsPanelView==="playoff"?"📈 PLAYOFF HIGHS (SINGLE GAME)":"📈 SEASON + ALL-TIME HIGHS"} seasonNumber={seasonNumber}/>
+          </div>
         </div>
       </div>
       </>
@@ -2206,7 +2637,9 @@ if(phase==="teamSetup") return(
   if(phase==="seasonEnd"){
     const finalAi = aiTeams;
     const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
-    const userRecord = { name: myTeamName, w: season.w, l: SEASON_LENGTH - season.w, eff: myEffVal || 0, isPlayer: true, division: userMeta.division, conference: userMeta.conference };
+    const userW = season.w ?? 0;
+    const userL = Math.min(season.l ?? 0, SEASON_LENGTH - userW);
+    const userRecord = { name: myTeamName, w: userW, l: userL, eff: myEffVal || 0, isPlayer: true, division: userMeta.division, conference: userMeta.conference };
     const all = [userRecord, ...finalAi.map((t) => ({ ...t, isPlayer: false }))];
     const confTeams = all.filter((t) => t.conference === userMeta.conference).sort(standingsSort);
     const myRankInConf = confTeams.findIndex((t) => t.isPlayer) + 1;
@@ -2324,18 +2757,23 @@ if(phase==="teamSetup") return(
         r.dpoyScore = defScore + teamDefBonus;
       });
 
-      leagueMVP = leagueRows.reduce(
-        (best, r) => (!best || r.mvpScore > best.mvpScore ? r : best),
-        null
-      );
-      leagueDPOY = leagueRows.reduce(
-        (best, r) => (!best || r.dpoyScore > best.dpoyScore ? r : best),
-        null
-      );
+      // Use same ranking as in-game race and award: vote totals. Fallback to score if no votes.
+      const voteLeaderRow = (votesMap, rows) => {
+        if (!votesMap || Object.keys(votesMap).length === 0) return null;
+        const ent = Object.entries(votesMap).reduce((best, [key, v]) => (!best || (Number(v) || 0) > (Number(best[1]) || 0) ? [key, v] : best), null);
+        if (!ent) return null;
+        const [name, team] = ent[0].split("|");
+        return (rows || []).find((r) => r.name === name && r.team === team) || null;
+      };
+      const mvpByVotes = voteLeaderRow(mvpVotes, leagueRows);
+      const dpoyByVotes = voteLeaderRow(dpoyVotes, leagueRows);
+      leagueMVP = mvpByVotes || leagueRows.reduce((best, r) => (!best || r.mvpScore > best.mvpScore ? r : best), null);
+      leagueDPOY = dpoyByVotes || leagueRows.reduce((best, r) => (!best || r.dpoyScore > best.dpoyScore ? r : best), null);
     }
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
         <div style={{position:"fixed",top:12,right:12,zIndex:50,display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:9,fontWeight:700,color:"#64748b",padding:"3px 8px",borderRadius:999,background:"#1e293b",border:"1px solid #334155",textTransform:"uppercase",letterSpacing:0.5}}>{difficulty === "casual" ? "Casual" : difficulty === "hardcore" ? "Hardcore" : "Standard"}</span>
           <button onClick={goToMainMenu} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🏠 Main menu</button>
           <button onClick={()=>setShowHelp(h=>!h)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>?</button>
           <button onClick={()=>setShowSaveModal(true)} style={{background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>💾 Save</button>
@@ -2371,7 +2809,6 @@ if(phase==="teamSetup") return(
         <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
           <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
           <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
-          <input type="range" min="0" max="100" value={Math.round(volume*100)} onChange={(e)=>setVolume(Number(e.target.value)/100)} style={{width:80,accentColor:"#60a5fa"}} title="Volume" />
         </div>
         {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:14,maxWidth:800,marginLeft:"auto",marginRight:"auto"}}>
           <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
@@ -2391,24 +2828,58 @@ if(phase==="teamSetup") return(
             <div style={{fontSize:22,fontWeight:900,color:mySeed<=6?"#22c55e":playoff?"#f59e0b":"#ef4444",letterSpacing:2}}>
               {mySeed<=6?`PLAYOFFS BOUND — SEED #${mySeed}`:playoff?`PLAY-IN TOURNAMENT — SEED #${mySeed}`:"MISSED THE PLAYOFFS"}
             </div>
-            <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>Final Record: {season.w}–{season.l} · PPG {ppg} · OPP {papg}</div>
+            <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>Final Record: {userW}–{userL} · PPG {ppg} · OPP {papg}</div>
             {(careerStats.seasonsPlayed > 0 || careerStats.championships > 0) && (
               <div style={{fontSize:10,color:"#a78bfa",marginTop:6,fontWeight:700}}>
                 Career: {careerStats.totalWins}–{careerStats.totalLosses} · {careerStats.championships} 🏆 · {careerStats.finalsAppearances} Finals · {careerStats.playoffAppearances} playoffs
               </div>
             )}
           </div>
+          {mvp && (
+            <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #fbbf24",textAlign:"center"}}>
+              <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:2,marginBottom:4}}>🏅 TEAM MVP — {myTeamName}</div>
+              <div style={{fontSize:18,fontWeight:900}}>{mvp.name}</div>
+              <div style={{fontSize:11,color:"#9ca3af",marginTop:2}}>{mvp.pos || "—"} · {fmt0(mvp.gp)} GP</div>
+              <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{fmt1(mvp.ppg)} PPG · {fmt1(mvp.apg)} APG · {fmt1(mvp.rpg)} RPG</div>
+            </div>
+          )}
           <div style={{marginBottom:14}}>
-            <StandingsTable aiTeams={finalAi} myRecord={myRecord} myName={myTeamName} highlight/>
+            <StandingsTable aiTeams={finalAi} myRecord={{ w: userRecord.w, l: userRecord.l, eff: userRecord.eff }} myName={myTeamName} highlight/>
           </div>
+          {allStarSelections && (allStarSelections.east?.starters?.length > 0 || allStarSelections.west?.starters?.length > 0 || (allStarSelections.east?.reserves?.length || 0) + (allStarSelections.west?.reserves?.length || 0) > 0) && (() => {
+            const isMyPlayer = (p) => p?.team === myTeamName;
+            const rowStyle = (p) => ({ fontSize: 11, color: isMyPlayer(p) ? "#22c55e" : "#e2e8f0", fontWeight: isMyPlayer(p) ? 700 : 400, background: isMyPlayer(p) ? "rgba(34,197,94,0.2)" : "transparent", padding: isMyPlayer(p) ? "2px 6px" : 0, borderRadius: 4 });
+            const reserveRowStyle = (p) => ({ fontSize: 11, color: isMyPlayer(p) ? "#22c55e" : "#94a3b8", fontWeight: isMyPlayer(p) ? 700 : 400, background: isMyPlayer(p) ? "rgba(34,197,94,0.2)" : "transparent", padding: isMyPlayer(p) ? "2px 6px" : 0, borderRadius: 4 });
+            return (
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:12,color:"#fbbf24",fontWeight:800,letterSpacing:2,marginBottom:8}}>⭐ ALL-STAR (First 50 games)</div>
+              <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12}}>
+                <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"2px solid #3b82f6"}}>
+                  <div style={{fontSize:12,fontWeight:800,color:"#60a5fa",marginBottom:8}}>EAST</div>
+                  {allStarSelections.east?.starters?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
+                  {(allStarSelections.east?.starters || []).map((p,i)=>(<div key={i} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} {p.allStarRole==="Starter"?"★":""}</div>))}
+                  {allStarSelections.east?.reserves?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:8,marginBottom:4}}>Reserves</div>}
+                  {(allStarSelections.east?.reserves || []).map((p,i)=>(<div key={i} style={reserveRowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team}</div>))}
+                </div>
+                <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"2px solid #ef4444"}}>
+                  <div style={{fontSize:12,fontWeight:800,color:"#f87171",marginBottom:8}}>WEST</div>
+                  {allStarSelections.west?.starters?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
+                  {(allStarSelections.west?.starters || []).map((p,i)=>(<div key={i} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} {p.allStarRole==="Starter"?"★":""}</div>))}
+                  {allStarSelections.west?.reserves?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:8,marginBottom:4}}>Reserves</div>}
+                  {(allStarSelections.west?.reserves || []).map((p,i)=>(<div key={i} style={reserveRowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team}</div>))}
+                </div>
+              </div>
+            </div>
+            );
+          })()}
           {(() => {
             const teamRecords = {};
             finalAi.forEach((t) => { teamRecords[t.name] = { w: t.w, l: t.l }; });
-            teamRecords[myTeamName] = myRecord;
+            teamRecords[myTeamName] = { w: userRecord.w, l: userRecord.l };
             return (
               <div style={{marginBottom:14}}>
                 <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"4px 0"}}>Loading awards…</div>}>
-                  <AllNBAAllDefensiveLazy leaders={leagueLeaders} teamRecords={teamRecords} myTeamName={myTeamName}/>
+                  <AllNBAAllDefensiveLazy leaders={leagueLeaders} teamRecords={teamRecords} myTeamName={myTeamName} dpoyVotes={dpoyVotes} mvpVotes={mvpVotes}/>
                 </Suspense>
               </div>
             );
@@ -2440,19 +2911,29 @@ if(phase==="teamSetup") return(
             </div>
           )}
           {(() => {
-            const rosterNames = new Set(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.name).concat(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.fullName).filter(Boolean)));
-            const myTeamAwards = Object.entries(playerAwards || {}).filter(([name]) => rosterNames.has(name)).filter(([, list]) => list && list.length > 0);
+            const myTeamAwards = getMyTeamAwardsByPlayer(roster, playerAwards);
             if (myTeamAwards.length === 0) return null;
             return (
               <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #475569"}}>
                 <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>🏅 YOUR TEAM'S AWARDS</div>
-                <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                  {myTeamAwards.map(([name, list]) => (
-                    <div key={name} style={{fontSize:10,display:"flex",flexWrap:"wrap",gap:4,alignItems:"baseline"}}>
-                      <span style={{fontWeight:700,color:"#e2e8f0",minWidth:120}}>{name}</span>
-                      <span style={{color:"#94a3b8"}}>{(list || []).map(({ season, award }) => `${award} (S${season})`).join(", ")}</span>
-                    </div>
-                  ))}
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {myTeamAwards.map(({ displayName, list }) => {
+                    const listWithoutTmvp = (list || []).filter((e) => e.award !== "TMVP");
+                    const grouped = groupAwardsByType(listWithoutTmvp);
+                    if (grouped.length === 0) return null;
+                    return (
+                      <div key={displayName} style={{fontSize:11}}>
+                        <div style={{fontWeight:700,color:"#e2e8f0",marginBottom:4}}>{displayName}</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
+                          {grouped.map(({ label, seasons }) => (
+                            <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
+                              {label} ({seasons.map((s) => `S${s}`).join(", ")})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -2478,18 +2959,6 @@ if(phase==="teamSetup") return(
               <TeamHighs teamSeasonHighs={teamSeasonHighs} careerTeamHighs={careerTeamHighs} teamPlayoffHighs={teamPlayoffHighs} roster={roster} title="📈 TEAM HIGHS" showPlayoff={false}/>
             </div>
           </div>
-          {mvp&&(
-            <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #fbbf24",textAlign:"center"}}>
-              <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:2,marginBottom:4}}>
-                🏅 TEAM MVP — {myTeamName}
-              </div>
-              <div style={{fontSize:18,fontWeight:900}}>{mvp.name}</div>
-              <div style={{fontSize:11,color:"#9ca3af",marginTop:2}}>
-                {mvp.pos || "—"} · {fmt0(mvp.gp)} GP
-              </div>
-              <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{fmt1(mvp.ppg)} PPG · {fmt1(mvp.apg)} APG · {fmt1(mvp.rpg)} RPG</div>
-            </div>
-          )}
           <div style={{marginBottom:14}}>
             <SeasonHighs highs={seasonHighs} careerHighs={careerLeagueHighs} myTeamName={myTeamName} title="📈 SEASON HIGHS (SINGLE GAME)" seasonNumber={seasonNumber}/>
           </div>
@@ -2498,6 +2967,57 @@ if(phase==="teamSetup") return(
               {playIn?"🎟 START PLAY-IN":"🏆 START PLAYOFFS"}
             </button>}
             {!playoff&&<button onClick={runItBack} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding:"12px 28px",fontSize:14,fontWeight:800,cursor:"pointer"}} title="Same roster, new AI opponents">🔄 Run it back</button>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "allStarBreak" && inSeason) {
+    const resumeSeason = () => { setPhase("game"); setGameNum(ALL_STAR_GAME_AT + 1); setResult(null); };
+    const east = allStarSelections?.east;
+    const west = allStarSelections?.west;
+    const hasSelections = east?.starters?.length > 0 || west?.starters?.length > 0 || (east?.reserves?.length || 0) + (west?.reserves?.length || 0) > 0;
+    const isMyPlayer = (p) => p?.team === myTeamName;
+    const rowStyle = (p) => ({ fontSize: 11, color: isMyPlayer(p) ? "#22c55e" : "#e2e8f0", fontWeight: isMyPlayer(p) ? 700 : 400, background: isMyPlayer(p) ? "rgba(34,197,94,0.2)" : "transparent", padding: isMyPlayer(p) ? "2px 6px" : 0, borderRadius: 4 });
+    const reserveRowStyle = (p) => ({ fontSize: 11, color: isMyPlayer(p) ? "#22c55e" : "#94a3b8", fontWeight: isMyPlayer(p) ? 700 : 400, background: isMyPlayer(p) ? "rgba(34,197,94,0.2)" : "transparent", padding: isMyPlayer(p) ? "2px 6px" : 0, borderRadius: 4 });
+    const simThroughActive = simThroughBreakRequestedRef.current;
+    return (
+      <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
+        <div style={{maxWidth:900,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:20}}>
+            <div style={{fontSize:28,fontWeight:900,color:"#fbbf24",letterSpacing:2}}>⭐ ALL-STAR BREAK (Game {ALL_STAR_GAME_AT})</div>
+            <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>Season {seasonNumber} · Selections from first {ALL_STAR_GAME_AT} games</div>
+            {simThroughActive && <div style={{fontSize:12,color:"#fbbf24",marginTop:8,fontWeight:700}}>Resuming season in 2 seconds…</div>}
+          </div>
+          <div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",padding:20,marginBottom:24,boxShadow:"0 8px 24px rgba(0,0,0,0.3)"}}>
+            <div style={{fontSize:12,color:"#fbbf24",fontWeight:800,letterSpacing:2,marginBottom:16}}>⭐ ALL-STAR SELECTIONS</div>
+            {!hasSelections ? (
+              <div style={{textAlign:"center",padding:24}}>
+                <div style={{fontSize:14,color:"#94a3b8"}}>Calculating All-Star selections…</div>
+                <div style={{marginTop:8,fontSize:11,color:"#64748b"}}>If this doesn’t update, click Resume season to continue.</div>
+              </div>
+            ) : (
+            <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:16}}>
+              <div style={{background:"#1e293b",borderRadius:12,padding:14,border:"2px solid #3b82f6"}}>
+                <div style={{fontSize:14,fontWeight:800,color:"#60a5fa",marginBottom:10}}>EAST</div>
+                {east?.starters?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
+                {(east?.starters || []).map((p,i)=>(<div key={i} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} {p.allStarRole==="Starter"?"★":""}</div>))}
+                {east?.reserves?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:8,marginBottom:4}}>Reserves</div>}
+                {(east?.reserves || []).map((p,i)=>(<div key={i} style={reserveRowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team}</div>))}
+              </div>
+              <div style={{background:"#1e293b",borderRadius:12,padding:14,border:"2px solid #ef4444"}}>
+                <div style={{fontSize:14,fontWeight:800,color:"#f87171",marginBottom:10}}>WEST</div>
+                {west?.starters?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
+                {(west?.starters || []).map((p,i)=>(<div key={i} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} {p.allStarRole==="Starter"?"★":""}</div>))}
+                {west?.reserves?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:8,marginBottom:4}}>Reserves</div>}
+                {(west?.reserves || []).map((p,i)=>(<div key={i} style={reserveRowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team}</div>))}
+              </div>
+            </div>
+            )}
+          </div>
+          <div style={{textAlign:"center"}}>
+            <button onClick={resumeSeason} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding:"12px 28px",fontSize:14,fontWeight:800,cursor:"pointer"}}>▶ Resume season (Game {ALL_STAR_GAME_AT + 1})</button>
           </div>
         </div>
       </div>
@@ -2540,7 +3060,6 @@ if(phase==="teamSetup") return(
         <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
           <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
           <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
-          <input type="range" min="0" max="100" value={Math.round(volume*100)} onChange={(e)=>setVolume(Number(e.target.value)/100)} style={{width:80,accentColor:"#60a5fa"}} title="Volume" />
         </div>
         <div style={{maxWidth:1040,margin:"0 auto"}}>
           <div style={{background:"#0f172a",borderRadius:10,padding:"10px 14px",marginBottom:10,border:"1px solid #1e293b",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -2565,8 +3084,11 @@ if(phase==="teamSetup") return(
   const emoji=last?"🔥":"❄️";
   return <div style={{fontSize:10,fontWeight:800,color:last?"#f59e0b":"#60a5fa"}}>{emoji}{streak}</div>;
 })()}
+            <div style={{fontSize:9,fontWeight:700,color:"#64748b",padding:"3px 8px",borderRadius:999,background:"#1e293b",border:"1px solid #334155",textTransform:"uppercase",letterSpacing:0.5}} title="Difficulty: Casual = you're favored · Standard = even · Hardcore = CPU favored">{difficulty === "casual" ? "Casual" : difficulty === "hardcore" ? "Hardcore" : "Standard"}</div>
             <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
             <button onClick={()=>setShowLeaders(s=>!s)} style={{background:"#1e293b",color:"#f97316",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showLeaders?"Hide":"Show"} Leaders</button>
+            {gameNum <= ALL_STAR_GAME_AT && <button onClick={()=>setShowAllStarTab(a=>!a)} style={{background:showAllStarTab?"#78350f":"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showAllStarTab?"Hide":"Show"} All-Star</button>}
+            <button onClick={()=>setShowMvpDpoyTab(a=>!a)} style={{background:showMvpDpoyTab?"#431407":"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showMvpDpoyTab?"Hide":"Show"} MVP/DPOY</button>
             <button onClick={goToMainMenu} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🏠 Main menu</button>
             <button onClick={()=>setShowSaveModal(true)} style={{background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Save to a slot">💾 Save</button>
             <button onClick={()=>setShowLoadModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>📂 Load</button>
@@ -2610,67 +3132,22 @@ if(phase==="teamSetup") return(
             <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
             <div>Adjacent ×0.82 · Wrong ×0.65</div>
           </div>}
-          {opp && oppTopPlayer && (
-            <div style={{background:"#020617",borderRadius:10,padding:10,border:"1px solid #1e293b",fontSize:11,color:"#9ca3af",marginBottom:10}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <div style={{minWidth:0}}>
-                  <div style={{fontSize:9,color:"#475569",fontWeight:700,letterSpacing:1,marginBottom:2}}>SCOUTING REPORT</div>
-                  <div style={{fontSize:11,color:"#e5e7eb",fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                    {oppTopPlayer.name} · {rf(oppTopPlayer.pts,1)} PTS · {rf(oppTopPlayer.reb,1)} REB · {rf(oppTopPlayer.ast,1)} AST
-                  </div>
+          {showAllStarSimThroughConfirm && (
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowAllStarSimThroughConfirm(false)}>
+              <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%"}} onClick={e=>e.stopPropagation()}>
+                <div style={{fontSize:14,fontWeight:800,marginBottom:8,color:"#fbbf24"}}>Sim through All-Star break?</div>
+                <p style={{fontSize:11,color:"#94a3b8",marginBottom:14}}>All-Star selections will be calculated from the first {ALL_STAR_GAME_AT} games and shown in season awards. The rest of the season will sim automatically.</p>
+                <div style={{display:"flex",gap:8,flexDirection:"column"}}>
+                  <button type="button" onClick={()=>{ setShowAllStarSimThroughConfirm(false); simThroughBreakRequestedRef.current = true; runSimGames(ALL_STAR_GAME_AT - gameNum + 1); }} style={{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"white",border:"none",borderRadius:8,padding:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>Yes — sim through break</button>
+                  <button type="button" onClick={()=>{ setShowAllStarSimThroughConfirm(false); runSimGames(ALL_STAR_GAME_AT - gameNum + 1); }} style={{width:"100%",background:"#1e293b",color:"#e2e8f0",border:"1px solid #334155",borderRadius:8,padding:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>No — sim to All-Star only</button>
+                  <button type="button" onClick={()=>setShowAllStarSimThroughConfirm(false)} style={{width:"100%",background:"#334155",color:"#94a3b8",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
                 </div>
-                {oppScoutingLabel && (
-                  <div style={{fontSize:10,color:"#facc15",fontWeight:700,whiteSpace:"nowrap"}}>
-                    {oppScoutingLabel}
-                  </div>
-                )}
               </div>
             </div>
           )}
-          {showStandings&&(
-            <div style={{marginBottom:10}}>
-              <StandingsTable
-                aiTeams={aiTeams}
-                myRecord={myRecord}
-                myName={myTeamName}
-                highlight
-              />
-            </div>
-          )}
-          {showLeaders&&(
-            <div style={{marginBottom:10}}>
-              <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"4px 0"}}>Loading leaders…</div>}>
-                <LeagueLeadersLazy leaders={leagueLeaders} myTeamName={myTeamName}/>
-              </Suspense>
-            </div>
-          )}
-          <div style={{marginBottom:10}}>
-            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false} isMobile={isMobile} seasonNumber={seasonNumber}/>
-            <div style={{marginTop:8}}>
-              <TeamHighs teamSeasonHighs={teamSeasonHighs} careerTeamHighs={careerTeamHighs} teamPlayoffHighs={{}} roster={roster} title="📈 TEAM HIGHS" showPlayoff={false}/>
-            </div>
-            {(() => {
-              const rosterNames = new Set(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.name).concat(POSITIONS.map((pos) => roster[pos]).filter(Boolean).map((p) => p.fullName).filter(Boolean)));
-              const myTeamAwards = Object.entries(playerAwards || {}).filter(([name]) => rosterNames.has(name)).filter(([, list]) => list && list.length > 0);
-              if (myTeamAwards.length === 0) return null;
-              return (
-                <div style={{marginTop:8,background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #475569"}}>
-                  <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:6}}>🏅 YOUR TEAM'S AWARDS</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                    {myTeamAwards.map(([name, list]) => (
-                      <div key={name} style={{fontSize:10,display:"flex",flexWrap:"wrap",gap:4,alignItems:"baseline"}}>
-                        <span style={{fontWeight:700,color:"#e2e8f0",minWidth:100}}>{name}</span>
-                        <span style={{color:"#94a3b8"}}>{(list || []).map(({ season, award }) => `${award} (S${season})`).join(", ")}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-          <SeasonHighs highs={seasonHighs} careerHighs={careerLeagueHighs} myTeamName={myTeamName} title="📈 SEASON HIGHS (SINGLE GAME)" seasonNumber={seasonNumber}/>
+          {/* Game card at top: play/sim or result */}
           {!result?(
-            <div style={{background:"#0f172a",borderRadius:16,padding:24,border:"1px solid #1e293b",textAlign:"center",marginBottom:10}}>
+            <div style={{background:"#0f172a",borderRadius:16,padding:24,border:"1px solid #1e293b",textAlign:"center",marginBottom:16,boxShadow:"0 4px 20px rgba(0,0,0,0.25)"}}>
               <div style={{fontSize:13,color:"#64748b",marginBottom:14,fontWeight:700,letterSpacing:1}}>GAME {gameNum} vs {opp?.name}</div>
               <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:32,marginBottom:18}}>
                 <div style={{textAlign:"center"}}><div style={{fontSize:12,color:"#60a5fa",fontWeight:800,marginBottom:4}}>{myTeamName}</div><div style={{fontSize:30,fontWeight:900,color:"#60a5fa"}}>{rf(teamEff(myLineup,teamRoster),0)}</div><div style={{fontSize:10,color:"#475569"}}>RTG</div></div>
@@ -2722,15 +3199,20 @@ if(phase==="teamSetup") return(
                     >
                       ⏩ SIM 10 GAMES
                     </button>
+                    {gameNum <= ALL_STAR_GAME_AT && (
+                      <button
+                        onClick={()=>runSimGames(ALL_STAR_GAME_AT - gameNum + 1)}
+                        disabled={isSimulating}
+                        style={{background:isSimulating?"#374151":"#475569",color:"white",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:isSimulating?"wait":"pointer",opacity:isSimulating?0.8:1}}
+                      >
+                        ⭐ SIM TO ALL-STAR (G{ALL_STAR_GAME_AT})
+                      </button>
+                    )}
                     <button
-                      onClick={()=>runSimGames(41)}
-                      disabled={isSimulating}
-                      style={{background:isSimulating?"#374151":"#475569",color:"white",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:isSimulating?"wait":"pointer",opacity:isSimulating?0.8:1}}
-                    >
-                      ⏩ SIM 41 GAMES
-                    </button>
-                    <button
-                      onClick={()=>runSimGames(SEASON_LENGTH - gameNum + 1)}
+                      onClick={() => {
+                        if (gameNum <= ALL_STAR_GAME_AT) setShowAllStarSimThroughConfirm(true);
+                        else runSimGames(SEASON_LENGTH - gameNum + 1);
+                      }}
                       disabled={isSimulating}
                       style={{background:isSimulating?"#374151":"#334155",color:"#94a3b8",border:"none",borderRadius:10,padding:"11px 20px",fontSize:12,fontWeight:800,cursor:isSimulating?"wait":"pointer",opacity:isSimulating?0.8:1}}
                     >
@@ -2742,7 +3224,7 @@ if(phase==="teamSetup") return(
             </div>
           ):(
             <>
-              <div style={{textAlign:"center",padding:"12px",background:"#0f172a",borderRadius:14,border:`2px solid ${won?"#22c55e":"#ef4444"}`,marginBottom:10}}>
+              <div style={{textAlign:"center",padding:"12px",background:"#0f172a",borderRadius:14,border:`2px solid ${won?"#22c55e":"#ef4444"}`,marginBottom:16,boxShadow:"0 4px 20px rgba(0,0,0,0.25)"}}>
                 <div style={{fontSize:24}}>{won?"🏆":"💀"}</div>
                 <div style={{fontSize:20,fontWeight:900,color:won?"#22c55e":"#ef4444",letterSpacing:2}}>{won?"VICTORY":"DEFEAT"}{result.ot>0?` (${result.ot}OT)`:""}</div>
                 <div style={{display:"flex",justifyContent:"center",gap:20,marginTop:6}}>
@@ -2767,7 +3249,7 @@ if(phase==="teamSetup") return(
               </div>
               <BoxScore stats={result.myStats} acc="#60a5fa" label={myTeamName}/>
               <BoxScore stats={result.oppStats} acc="#f87171" label={opp?.name||"Opponent"}/>
-              <div style={{display:"flex",gap:8,justifyContent:"center",paddingBottom:16}}>
+              <div style={{display:"flex",gap:8,justifyContent:"center",paddingBottom:16,marginBottom:16}}>
                 {gameNum<SEASON_LENGTH
                   ?<button onClick={nextGame} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding:"11px 28px",fontSize:13,fontWeight:800,cursor:"pointer"}}>▶ NEXT GAME ({gameNum+1}/{SEASON_LENGTH})</button>
                   :<button onClick={()=>setPhase("seasonEnd")} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"white",border:"none",borderRadius:10,padding:"11px 28px",fontSize:13,fontWeight:800,cursor:"pointer"}}>🏆 VIEW SEASON RESULTS</button>
@@ -2775,6 +3257,147 @@ if(phase==="teamSetup") return(
               </div>
             </>
           )}
+          <div style={{marginTop:20,paddingTop:16,borderTop:"1px solid #1e293b"}}>
+            <div style={{fontSize:10,color:"#64748b",fontWeight:800,letterSpacing:1,marginBottom:10}}>TEAM & LEAGUE</div>
+          {opp && oppTopPlayer && (
+            <div style={{background:"#020617",borderRadius:10,padding:10,border:"1px solid #1e293b",fontSize:11,color:"#9ca3af",marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:9,color:"#475569",fontWeight:700,letterSpacing:1,marginBottom:2}}>SCOUTING REPORT</div>
+                  <div style={{fontSize:11,color:"#e5e7eb",fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                    {oppTopPlayer.name} · {rf(oppTopPlayer.pts,1)} PTS · {rf(oppTopPlayer.reb,1)} REB · {rf(oppTopPlayer.ast,1)} AST
+                  </div>
+                </div>
+                {oppScoutingLabel && (
+                  <div style={{fontSize:10,color:"#facc15",fontWeight:700,whiteSpace:"nowrap"}}>
+                    {oppScoutingLabel}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {showAllStarTab && gameNum <= ALL_STAR_GAME_AT && (() => {
+            const leaderEntries = Object.values(leagueLeaders || {}).filter((r) => r && (r.gp || 0) > 0);
+            if (leaderEntries.length === 0) return <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Play games to see All-Star race.</div>;
+            const teamWinPct = {};
+            const gp = result ? gameNum : gameNum - 1;
+            if (gp > 0 && season?.gp) teamWinPct[myTeamName] = (season.w || 0) / gp;
+            (aiTeams || []).forEach((t) => {
+              const gl = (t.gameLog || []).slice(0, gp);
+              const w = gl.filter((x) => x === 1).length;
+              const l = gl.filter((x) => x === 0).length;
+              const g = w + l || 1;
+              teamWinPct[t.name] = w / g;
+            });
+            const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
+            const conferenceTeams = { East: [], West: [] };
+            conferenceTeams[userMeta.conference].push(myTeamName);
+            (aiTeams || []).forEach((t) => { if (t.conference && conferenceTeams[t.conference]) conferenceTeams[t.conference].push(t.name); });
+            buildAllStarSelections(leaderEntries, gamePogs.slice(0, gp), teamWinPct, conferenceTeams, allStarVotes);
+            const getVotes = (p) => (p._allStarVotes ?? allStarVotes[`${p.name}|${p.team}`]) ?? 0;
+            const top12ByVotes = (confKey) => leaderEntries
+              .filter((r) => (conferenceTeams[confKey] || []).includes(r.team))
+              .sort((a, b) => (b._allStarVotes ?? 0) - (a._allStarVotes ?? 0))
+              .slice(0, 12);
+            const topEast = top12ByVotes("East");
+            const topWest = top12ByVotes("West");
+            const isMyPlayer = (p) => p?.team === myTeamName;
+            const raceRowStyle = (p) => ({ color: isMyPlayer(p) ? "#22c55e" : "#e2e8f0", fontWeight: isMyPlayer(p) ? 700 : 400, background: isMyPlayer(p) ? "rgba(34,197,94,0.2)" : "transparent", padding: isMyPlayer(p) ? "2px 4px" : 0, borderRadius: 4 });
+            return (
+              <div style={{marginBottom:10,background:"#0f172a",borderRadius:10,padding:12,border:"1px solid #334155"}}>
+                <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:4}}>⭐ ALL-STAR RACE (through Game {gp})</div>
+                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>Order = votes. Votes = per game: pts + 0.5·reb + 0.5·ast, +5 POG, +2 win.</div>
+                <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,fontSize:10}}>
+                  <div>
+                    <div style={{color:"#60a5fa",fontWeight:700,marginBottom:4}}>East</div>
+                    {topEast.map((p,i)=>(<div key={i} style={raceRowStyle(p)}>{i+1}. {p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos || "—"})</span> · {p.team} <span style={{color:"#94a3b8",fontWeight:500}}>({Math.round(getVotes(p))} votes)</span></div>))}
+                  </div>
+                  <div>
+                    <div style={{color:"#f87171",fontWeight:700,marginBottom:4}}>West</div>
+                    {topWest.map((p,i)=>(<div key={i} style={raceRowStyle(p)}>{i+1}. {p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos || "—"})</span> · {p.team} <span style={{color:"#94a3b8",fontWeight:500}}>({Math.round(getVotes(p))} votes)</span></div>))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          {showMvpDpoyTab && inSeason && (() => {
+            const leaderEntries = Object.values(leagueLeaders || {}).filter((r) => r && (r.gp || 0) > 0);
+            if (leaderEntries.length === 0) return <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Play games to see MVP/DPOY race.</div>;
+            const gp = result ? gameNum : gameNum - 1;
+            const getMvpV = (p) => (mvpVotes || {})[`${p.name}|${p.team}`] ?? 0;
+            const getDpoyV = (p) => (dpoyVotes || {})[`${p.name}|${p.team}`] ?? 0;
+            const topMvp = [...leaderEntries].sort((a, b) => getMvpV(b) - getMvpV(a)).slice(0, 5);
+            const topDpoy = [...leaderEntries].sort((a, b) => getDpoyV(b) - getDpoyV(a)).slice(0, 5);
+            const isMyPlayer = (p) => p?.team === myTeamName;
+            const rowStyle = (p) => ({ color: isMyPlayer(p) ? "#22c55e" : "#e2e8f0", fontWeight: isMyPlayer(p) ? 700 : 400, background: isMyPlayer(p) ? "rgba(34,197,94,0.2)" : "transparent", padding: isMyPlayer(p) ? "2px 4px" : 0, borderRadius: 4 });
+            return (
+              <div style={{marginBottom:10,background:"#0f172a",borderRadius:10,padding:12,border:"1px solid #334155"}}>
+                <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:6}}>🏅 MVP & DPOY RACE (through Game {gp})</div>
+                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>MVP: standings-driven (stats + 35 per win, +6 POG). DPOY: steals + blocks (stl×2.5 + blk×2.5 + 0.15·reb, +1 POG, +6 per win).</div>
+                <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,fontSize:10}}>
+                  <div>
+                    <div style={{color:"#fbbf24",fontWeight:700,marginBottom:4}}>MVP</div>
+                    {topMvp.map((p,i)=>(<div key={`mvp-${i}`} style={rowStyle(p)}>{i+1}. {p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos || "—"})</span> · {p.team} <span style={{color:"#94a3b8",fontWeight:500}}>({Math.round(getMvpV(p))} votes)</span></div>))}
+                  </div>
+                  <div>
+                    <div style={{color:"#22c55e",fontWeight:700,marginBottom:4}}>DPOY</div>
+                    {topDpoy.map((p,i)=>(<div key={`dpoy-${i}`} style={rowStyle(p)}>{i+1}. {p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos || "—"})</span> · {p.team} <span style={{color:"#94a3b8",fontWeight:500}}>({Math.round(getDpoyV(p))} votes)</span></div>))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          {showStandings&&(
+            <div style={{marginBottom:10}}>
+              <StandingsTable
+                aiTeams={aiTeams}
+                myRecord={myRecord}
+                myName={myTeamName}
+                highlight
+              />
+            </div>
+          )}
+          {showLeaders&&(
+            <div style={{marginBottom:10}}>
+              <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"4px 0"}}>Loading leaders…</div>}>
+                <LeagueLeadersLazy leaders={leagueLeaders} myTeamName={myTeamName}/>
+              </Suspense>
+            </div>
+          )}
+          <div style={{marginBottom:10}}>
+            <TeamStatsPanel teamName={myTeamName} playerSeasonRows={playerSeasonRows} playerPlayoffRows={playerPlayoffRows} perMode={teamStatsPerMode} onPerModeChange={setTeamStatsPerMode} showPlayoff={false} isMobile={isMobile} seasonNumber={seasonNumber}/>
+            <div style={{marginTop:8}}>
+              <TeamHighs teamSeasonHighs={teamSeasonHighs} careerTeamHighs={careerTeamHighs} teamPlayoffHighs={{}} roster={roster} title="📈 TEAM HIGHS" showPlayoff={false}/>
+            </div>
+            {(() => {
+              const myTeamAwards = getMyTeamAwardsByPlayer(roster, playerAwards);
+              if (myTeamAwards.length === 0) return null;
+              return (
+                <div style={{marginTop:8,background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #475569"}}>
+                  <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>🏅 YOUR TEAM'S AWARDS</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {myTeamAwards.map(({ displayName, list }) => {
+                      const grouped = groupAwardsByType(list);
+                      return (
+                        <div key={displayName} style={{fontSize:11}}>
+                          <div style={{fontWeight:700,color:"#e2e8f0",marginBottom:4}}>{displayName}</div>
+                          <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
+                            {grouped.map(({ label, seasons }) => (
+                              <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
+                                {label} ({seasons.map((s) => `S${s}`).join(", ")})
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+          <SeasonHighs highs={seasonHighs} careerHighs={careerLeagueHighs} myTeamName={myTeamName} title="📈 SEASON HIGHS (SINGLE GAME)" seasonNumber={seasonNumber}/>
+          </div>
         </div>
       </div>
       </>
@@ -2852,7 +3475,6 @@ if(phase==="teamSetup") return(
       <div style={{ position: "fixed", bottom: 16, left: 16, zIndex: 50, display: "flex", alignItems: "center", gap: 6, background: "#0f172a", border: "1px solid #334155", borderRadius: 12, padding: "8px 12px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}>
         <button onClick={() => setSoundOn((s) => !s)} style={{ background: soundOn ? "#14532d" : "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 10px", fontSize: 14, fontWeight: 700, color: soundOn ? "#22c55e" : "#9ca3af", cursor: "pointer" }}>{soundOn ? "🔊" : "🔈"}</button>
         <button onClick={skipSong} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 10px", fontSize: 12, fontWeight: 700, color: "#e2e8f0", cursor: "pointer" }} title="Skip song">⏭ Skip</button>
-        <input type="range" min="0" max="100" value={Math.round(volume * 100)} onChange={(e) => setVolume(Number(e.target.value) / 100)} style={{ width: 80, accentColor: "#60a5fa" }} title="Volume" />
       </div>
 
       <Analytics />
@@ -3982,7 +4604,7 @@ if(phase==="teamSetup") return(
                     )}
                     {((playerAwards[p.name] || playerAwards[p.fullName] || []).length > 0) && (
                       <div style={{ marginTop: 3, fontSize: 8, color: "#eab308", textAlign: "center", fontWeight: 700 }}>
-                        {(playerAwards[p.name] || playerAwards[p.fullName] || []).map(({ season, award }) => `${award} (S${season})`).join(", ")}
+                        {(playerAwards[p.name] || playerAwards[p.fullName] || []).map(({ season, award }) => `${AWARD_LABELS[award] || award} (S${season})`).join(", ")}
                       </div>
                     )}
                     <div
