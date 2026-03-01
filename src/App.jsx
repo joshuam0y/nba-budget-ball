@@ -2660,10 +2660,10 @@ if(phase==="teamSetup") return(
           placeholder="e.g. Hardwood Kings..."
           style={{width:"100%",background:"#080f1e",border:"1px solid #334155",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#e2e8f0",outline:"none",boxSizing:"border-box",marginBottom:12,textAlign:"center"}}
         />
-        <div style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1,marginBottom:6}}>LEAGUE</div>
+        <div style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1,marginBottom:6}}>LEAGUE NAME</div>
         <input
-          value={leagueName||"NBA"}
-          onChange={e=>setLeagueName((e.target.value||"").trim()||"NBA")}
+          value={leagueName}
+          onChange={e=>setLeagueName(e.target.value)}
           placeholder="NBA"
           maxLength={24}
           style={{width:"100%",background:"#080f1e",border:"1px solid #334155",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#94a3b8",outline:"none",boxSizing:"border-box",marginBottom:16,textAlign:"center"}}
@@ -4693,6 +4693,7 @@ if(phase==="teamSetup") return(
                 const p = roster[pos];
                 const m = p ? posMult(p, pos) : 1;
                 const tier = p ? getTier(p.cost) : null;
+                const arch = p ? getArchetype(p) : null;
                 const isActive = slotSel === pos;
                 return (
                   <div
@@ -4770,6 +4771,13 @@ if(phase==="teamSetup") return(
                               color={tier.color}
                               bg={tier.bg}
                             />
+                            {arch && (
+                              <Tag
+                                label={arch.label}
+                                color={arch.color}
+                                bg="#1e293b"
+                              />
+                            )}
                             {m < 1 && (
                               <Tag
                                 label={`OOP ×${m}`}
