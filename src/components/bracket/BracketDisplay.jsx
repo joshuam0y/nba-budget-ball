@@ -1,7 +1,7 @@
 import { MatchupCard } from "./MatchupCard";
 import { ConfBracketSection } from "./ConfBracketSection";
 
-export function BracketDisplay({ bracket, onSelectMatch, onPlayMatch, activeMatchId, nextPlayerMatchId, isMobile, density }) {
+export function BracketDisplay({ bracket, onSelectMatch, onPlayMatch, onSimSeries, activeMatchId, nextPlayerMatchId, isMobile, density }) {
   const champion = bracket.champion;
   const hasConferences = bracket.east && bracket.west;
   const pad = isMobile ? 12 : 20;
@@ -27,17 +27,17 @@ export function BracketDisplay({ bracket, onSelectMatch, onPlayMatch, activeMatc
         <>
           <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 20 : 28, marginBottom: isMobile ? 16 : 24 }}>
             <div style={{ minWidth: 0 }}>
-              <ConfBracketSection sub={bracket.east} confLabel="EAST" prefix="east-" onSelectMatch={onSelectMatch} onPlayMatch={onPlayMatch} activeMatchId={activeMatchId} nextPlayerMatchId={nextPlayerMatchId} isMobile={isMobile} density={density} />
+              <ConfBracketSection sub={bracket.east} confLabel="EAST" prefix="east-" onSelectMatch={onSelectMatch} onPlayMatch={onPlayMatch} onSimSeries={onSimSeries} activeMatchId={activeMatchId} nextPlayerMatchId={nextPlayerMatchId} isMobile={isMobile} density={density} />
             </div>
             <div style={{ minWidth: 0 }}>
-              <ConfBracketSection sub={bracket.west} confLabel="WEST" prefix="west-" onSelectMatch={onSelectMatch} onPlayMatch={onPlayMatch} activeMatchId={activeMatchId} nextPlayerMatchId={nextPlayerMatchId} isMobile={isMobile} density={density} />
+              <ConfBracketSection sub={bracket.west} confLabel="WEST" prefix="west-" onSelectMatch={onSelectMatch} onPlayMatch={onPlayMatch} onSimSeries={onSimSeries} activeMatchId={activeMatchId} nextPlayerMatchId={nextPlayerMatchId} isMobile={isMobile} density={density} />
             </div>
           </div>
           {bracket.finals && (bracket.finals.top || bracket.finals.bot) && (
             <div id="finals-section" style={{ marginTop: isMobile ? 16 : 24, padding: isMobile ? 14 : 20, background: "linear-gradient(135deg,#1c1917 0%,#0f172a 50%)", borderRadius: 16, border: "2px solid #f59e0b", boxShadow: "0 0 20px rgba(245,158,11,0.15)" }}>
               <div style={{ fontSize: 11, color: "#fbbf24", fontWeight: 800, letterSpacing: 2, marginBottom: 10, textAlign: "center" }}>🏆 NBA FINALS</div>
               <div style={{ display: "flex", justifyContent: "center" }}>
-                <MatchupCard matchup={bracket.finals} matchId="finals" isActive={activeMatchId === "finals"} isYourNextGame={"finals" === nextPlayerMatchId} onSelectMatch={onSelectMatch} onPlayMatch={onPlayMatch} isMobile={isMobile} density={density} />
+                <MatchupCard matchup={bracket.finals} matchId="finals" isActive={activeMatchId === "finals"} isYourNextGame={"finals" === nextPlayerMatchId} onSelectMatch={onSelectMatch} onPlayMatch={onPlayMatch} onSimSeries={onSimSeries} isMobile={isMobile} density={density} />
               </div>
               {champion && (
                 <div style={{ marginTop: 14, textAlign: "center", padding: isMobile ? 14 : 16, background: "linear-gradient(135deg,#78350f,#92400e)", borderRadius: 12, border: "2px solid #fbbf24", boxShadow: "0 4px 16px rgba(251,191,36,0.2)" }}>

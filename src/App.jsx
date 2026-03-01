@@ -139,98 +139,343 @@ async function getTopPicks(limit = 5) {
 }
 
 function generateLineupImageBlob(roster, teamName, shareUrl, teamCode) {
-  const W = 640, H = 480;
+  const W = 640;
+  const H = 480;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return Promise.reject(new Error("Canvas not supported"));
+  if (!ctx) throw new Error("Canvas not supported");
 
-  // Gradient background
+  const safeName = (teamName && teamName.trim()) ? teamName.trim() : "";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
+  const totalCost = POSITIONS.reduce((s, pos) => s + (roster[pos]?.cost || 0), 0);
+  const filledCount = POSITIONS.filter((pos) => roster[pos]).length;
+
+  function roundRect(x, y, w, h, r) {
+    const rr = Math.min(r, h / 2, w / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.lineTo(x + w - rr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+    ctx.lineTo(x + w, y + h - rr);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+    ctx.lineTo(x + rr, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+    ctx.lineTo(x, y + rr);
+    ctx.quadraticCurveTo(x, y, x + rr, y);
+    ctx.closePath();
+  }
+
+  function drawPillCentered(text, cx, y, bg, color, strokeColor) {
+    ctx.font = "10px system-ui, sans-serif";
+    const metrics = ctx.measureText(text);
+    const w = metrics.width + 14;
+    const h = 16;
+    const x = cx - w / 2;
+    roundRect(x, y, w, h, 8);
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.strokeStyle = strokeColor ?? "rgba(255,255,255,0.1)";
+    ctx.lineWidth = strokeColor ? 1.5 : 1;
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, cx, y + h / 2 + 0.5);
+  }
+
+  function truncateText(text, maxWidth, font) {
+    ctx.font = font;
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let t = text;
+    while (t.length > 3 && ctx.measureText(t + "…").width > maxWidth) {
+      t = t.slice(0, -1);
+    }
+    return t + "…";
+  }
+
+  // Background with subtle gradient
   const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, "#0f172a");
-  bg.addColorStop(0.5, "#1e293b");
-  bg.addColorStop(1, "#0f172a");
+  bg.addColorStop(0, "#030712");
+  bg.addColorStop(0.5, "#020617");
+  bg.addColorStop(1, "#030712");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // Subtle inner border
-  ctx.strokeStyle = "rgba(148, 163, 184, 0.2)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(2, 2, W - 4, H - 4);
+  // Thin gold accent bar at top
+  const accentGrad = ctx.createLinearGradient(0, 0, W, 0);
+  accentGrad.addColorStop(0, "#f59e0b");
+  accentGrad.addColorStop(0.5, "#eab308");
+  accentGrad.addColorStop(1, "#f59e0b");
+  ctx.fillStyle = accentGrad;
+  ctx.fillRect(0, 0, W, 5);
 
-  // Header with accent bar
-  ctx.fillStyle = "#f59e0b";
-  ctx.fillRect(0, 0, W, 4);
+  // Court rectangle with subtle gradient
+  const courtX = 40;
+  const courtY = 118;
+  const courtW = W - courtX * 2;
+  const courtH = H - courtY - 80;
+  const courtGrad = ctx.createLinearGradient(courtX, courtY, courtX + courtW, courtY + courtH);
+  courtGrad.addColorStop(0, "#0f172a");
+  courtGrad.addColorStop(0.5, "#0b1220");
+  courtGrad.addColorStop(1, "#0f172a");
+  ctx.fillStyle = courtGrad;
+  roundRect(courtX, courtY, courtW, courtH, 26);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(251, 191, 36, 0.25)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Half-court lines and circle
+  ctx.strokeStyle = "rgba(251, 191, 36, 0.65)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(courtX + courtW / 2, courtY);
+  ctx.lineTo(courtX + courtW / 2, courtY + courtH);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(courtX + courtW / 2, courtY + courtH * 0.25, 34, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Paint / key near bottom (basket)
+  const keyW = courtW * 0.38;
+  const keyX = courtX + (courtW - keyW) / 2;
+  const keyY = courtY + courtH * 0.58;
+  const keyH = courtH * 0.34;
+  ctx.strokeStyle = "rgba(251, 191, 36, 0.8)";
+  ctx.lineWidth = 2;
+  roundRect(keyX, keyY, keyW, keyH, 10);
+  ctx.stroke();
+
+  // Rim + restricted circle
+  const rimCx = courtX + courtW / 2;
+  const rimCy = keyY + 10;
+  ctx.beginPath();
+  ctx.arc(rimCx, rimCy, 8, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(rimCx, rimCy + 18, 22, Math.PI * 0.25, Math.PI * 0.75);
+  ctx.stroke();
+
+  // Header text (yellow title, light blue subtitle)
   ctx.textAlign = "center";
-  ctx.fillStyle = "#fef3c7";
-  ctx.font = "bold 28px system-ui, sans-serif";
-  ctx.fillText("NBA BUDGET BALL", W / 2, 52);
-  if (teamName && teamName.trim()) {
+  ctx.textBaseline = "alphabetic";
+  const titleGrad = ctx.createLinearGradient(0, 20, W, 50);
+  titleGrad.addColorStop(0, "#fef3c7");
+  titleGrad.addColorStop(0.5, "#fde68a");
+  titleGrad.addColorStop(1, "#fef3c7");
+  ctx.fillStyle = titleGrad;
+  ctx.font = "bold 26px system-ui, sans-serif";
+  ctx.fillText("🏀 NBA BUDGET BALL", W / 2, 52);
+
+  ctx.fillStyle = "#60a5fa";
+  ctx.font = "bold 12px system-ui, sans-serif";
+  ctx.fillText("YOUR STARTING 5", W / 2, 74);
+
+  if (safeName) {
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "16px system-ui, sans-serif";
-    ctx.fillText(teamName.trim(), W / 2, 82);
+    ctx.font = "13px system-ui, sans-serif";
+    ctx.fillText(safeName, W / 2, 96);
   }
-  ctx.fillStyle = "#64748b";
-  ctx.font = "11px system-ui, sans-serif";
-  ctx.fillText("STARTING 5", W / 2, 108);
 
-  // Player rows with card-style layout
-  const y0 = 132;
-  const lineH = 56;
-  const cardPad = 24;
-  POSITIONS.forEach((pos, i) => {
-    const p = roster[pos];
-    const y = y0 + i * lineH;
-    const pillX = cardPad;
-    // Position pill
-    ctx.fillStyle = "#334155";
-    ctx.fillRect(pillX, y - 16, 48, 32);
-    ctx.strokeStyle = "#475569";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(pillX, y - 16, 48, 32);
-    ctx.fillStyle = "#60a5fa";
-    ctx.font = "bold 12px system-ui, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(pos, pillX + 12, y + 6);
-    // Player name
-    ctx.fillStyle = "#f1f5f9";
-    ctx.font = "bold 20px system-ui, sans-serif";
-    ctx.fillText(p ? p.name : "—", 96, y + 6);
-    if (p) {
-      ctx.fillStyle = "#fbbf24";
-      ctx.font = "bold 16px system-ui, sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText("$" + p.cost, W - cardPad - 12, y + 6);
-    }
-    ctx.textAlign = "left";
-  });
-
-  // Footer
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const name = (teamName && teamName.trim()) ? teamName.trim() : "my";
-  ctx.fillStyle = "#94a3b8";
+  // Budget + code summary strip
+  const summaryY = H - 64;
   ctx.font = "11px system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("Paste the code to try it or build your own!", W / 2, H - 52);
-  if (teamCode) {
-    ctx.fillStyle = "#64748b";
-    ctx.font = "10px system-ui, sans-serif";
-    ctx.fillText("Code: " + teamCode, W / 2, H - 36);
+  const costText = `💰 Budget: $${totalCost}/${BUDGET}`;
+  const filledText = `📋 Slots: ${filledCount}/5`;
+  const codeText = teamCode ? `🔗 Code: ${teamCode}` : "";
+  const smallGap = 14;
+  const costW = ctx.measureText(costText).width;
+  const filledW = ctx.measureText(filledText).width;
+  const codeW = codeText ? ctx.measureText(codeText).width : 0;
+  const totalStripW = costW + filledW + (codeText ? codeW + smallGap * 2 : 0) + smallGap * 2;
+  const stripX = (W - totalStripW) / 2;
+
+  const stripGrad = ctx.createLinearGradient(stripX - 10, 0, stripX + totalStripW + 10, 0);
+  stripGrad.addColorStop(0, "rgba(15, 23, 42, 0.95)");
+  stripGrad.addColorStop(0.5, "rgba(30, 41, 59, 0.95)");
+  stripGrad.addColorStop(1, "rgba(15, 23, 42, 0.95)");
+  ctx.fillStyle = stripGrad;
+  roundRect(stripX - 10, summaryY - 16, totalStripW + 20, 26, 10);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(251, 191, 36, 0.3)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Budget progress bar below strip
+  const barW = totalStripW + 20;
+  const barX = stripX - 10;
+  const barY = summaryY + 14;
+  const barH = 5;
+  roundRect(barX, barY, barW, barH, 2);
+  ctx.fillStyle = "rgba(30, 41, 59, 0.9)";
+  ctx.fill();
+  const pct = Math.min(1, totalCost / BUDGET);
+  roundRect(barX, barY, barW * pct, barH, 2);
+  const barGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+  barGrad.addColorStop(0, "#22c55e");
+  barGrad.addColorStop(0.5, "#fbbf24");
+  barGrad.addColorStop(1, pct > 1 ? "#ef4444" : "#22c55e");
+  ctx.fillStyle = barGrad;
+  ctx.fill();
+
+  ctx.fillStyle = "#e5e7eb";
+  ctx.textAlign = "left";
+  let cursorX = stripX;
+  ctx.fillText(costText, cursorX, summaryY);
+  cursorX += costW + smallGap;
+  ctx.fillStyle = "#a5b4fc";
+  ctx.fillText(filledText, cursorX, summaryY);
+  cursorX += filledW + smallGap;
+  if (codeText) {
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText(codeText, cursorX, summaryY);
   }
-  ctx.fillStyle = "#475569";
+
+  // Footer link
   const linkText = shareUrl || origin;
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#475569";
+  ctx.font = "10px system-ui, sans-serif";
   let drawUrl = linkText;
   if (shareUrl && ctx.measureText(linkText).width > W - 48) {
     for (let i = linkText.length; i > 0; i--) {
       const t = linkText.slice(0, i) + "…";
-      if (ctx.measureText(t).width <= W - 48) { drawUrl = t; break; }
+      if (ctx.measureText(t).width <= W - 48) {
+        drawUrl = t;
+        break;
+      }
     }
   }
-  ctx.fillText(shareUrl ? "Play: " + drawUrl : "Play at " + origin, W / 2, H - 20);
+  ctx.fillStyle = "#64748b";
+  ctx.font = "10px system-ui, sans-serif";
+  ctx.fillText(shareUrl ? "▶ Play: " + drawUrl : "▶ Play at " + origin, W / 2, H - 18);
+
+  // Layout for 5 positions on the court
+  const layout = {
+    PG: { x: courtX + courtW * 0.22, y: courtY + courtH * 0.30 },
+    SG: { x: courtX + courtW * 0.78, y: courtY + courtH * 0.30 },
+    SF: { x: courtX + courtW * 0.50, y: courtY + courtH * 0.46 },
+    PF: { x: courtX + courtW * 0.32, y: courtY + courtH * 0.68 },
+    C:  { x: courtX + courtW * 0.68, y: courtY + courtH * 0.68 },
+  };
+
+  // Draw each starter node
+  POSITIONS.forEach((pos) => {
+    const spot = layout[pos];
+    if (!spot) return;
+    const p = roster[pos];
+    const tier = p ? getTier(p.cost) : null;
+    const arch = p ? getArchetype(p) : null;
+
+    // Blue light / aura reflecting from each position (stronger like original)
+    ctx.beginPath();
+    ctx.arc(spot.x, spot.y, 52, 0, Math.PI * 2);
+    if (p) {
+      const glowGrad = ctx.createRadialGradient(spot.x, spot.y, 0, spot.x, spot.y, 52);
+      glowGrad.addColorStop(0, "rgba(56, 189, 248, 0.4)");
+      glowGrad.addColorStop(0.4, "rgba(56, 189, 248, 0.18)");
+      glowGrad.addColorStop(0.7, "rgba(56, 189, 248, 0.06)");
+      glowGrad.addColorStop(1, "rgba(56, 189, 248, 0)");
+      ctx.fillStyle = glowGrad;
+    } else {
+      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+    }
+    ctx.fill();
+
+    // Position badge
+    ctx.beginPath();
+    ctx.arc(spot.x, spot.y, 20, 0, Math.PI * 2);
+    ctx.fillStyle = p ? "#0f172a" : "#020617";
+    ctx.fill();
+    const badgeStroke = p ? "rgba(56, 189, 248, 0.9)" : "#1f2937";
+    ctx.strokeStyle = badgeStroke;
+    ctx.lineWidth = p ? 2.5 : 1.5;
+    ctx.stroke();
+    ctx.fillStyle = p ? "#e0f2fe" : "#4b5563";
+    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(pos, spot.x, spot.y);
+
+    // Player name under badge
+    const nameY = spot.y + 34;
+    const rawName = p ? p.name : "Empty slot";
+    const nameFont = "bold 13px system-ui, sans-serif";
+    const maxNameWidth = 120;
+    const nameText = truncateText(rawName, maxNameWidth, nameFont);
+    ctx.font = nameFont;
+    ctx.fillStyle = p ? "#f8fafc" : "#4b5563";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    if (p) {
+      ctx.shadowColor = "rgba(0,0,0,0.8)";
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 1;
+    }
+    ctx.fillText(nameText, spot.x, nameY);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+
+    if (!p) return;
+
+    // Tier + cost pills (row 1), archetype pill underneath (row 2) with its color
+    const tierLabel = tier?.label || "";
+    const archLabel = arch?.label || "";
+    const costText = "$" + p.cost;
+    const pillY = nameY + 8;
+    const pillH = 16;
+    const gap = 6;
+    ctx.font = "10px system-ui, sans-serif";
+    const tierW = tierLabel ? ctx.measureText(tierLabel).width + 14 : 0;
+    ctx.font = "bold 12px system-ui, sans-serif";
+    const costW = ctx.measureText(costText).width + 14;
+    const row1W = tierW + (tierLabel ? gap : 0) + costW;
+    let left = spot.x - row1W / 2;
+    if (tierLabel) {
+      drawPillCentered(tierLabel, left + tierW / 2, pillY, tier.bg, tier.color);
+      left += tierW + gap;
+    }
+    const costX = left;
+    const costY = pillY;
+    const costH = pillH;
+    roundRect(costX, costY, costW, costH, 8);
+    ctx.fillStyle = "#78350f";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(251, 191, 36, 0.4)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "#fbbf24";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(costText, costX + costW / 2, costY + costH / 2 + 0.5);
+    if (archLabel) {
+      drawPillCentered(archLabel, spot.x, pillY + pillH + gap, "#1e293b", arch.color, arch.color);
+    }
+  });
+
+  // Subtle vignette (darker corners)
+  const vigGrad = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, W * 0.75);
+  vigGrad.addColorStop(0, "rgba(0,0,0,0)");
+  vigGrad.addColorStop(0.7, "rgba(0,0,0,0)");
+  vigGrad.addColorStop(1, "rgba(0,0,0,0.25)");
+  ctx.fillStyle = vigGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Outer border (subtle gold accent)
+  ctx.strokeStyle = "rgba(251, 191, 36, 0.4)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, W - 2, H - 2);
 
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))), "image/png");
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))),
+      "image/png",
+      1
+    );
   });
 }
 
@@ -311,7 +556,7 @@ export default function App(){
       return true;
     }
   });
-  const volume = 1; // 100%
+  const volume = 0.5; // 50%
   const [aiTeams,setAiTeams]=useState([]);
   const [schedule,setSchedule]=useState(null);
   const [scheduleHome, setScheduleHome] = useState(null); // scheduleHome[i][g] = true if team i is home in game g
@@ -654,7 +899,6 @@ export default function App(){
   }, []);
 
   const handleCopyTeamCode = useCallback(() => {
-    if (inSeason) return;
     const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
     const code = ids.join("-");
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -664,7 +908,7 @@ export default function App(){
     } else {
       window.prompt("Copy your team code:", code);
     }
-  }, [roster, inSeason]);
+  }, [roster]);
 
   const handleLoadTeamCode = useCallback(() => {
     if (inSeason) return;
@@ -881,7 +1125,6 @@ export default function App(){
     shareStatusTimerRef.current = setTimeout(() => setShareStatus(null), 3000);
   }, []);
   const handleShareLineup = useCallback(async () => {
-    if (inSeason) return;
     const filled = POSITIONS.every((pos) => roster[pos]);
     if (!filled) {
       setShareStatus({ type: "error", msg: "Complete your lineup first" });
@@ -892,7 +1135,7 @@ export default function App(){
     const code = ids.join("-");
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const name = (myTeamName && myTeamName.trim()) ? myTeamName.trim() : "my";
-    const shareText = "Here's " + name + "'s lineup — paste the code to try it or build your own!\nCode: " + code + "\nPlay: " + origin;
+    const shareText = "🏀 Here's " + name + "'s lineup — paste the code to try it or build your own!\n🔗 Code: " + code + "\n▶ Play: " + origin;
     const nav = typeof navigator !== "undefined" ? navigator : null;
     try {
       if (nav?.share && /mobile|android|iphone|ipad/i.test(navigator.userAgent)) {
@@ -913,48 +1156,45 @@ export default function App(){
       }
     }
     clearShareStatus();
-  }, [roster, myTeamName, inSeason, clearShareStatus]);
+  }, [roster, myTeamName, clearShareStatus]);
 
   const handleCopyLineupImage = useCallback(async () => {
-    if (inSeason) return;
     const filled = POSITIONS.every((pos) => roster[pos]);
     if (!filled) {
       setShareStatus({ type: "error", msg: "Complete your lineup first" });
       clearShareStatus();
       return;
     }
-    setShareStatus({ type: "loading", msg: "Creating image…" });
     try {
       const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
       const code = ids.join("-");
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       const blob = await generateLineupImageBlob(roster, myTeamName, origin, code);
-      const file = new File([blob], "nba-budget-ball-lineup.png", { type: "image/png" });
       const nav = typeof navigator !== "undefined" ? navigator : null;
-      if (nav?.share && nav?.canShare?.({ files: [file] })) {
-        await nav.share({
-          title: "NBA Budget Ball Lineup",
-          text: (myTeamName && myTeamName.trim()) ? myTeamName.trim() + "'s lineup" : "My lineup",
-          files: [file],
-        });
-        setShareStatus({ type: "success", msg: "Shared!" });
-      } else if (nav?.clipboard?.write) {
-        await nav.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setShareStatus({ type: "success", msg: "Image copied!" });
-      } else {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "nba-budget-ball-lineup.png";
-        a.click();
-        URL.revokeObjectURL(a.href);
-        setShareStatus({ type: "success", msg: "Image downloaded" });
+      // Always try clipboard first (user clicked "Copy Image")
+      if (nav?.clipboard?.write) {
+        try {
+          await nav.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          setShareStatus({ type: "success", msg: "Image copied!" });
+          clearShareStatus();
+          return;
+        } catch (clipErr) {
+          // Clipboard may fail (e.g. Firefox, or not in secure context) — fall through to download
+        }
       }
+      // Fallback: download the image
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "nba-budget-ball-lineup.png";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setShareStatus({ type: "success", msg: "Image downloaded" });
     } catch (e) {
       if (e?.name === "AbortError") return;
       setShareStatus({ type: "error", msg: "Couldn't copy image" });
     }
     clearShareStatus();
-  }, [roster, myTeamName, inSeason, clearShareStatus]);
+  }, [roster, myTeamName, clearShareStatus]);
 
 const soundtrackRef = useRef(null);
   const trackIndexRef = useRef(0);
@@ -1220,6 +1460,7 @@ const soundtrackRef = useRef(null);
     if (phase !== "playoffs" || !bracket?.champion) return;
     if (playoffRecordedRef.current) return;
     playoffRecordedRef.current = true;
+    setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 150);
     const wonChip = bracket.champion?.isPlayer === true;
     const madeFinals = bracket.finals?.top?.isPlayer || bracket.finals?.bot?.isPlayer;
     setCareerStats((prev) => ({
@@ -2634,7 +2875,7 @@ const startSeason = async () => {
 
 if(phase==="teamSetup") return(
   <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24,position:"relative"}}>
-    <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+    <div style={{position:"fixed",bottom:16,right:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
       <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
       <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
     </div>
@@ -2652,7 +2893,7 @@ if(phase==="teamSetup") return(
             if(e.key==="Enter"&&myTeamName.trim()){
               rememberTeamName(myTeamName);
               setUnlockedAchievements([]);
-              if (typeof window !== "undefined" && !window.localStorage.getItem(TUTORIAL_SEEN_KEY)) setShowTutorial(true);
+              setShowTutorial(true);
               setPhase("draft");
             }
           }}
@@ -2690,7 +2931,7 @@ if(phase==="teamSetup") return(
             if(!myTeamName.trim()) return;
             rememberTeamName(myTeamName);
             setUnlockedAchievements([]);
-            if (typeof window !== "undefined" && !window.localStorage.getItem(TUTORIAL_SEEN_KEY)) setShowTutorial(true);
+            setShowTutorial(true);
             setPhase("draft");
           }}
           disabled={!myTeamName.trim()}
@@ -2725,11 +2966,11 @@ if(phase==="teamSetup") return(
   if(phase==="import") return(
     <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24,position:"relative"}}>
       <div style={{position:"fixed",top:12,right:12,zIndex:50}}>
-        <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#fbbf24",cursor:"pointer"}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
+        <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#fbbf24",cursor:"pointer"}} title="Achievements">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
       </div>
-      {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Trophy case</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
+      {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
       {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
-      <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+      <div style={{position:"fixed",bottom:16,right:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
         <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
         <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
       </div>
@@ -2770,7 +3011,7 @@ if(phase==="teamSetup") return(
       <>
         {simulatingOverlayPlayoffs}
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding: isMobile ? 12 : 16, paddingBottom: isMobile ? 96 : undefined}}>
-        <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+        <div style={{position:"fixed",bottom:16,right:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
           <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
           <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
         </div>
@@ -2779,6 +3020,11 @@ if(phase==="teamSetup") return(
             <h2 style={{margin:0,fontSize: isMobile ? 18 : 20,fontWeight:900,color:"#f59e0b",letterSpacing:1}}>Season {seasonNumber} · 🏆 PLAYOFFS</h2>
             <div style={{display:"flex",gap: isMobile ? 6 : 8,alignItems:"center",flexWrap:"wrap"}}>
               <span style={{fontSize:9,fontWeight:700,color:"#64748b",padding:"3px 8px",borderRadius:999,background:"#1e293b",border:"1px solid #334155",textTransform:"uppercase",letterSpacing:0.5}}>{difficulty === "casual" ? "Casual" : difficulty === "hardcore" ? "Hardcore" : "Standard"}</span>
+              <div style={{display:"flex",gap:4,alignItems:"center",padding:"4px 6px",background:"#0f172a",borderRadius:8,border:"1px solid #334155"}}>
+                <button onClick={handleCopyTeamCode} title="Copy team code" style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "8px 10px" : "5px 10px",fontSize: isMobile ? 12 : 11}}>🔗 Code</button>
+                <button onClick={handleShareLineup} title="Share" style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "8px 10px" : "5px 10px",fontSize: isMobile ? 12 : 11}}>📤 Share</button>
+                <button onClick={handleCopyLineupImage} title="Copy lineup image" style={{...btnBase,background:"linear-gradient(135deg,#60a5fa,#a78bfa)",color:"#0f172a",border:"none",padding: isMobile ? "8px 10px" : "5px 10px",fontSize: isMobile ? 12 : 11}}>🖼️ Image</button>
+              </div>
               {nextPlayerMatchId && (
                 <button onClick={()=>{ setActiveMatchId(nextPlayerMatchId); setPlayoffResult(null); }} style={{...btnBase,background:"#052e16",color:"#86efac",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,border:"1px solid #14532d"}}>⏭ Next game</button>
               )}
@@ -2800,15 +3046,20 @@ if(phase==="teamSetup") return(
               <button onClick={()=>setShowSaveModal(true)} style={{...btnBase,background:"#1e293b",color:"#a78bfa",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>💾 Save</button>
               <button onClick={()=>setShowLoadModal(true)} style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>📂 Load</button>
               {(champion || (elimInPlayoffs && !getNextAIMatchId(bracket))) && <button onClick={runItBack} style={{...btnBase,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:800}} title="Same roster, new AI opponents">🔄 Run it back</button>}
-              <button onClick={()=>setShowTrophyCase(true)} style={{...btnBase,background:"#1e293b",color:"#fbbf24",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:700}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
+              <button onClick={()=>setShowTrophyCase(true)} style={{...btnBase,background:"#1e293b",color:"#fbbf24",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:700}} title="Achievements">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
               <button onClick={()=>setShowHelp(h=>!h)} style={{...btnBase,width: isMobile ? 40 : 32,height: isMobile ? 40 : 32,borderRadius:10,background:"#1e293b",color:"#60a5fa",fontSize:14,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>?</button>
             </div>
           </div>
+          {shareStatus && (
+            <div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:10,fontWeight:600,color:(typeof shareStatus==="object"&&shareStatus.type==="error")?"#f87171":(typeof shareStatus==="object"&&shareStatus.type==="success")?"#22c55e":"#60a5fa",padding:"4px 12px",background:(typeof shareStatus==="object"&&shareStatus.type==="error")?"rgba(248,113,113,0.2)":(typeof shareStatus==="object"&&shareStatus.type==="success")?"rgba(34,197,94,0.2)":"rgba(96,165,250,0.2)",borderRadius:8}}>
+              {typeof shareStatus==="object"?shareStatus.msg:shareStatus}
+            </div>
+          )}
           {showTrophyCase&&(
             <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}>
               <div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                  <div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Trophy case</div>
+                  <div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div>
                   <button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -2843,16 +3094,17 @@ if(phase==="teamSetup") return(
               </div>
             </div>
           )}
-          {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding: isMobile ? 12 : 10,border:"1px solid #334155",fontSize: isMobile ? 11 : 10,color:"#64748b",marginBottom:12,lineHeight:1.5}}>
-            <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
-            <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
-            <div style={{marginBottom:2}}>• 30-team league (2 conferences, 6 divisions) — 82-game season</div>
-            <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
-            <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
-            <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
-            <div style={{marginBottom:2}}>• Difficulty: Casual = you're favored · Hardcore = CPU favored</div>
-            <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
-            <div>Adjacent ×0.82 · Wrong ×0.65</div>
+          {showHelp&&<div style={{background:"linear-gradient(180deg,#0f172a 0%,#0c1222 100%)",borderRadius:12,padding: isMobile ? 14 : 12,border:"1px solid #334155",boxShadow:"0 8px 24px rgba(0,0,0,0.3)",marginBottom:12,overflow:"hidden"}}>
+            <div style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",padding:"8px 12px",margin:"-1px -1px 0 -1px",borderRadius:"11px 11px 0 0",fontWeight:800,fontSize:10,color:"white",letterSpacing:1}}>HOW TO PLAY</div>
+            <div style={{fontSize: isMobile ? 11 : 10,color:"#94a3b8",lineHeight:1.55,paddingTop:10}}>
+              <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#60a5fa"}}>📍</span><span><strong style={{color:"#e2e8f0"}}>Positions</strong>: One per slot (PG–C). OOP: Adjacent ×0.82 · Wrong ×0.65</span></div>
+              <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#fbbf24"}}>💰</span><span><strong style={{color:"#e2e8f0"}}>Budget</strong>: ${BUDGET} for 5 players</span></div>
+              <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span>⚡</span><span><strong style={{color:"#e2e8f0"}}>Chemistry</strong>: 2+ same team+season (bigger for 3–5)</span></div>
+              <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span>🧩</span><span><strong style={{color:"#e2e8f0"}}>Archetypes</strong>: Balance roles for bonuses</span></div>
+              <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#22c55e"}}>⚖️</span><span><strong style={{color:"#e2e8f0"}}>Team balance</strong>: Need Big, Playmaker, Defense, Scoring. 3+ scorers hurt</span></div>
+              <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#a78bfa"}}>🏀</span><span>30 teams · 82 games · Top 6 direct · 7–10 play-in</span></div>
+              <div style={{display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#f472b6"}}>🎚</span><span><strong style={{color:"#e2e8f0"}}>Difficulty</strong>: Casual / Standard / Hardcore</span></div>
+            </div>
           </div>}
           {champion&&(
             <>
@@ -2936,7 +3188,7 @@ if(phase==="teamSetup") return(
           )}
           <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"8px 0"}}>Loading bracket…</div>}>
             <div id="playoff-bracket">
-            <BracketDisplayLazy bracket={bracket} activeMatchId={activeMatchId} nextPlayerMatchId={nextPlayerMatchId || undefined} onSelectMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);}} onPlayMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);playPlayoffGame(id);}} isMobile={isMobile} density={bracketDensity}/>
+            <BracketDisplayLazy bracket={bracket} activeMatchId={activeMatchId} nextPlayerMatchId={nextPlayerMatchId || undefined} onSelectMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);}} onPlayMatch={id=>{setActiveMatchId(id);setPlayoffResult(null);const parsed=getPlayoffMatchup(bracket,id);const pInv=parsed?.matchup?.top?.isPlayer||parsed?.matchup?.bot?.isPlayer;if(pInv)playPlayoffGame(id);else runSimAllAIGames();}} onSimSeries={simMySeries} isMobile={isMobile} density={bracketDensity}/>
             </div>
           </Suspense>
           {activeMatchId&&(()=>{
@@ -2945,6 +3197,7 @@ if(phase==="teamSetup") return(
             if(!matchup)return null;
             const wT=matchup.games.filter(g=>g.winnerIdx===0).length,wB=matchup.games.filter(g=>g.winnerIdx===1).length;
             const done=!!matchup.winner,pInv=matchup.top?.isPlayer||matchup.bot?.isPlayer;
+            const rLabel=activeMatchId?getRoundLabel(getStageKey(activeMatchId)):"";
             const opponentName = pInv ? (matchup.top?.isPlayer ? matchup.bot?.name : matchup.top?.name) ?? "TBD" : null;
             return(
               <div style={{marginTop: isMobile ? 16 : 20}}>
@@ -2969,7 +3222,7 @@ if(phase==="teamSetup") return(
                           <button onClick={()=>simMySeries(activeMatchId)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #475569",borderRadius:10,padding: isMobile ? "14px 18px" : "12px 20px",fontSize: isMobile ? 13 : 12,fontWeight:700,cursor:"pointer", minHeight: isMobile ? 48 : undefined}} title="Sim remaining games in this series">⚡ Sim series</button>
                         </>
                       ) : (
-                        <button onClick={()=>playPlayoffGame(activeMatchId)} style={{background:"linear-gradient(135deg,#475569,#64748b)",color:"white",border:"none",borderRadius:10,padding: isMobile ? "14px 24px" : "12px 28px",fontSize: isMobile ? 14 : 13,fontWeight:800,cursor:"pointer", minHeight: isMobile ? 48 : undefined}}>⚡ Sim Game {matchup.games.length+1}</button>
+                        <button onClick={runSimAllAIGames} disabled={isSimulating} style={{background:isSimulating?"#374151":"linear-gradient(135deg,#475569,#64748b)",color:"white",border:"none",borderRadius:10,padding: isMobile ? "14px 24px" : "12px 28px",fontSize: isMobile ? 14 : 13,fontWeight:800,cursor:isSimulating?"wait":"pointer", minHeight: isMobile ? 48 : undefined,opacity:isSimulating?0.8:1}}>⚡ Sim round{rLabel?" ("+rLabel+")":""}</button>
                       )}
                     </div>
                   )}
@@ -3013,7 +3266,7 @@ if(phase==="teamSetup") return(
             if (!matchup || matchup.winner || !matchup.top || !matchup.bot) return null;
             const pInv = matchup.top?.isPlayer || matchup.bot?.isPlayer;
             const oppName = pInv ? (matchup.top?.isPlayer ? matchup.bot?.name : matchup.top?.name) ?? null : null;
-            const btnLabel = pInv ? `▶ Play Game ${matchup.games.length + 1}` : `⚡ Sim Game ${matchup.games.length + 1}`;
+            const btnLabel = pInv ? `▶ Play Game ${matchup.games.length + 1}` : "⚡ Sim round";
             return (
               <div style={{ position:"fixed", left:12, right:12, bottom:12, background:"linear-gradient(180deg,#0f172a 0%,#0b1220 100%)", border:"1px solid #334155", borderRadius:14, padding:12, boxShadow:"0 10px 30px rgba(0,0,0,0.45)", zIndex:50 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", gap:8, alignItems:"center", flexWrap:"wrap" }}>
@@ -3023,7 +3276,7 @@ if(phase==="teamSetup") return(
                     {oppName && <div style={{ fontSize:11, color:"#fbbf24", fontWeight:700, marginTop:2 }}>vs {oppName}</div>}
                   </div>
                   <div style={{ display:"flex", gap:8, flexShrink:0 }}>
-                    <button onClick={()=>playPlayoffGame(activeMatchId)} style={{ background: pInv ? "linear-gradient(135deg,#22c55e,#16a34a)" : "linear-gradient(135deg,#475569,#64748b)", color:"white", border:"none", borderRadius:12, padding:"12px 14px", fontSize:13, fontWeight:900, minHeight:44, cursor:"pointer" }}>
+                    <button onClick={pInv?()=>playPlayoffGame(activeMatchId):runSimAllAIGames} disabled={!pInv&&isSimulating} style={{ background: pInv ? "linear-gradient(135deg,#22c55e,#16a34a)" : isSimulating?"#374151":"linear-gradient(135deg,#475569,#64748b)", color:"white", border:"none", borderRadius:12, padding:"12px 14px", fontSize:13, fontWeight:900, minHeight:44, cursor:pInv||!isSimulating?"pointer":"wait", opacity:!pInv&&isSimulating?0.8:1 }}>
                       {btnLabel}
                     </button>
                     {pInv && (
@@ -3247,19 +3500,33 @@ if(phase==="teamSetup") return(
       leagueDPOY = dpoyByVotes || leagueRows.reduce((best, r) => (!best || r.dpoyScore > best.dpoyScore ? r : best), null);
     }
     return(
-      <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
-        <div style={{position:"fixed",top:12,right:12,zIndex:50,display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:9,fontWeight:700,color:"#64748b",padding:"3px 8px",borderRadius:999,background:"#1e293b",border:"1px solid #334155",textTransform:"uppercase",letterSpacing:0.5}}>{difficulty === "casual" ? "Casual" : difficulty === "hardcore" ? "Hardcore" : "Standard"}</span>
-          <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
-          <button onClick={goToMainMenu} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🏠 Main menu</button>
-          <button onClick={()=>setShowHelp(h=>!h)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>?</button>
-          <button onClick={()=>setShowSaveModal(true)} style={{background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>💾 Save</button>
-          <button onClick={()=>setShowLoadModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>📂 Load</button>
-          {!playoff && <button onClick={runItBack} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:800,cursor:"pointer"}} title="Same roster, new AI opponents">🔄 Run it back</button>}
-          {playoff && <span style={{fontSize:10,color:"#f59e0b",fontWeight:700}}>Play through playoffs first</span>}
+      <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex"}}>
+        {/* Left sidebar - same as main view */}
+        <aside style={{position:"fixed",left:0,top:0,bottom:0,width:130,background:"#0f172a",borderRight:"1px solid #1e293b",display:"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
+          <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Menu</button>
+          <button onClick={()=>setShowSaveModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#a78bfa",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>💾</span> Save</button>
+          <button onClick={()=>setShowLoadModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📂</span> Load</button>
+          <button onClick={()=>setShowTrophyCase(true)} title={`Achievements (${unlockedAchievements.length}/${ACHIEVEMENTS.length})`} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#fbbf24",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}><span style={{fontSize:14,flexShrink:0}}>🏆</span> <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{unlockedAchievements.length}/{ACHIEVEMENTS.length}</span></button>
+          <button onClick={()=>setShowHelp(h=>!h)} title="Help" style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14,fontWeight:900}}>?</span></button>
+          <div style={{flex:1}} />
+          {!playoff && <button onClick={runItBack} style={{width:"100%",borderRadius:8,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🔄</span> Run back</button>}
+        </aside>
+        <div style={{marginLeft:130,flex:1,padding:16}}>
+        {/* Compact top bar */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>{difficulty==="casual"?"Casual":difficulty==="hardcore"?"Hardcore":"Standard"} Season {seasonNumber}</span>
+            <div style={{display:"flex",gap:4,alignItems:"center",padding:"4px 6px",background:"#0f172a",borderRadius:8,border:"1px solid #334155"}}>
+              <button onClick={handleCopyTeamCode} title="Copy team code" style={{background:"#1e293b",color:"#94a3b8",border:"none",borderRadius:6,padding:"5px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🔗 Copy code</button>
+              <button onClick={handleShareLineup} title="Share link" style={{background:"#1e293b",color:"#94a3b8",border:"none",borderRadius:6,padding:"5px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>📤 Share link</button>
+              <button onClick={handleCopyLineupImage} title="Copy lineup image" style={{background:"linear-gradient(135deg,#60a5fa,#a78bfa)",color:"#0f172a",border:"none",borderRadius:6,padding:"5px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🖼️ Share image</button>
+            </div>
+          </div>
+          {playoff && <span style={{fontSize:11,color:"#f59e0b",fontWeight:700}}>Play through playoffs first</span>}
         </div>
-        {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Trophy case</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
+        {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
         {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
+        {shareStatus&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:10,fontWeight:600,color:(typeof shareStatus==="object"&&shareStatus.type==="error")?"#f87171":(typeof shareStatus==="object"&&shareStatus.type==="success")?"#22c55e":"#60a5fa",padding:"4px 12px",background:(typeof shareStatus==="object"&&shareStatus.type==="error")?"rgba(248,113,113,0.2)":(typeof shareStatus==="object"&&shareStatus.type==="success")?"rgba(34,197,94,0.2)":"rgba(96,165,250,0.2)",borderRadius:8}}>{typeof shareStatus==="object"?shareStatus.msg:shareStatus}</div>)}
         {showSaveModal && (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowSaveModal(false)}>
             <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:320,width:"100%"}} onClick={e=>e.stopPropagation()}>
@@ -3285,20 +3552,21 @@ if(phase==="teamSetup") return(
             </div>
           </div>
         )}
-        <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+        <div style={{position:"fixed",bottom:16,right:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
           <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
           <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
         </div>
-        {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:14,maxWidth:800,marginLeft:"auto",marginRight:"auto"}}>
-          <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
-          <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
-          <div style={{marginBottom:2}}>• 30-team league (2 conferences, 6 divisions) — 82-game season</div>
-          <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
-          <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
-          <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
-          <div style={{marginBottom:2}}>• Difficulty: Casual = you're favored · Hardcore = CPU favored</div>
-          <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
-          <div>Adjacent ×0.82 · Wrong ×0.65</div>
+        {showHelp&&<div style={{background:"linear-gradient(180deg,#0f172a 0%,#0c1222 100%)",borderRadius:12,padding:0,border:"1px solid #334155",boxShadow:"0 8px 24px rgba(0,0,0,0.3)",marginBottom:14,maxWidth:800,marginLeft:"auto",marginRight:"auto",overflow:"hidden"}}>
+          <div style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",padding:"10px 14px",fontWeight:800,fontSize:10,color:"white",letterSpacing:1}}>HOW TO PLAY</div>
+          <div style={{padding:12,fontSize:10,color:"#94a3b8",lineHeight:1.55}}>
+            <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#60a5fa"}}>📍</span><span><strong style={{color:"#e2e8f0"}}>Positions</strong>: One per slot (PG–C). OOP: Adjacent ×0.82 · Wrong ×0.65</span></div>
+            <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#fbbf24"}}>💰</span><span><strong style={{color:"#e2e8f0"}}>Budget</strong>: ${BUDGET} for 5 players</span></div>
+            <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span>⚡</span><span><strong style={{color:"#e2e8f0"}}>Chemistry</strong>: 2+ same team+season (bigger for 3–5)</span></div>
+            <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span>🧩</span><span><strong style={{color:"#e2e8f0"}}>Archetypes</strong>: Balance roles for bonuses</span></div>
+            <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#22c55e"}}>⚖️</span><span><strong style={{color:"#e2e8f0"}}>Team balance</strong>: Need Big, Playmaker, Defense, Scoring. 3+ scorers hurt</span></div>
+            <div style={{marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#a78bfa"}}>🏀</span><span>30 teams · 82 games · Top 6 direct · 7–10 play-in</span></div>
+            <div style={{display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#f472b6"}}>🎚</span><span><strong style={{color:"#e2e8f0"}}>Difficulty</strong>: Casual / Standard / Hardcore</span></div>
+          </div>
         </div>}
         <div style={{maxWidth:800,margin:"0 auto"}}>
           <div style={{textAlign:"center",padding:"16px",background:"#0f172a",borderRadius:16,border:`2px solid ${mySeed<=6?"#22c55e":playoff?"#f59e0b":"#ef4444"}`,marginBottom:14}}>
@@ -3392,56 +3660,53 @@ if(phase==="teamSetup") return(
               return !best || diff > ((best.myScore || 0) - (best.oppScore || 0)) ? r : best;
             }, null);
             return (
-              <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #475569"}}>
-                <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>📊 SEASON SUMMARY — {leagueName || "NBA"}</div>
-                <div style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1,marginBottom:6}}>KEY MOMENTS</div>
-                <div style={{display:"flex",flexDirection:"column",gap:4,fontSize:11,color:"#e2e8f0"}}>
-                  {myMVPThisSeason && (() => { const n = careerAwardCount(myMVPThisSeason, "MVP"); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key="mvp">{myMVPThisSeason.name} won MVP for the {ord} time</div>; })()}
-                  {myDPOYThisSeason && (() => { const n = careerAwardCount(myDPOYThisSeason, "DPOY"); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key="dpoy">{myDPOYThisSeason.name} won DPOY for the {ord} time</div>; })()}
-                  {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name}>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</div> : null; })}
-                  {myAllNBAThisSeason.map(({ name, award }) => { const n = careerNBACount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`}>{name} made {AWARD_LABELS[award] || award} for the {ord} time</div>; })}
-                  {myAllDefensiveThisSeason.map(({ name, award }) => { const n = careerDefCount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`}>{name} made {AWARD_LABELS[award] || award} for the {ord} time</div>; })}
-                  {leaderPts && <div key="pts">{leaderPts.name} led the team in points ({rf(leaderPts.ppg, 1)} PPG)</div>}
-                  {leaderReb && <div key="reb">{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG)</div>}
-                  {leaderAst && <div key="ast">{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG)</div>}
-                  {bestStreak > 0 && <div key="streak">Best win streak: {bestStreak} games</div>}
-                  {allStarCount > 0 && <div key="allstar">All-Stars: {allStarCount}</div>}
+              <div style={{background:"linear-gradient(180deg,#0f172a 0%,#0b1220 100%)",borderRadius:14,padding:0,marginBottom:14,border:"1px solid #334155",boxShadow:"0 4px 20px rgba(0,0,0,0.35)",overflow:"hidden"}}>
+                <div style={{background:"linear-gradient(90deg,#f59e0b,#eab308)",height:4}}/>
+                <div style={{padding:"14px 16px"}}>
+                  <div style={{fontSize:12,fontWeight:900,letterSpacing:2,marginBottom:4,color:"#fef3c7"}}>📊 SEASON SUMMARY — {leagueName || "NBA"}</div>
+                  <div style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1.5,marginBottom:10,textTransform:"uppercase"}}>Key moments</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:2,fontSize:12,color:"#f1f5f9",lineHeight:1.5}}>
+                  {myMVPThisSeason && (() => { const n = careerAwardCount(myMVPThisSeason, "MVP"); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key="mvp" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #fbbf24"}}><span style={{color:"#fbbf24",fontSize:14}}>🏆</span><span>{myMVPThisSeason.name} won MVP for the {ord} time</span></div>; })()}
+                  {myDPOYThisSeason && (() => { const n = careerAwardCount(myDPOYThisSeason, "DPOY"); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key="dpoy" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #60a5fa"}}><span style={{color:"#60a5fa",fontSize:14}}>🛡️</span><span>{myDPOYThisSeason.name} won DPOY for the {ord} time</span></div>; })()}
+                  {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f59e0b"}}><span style={{color:"#f59e0b",fontSize:14}}>⭐</span><span>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</span></div> : null; })}
+                  {myAllNBAThisSeason.map(({ name, award }) => { const n = careerNBACount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #a78bfa"}}><span style={{color:"#a78bfa",fontSize:14}}>📋</span><span>{name} made {AWARD_LABELS[award] || award} for the {ord} time</span></div>; })}
+                  {myAllDefensiveThisSeason.map(({ name, award }) => { const n = careerDefCount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #4ade80"}}><span style={{color:"#4ade80",fontSize:14}}>🔒</span><span>{name} made {AWARD_LABELS[award] || award} for the {ord} time</span></div>; })}
+                  {leaderPts && <div key="pts" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f87171"}}><span style={{color:"#f87171",fontSize:14}}>🔥</span><span>{leaderPts.name} led the team in points ({rf(leaderPts.ppg, 1)} PPG)</span></div>}
+                  {leaderReb && <div key="reb" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #22c55e"}}><span style={{color:"#22c55e",fontSize:14}}>📦</span><span>{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG)</span></div>}
+                  {leaderAst && <div key="ast" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #38bdf8"}}><span style={{color:"#38bdf8",fontSize:14}}>🎯</span><span>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG)</span></div>}
+                  {bestStreak > 0 && <div key="streak" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #fbbf24"}}><span style={{color:"#fbbf24",fontSize:14}}>🔥</span><span>Best win streak: {bestStreak} games</span></div>}
+                  {allStarCount > 0 && <div key="allstar" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f59e0b"}}><span style={{color:"#f59e0b",fontSize:14}}>⭐</span><span>All-Stars: {allStarCount}</span></div>}
                   {bestWin && (() => {
-              const oppLabel = (bestWin.oppName || "Opponent") + (bestWin.oppName ? (String(bestWin.oppName).endsWith("s") ? "'" : "'s") : "");
+              const oppLabel = bestWin.oppName || "Opponent";
               const p = bestWin.pog;
-              if (!p?.name) return <div key="bestWin">Best win: {bestWin.myScore}–{bestWin.oppScore} over the {oppLabel}.</div>;
+              if (!p?.name) return <div key="bestWin" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #22c55e"}}><span style={{color:"#22c55e",fontSize:14}}>🏅</span><span>Best win: {bestWin.myScore}–{bestWin.oppScore} over the {oppLabel}.</span></div>;
               const pts = p.pts != null ? Number(p.pts) : null;
               const reb = p.reb != null ? Number(p.reb) : null;
               const ast = p.ast != null ? Number(p.ast) : null;
-              const stl = p.stl != null ? Number(p.stl) : null;
-              const blk = p.blk != null ? Number(p.blk) : null;
-              const tpm = p.tpm != null ? Number(p.tpm) : null;
-              const tpa = p.tpa != null ? Number(p.tpa) : null;
-              const parts = [];
-              if (pts != null) parts.push(`${pts} point${pts === 1 ? "" : "s"}`);
-              if (reb != null) parts.push(`${reb} rebound${reb === 1 ? "" : "s"}`);
-              if (ast != null) parts.push(`${ast} assist${ast === 1 ? "" : "s"}`);
-              if (stl != null && stl > 0) parts.push(`${stl} steal${stl === 1 ? "" : "s"}`);
-              if (blk != null && blk > 0) parts.push(`${blk} block${blk === 1 ? "" : "s"}`);
-              const statLine = parts.length > 0 ? parts.join(", ") : null;
-              const threeLine = (tpa != null && tpa > 0 && tpm != null) ? ` and went ${tpm}-for-${tpa} from three` : (tpm != null && tpm > 0 ? ` and hit ${tpm} three${tpm === 1 ? "" : "s"}` : "");
+              const statParts = [pts != null && `${pts} PTS`, reb != null && `${reb} REB`, ast != null && `${ast} AST`].filter(Boolean);
+              const statLine = statParts.length > 0 ? statParts.join(", ") : null;
+              const threeNote = (p.tpa != null && p.tpa > 0 && p.tpm != null) ? ` · ${p.tpm}/${p.tpa} 3PM` : "";
               return (
-                <div key="bestWin">
-                  Best win: {bestWin.myScore}–{bestWin.oppScore} over the {oppLabel} — {p.name} won Player of the Game
-                  {statLine ? <> with {statLine}{threeLine}.</> : threeLine ? <> and performed well from three.</> : "."}
+                <div key="bestWin" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #22c55e"}}>
+                  <span style={{color:"#22c55e",fontSize:14}}>🏅</span>
+                  <span>Best win: {bestWin.myScore}–{bestWin.oppScore} over the {oppLabel}. POG: {p.name} · {statLine || "—"}{threeNote}</span>
                 </div>
               );
             })()}
+                </div>
                 </div>
               </div>
             );
           })()}
           {mvp && (
-            <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #fbbf24",textAlign:"center"}}>
-              <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:2,marginBottom:4}}>🏅 TEAM MVP — {myTeamName}</div>
-              <div style={{fontSize:18,fontWeight:900}}>{mvp.name}</div>
-              <div style={{fontSize:11,color:"#9ca3af",marginTop:2}}>{mvp.pos || "—"} · {fmt0(mvp.gp)} GP</div>
-              <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{fmt1(mvp.ppg)} PPG · {fmt1(mvp.apg)} APG · {fmt1(mvp.rpg)} RPG</div>
+            <div style={{background:"linear-gradient(180deg,#0f172a 0%,#0b1220 100%)",borderRadius:14,padding:0,marginBottom:14,border:"1px solid rgba(251,191,36,0.4)",boxShadow:"0 4px 20px rgba(0,0,0,0.3)",overflow:"hidden"}}>
+              <div style={{background:"linear-gradient(90deg,#f59e0b,#eab308)",height:4}}/>
+              <div style={{padding:"16px",textAlign:"center"}}>
+                <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:2,marginBottom:6}}>🏅 TEAM MVP — {myTeamName}</div>
+                <div style={{fontSize:20,fontWeight:900,color:"#fef3c7"}}>{mvp.name}</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{mvp.pos || "—"} · {fmt0(mvp.gp)} GP</div>
+                <div style={{fontSize:12,color:"#64748b",marginTop:4,display:"flex",justifyContent:"center",gap:12,flexWrap:"wrap"}}><span>{fmt1(mvp.ppg)} PPG</span><span>{fmt1(mvp.apg)} APG</span><span>{fmt1(mvp.rpg)} RPG</span></div>
+              </div>
             </div>
           )}
           <div style={{marginBottom:14}}>
@@ -3563,11 +3828,12 @@ if(phase==="teamSetup") return(
             <SeasonHighs highs={seasonHighs} careerHighs={careerLeagueHighs} myTeamName={myTeamName} title="📈 SEASON HIGHS (SINGLE GAME)" seasonNumber={seasonNumber}/>
           </div>
           <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
-            {playoff&&<button onClick={()=>buildPlayoffBracket(season,finalAi)} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"white",border:"none",borderRadius:10,padding:"12px 28px",fontSize:14,fontWeight:800,cursor:"pointer",boxShadow:"0 4px 18px rgba(245,158,11,0.3)"}}>
+            {playoff&&<button onClick={()=>{buildPlayoffBracket(season,finalAi);setTimeout(()=>{const el=document.getElementById("playoff-bracket");if(el)el.scrollIntoView({behavior:"smooth",block:"start"});else window.scrollTo({top:0,behavior:"smooth"});},100);}} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"white",border:"none",borderRadius:10,padding:"12px 28px",fontSize:14,fontWeight:800,cursor:"pointer",boxShadow:"0 4px 18px rgba(245,158,11,0.3)"}}>
               {playIn?"🎟 START PLAY-IN":"🏆 START PLAYOFFS"}
             </button>}
             {!playoff&&<button onClick={runItBack} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding:"12px 28px",fontSize:14,fontWeight:800,cursor:"pointer"}} title="Same roster, new AI opponents">🔄 Run it back</button>}
           </div>
+        </div>
         </div>
       </div>
     );
@@ -3584,15 +3850,21 @@ if(phase==="teamSetup") return(
     const simThroughActive = simThroughBreakRequestedRef.current;
     return (
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
-        <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+        <div style={{position:"fixed",bottom:16,right:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
           <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
           <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
         </div>
         <div style={{position:"fixed",top:12,right:12,zIndex:50,display:"flex",alignItems:"center",gap:8}}>
-          <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#fbbf24",cursor:"pointer"}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
+          <div style={{display:"flex",gap:4,alignItems:"center",padding:"4px 6px",background:"#0f172a",borderRadius:8,border:"1px solid #334155"}}>
+            <button onClick={handleCopyTeamCode} title="Copy team code" style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#94a3b8",cursor:"pointer"}}>🔗 Code</button>
+            <button onClick={handleShareLineup} title="Share" style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#94a3b8",cursor:"pointer"}}>📤 Share</button>
+            <button onClick={handleCopyLineupImage} title="Copy lineup image" style={{background:"linear-gradient(135deg,#60a5fa,#a78bfa)",color:"#0f172a",border:"none",borderRadius:6,padding:"6px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>🖼️ Image</button>
+          </div>
+          <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#fbbf24",cursor:"pointer"}} title="Achievements">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
         </div>
-        {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Trophy case</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
+        {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
         {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
+        {shareStatus&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:10,fontWeight:600,color:(typeof shareStatus==="object"&&shareStatus.type==="error")?"#f87171":(typeof shareStatus==="object"&&shareStatus.type==="success")?"#22c55e":"#60a5fa",padding:"4px 12px",background:(typeof shareStatus==="object"&&shareStatus.type==="error")?"rgba(248,113,113,0.2)":(typeof shareStatus==="object"&&shareStatus.type==="success")?"rgba(34,197,94,0.2)":"rgba(96,165,250,0.2)",borderRadius:8}}>{typeof shareStatus==="object"?shareStatus.msg:shareStatus}</div>)}
         <div style={{maxWidth:900,margin:"0 auto"}}>
           <div style={{textAlign:"center",marginBottom:20}}>
             <div style={{fontSize:28,fontWeight:900,color:"#fbbf24",letterSpacing:2}}>⭐ ALL-STAR BREAK (Game {ALL_STAR_GAME_AT})</div>
@@ -3666,7 +3938,7 @@ if(phase==="teamSetup") return(
       <>
         {simulatingOverlay}
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
-        <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+        <div style={{position:"fixed",bottom:16,right:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
           <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
           <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
         </div>
@@ -3702,6 +3974,11 @@ if(phase==="teamSetup") return(
                 </span>
               )}
             </div>
+            <div style={{display:"flex",gap:4,alignItems:"center",padding:"3px 6px",background:"#0f172a",borderRadius:8,border:"1px solid #334155"}}>
+              <button onClick={handleCopyTeamCode} title="Copy team code" style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🔗 Code</button>
+              <button onClick={handleShareLineup} title="Share" style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}}>📤 Share</button>
+              <button onClick={handleCopyLineupImage} title="Copy lineup image" style={{background:"linear-gradient(135deg,#60a5fa,#a78bfa)",color:"#0f172a",border:"none",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🖼️ Image</button>
+            </div>
             <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
             <button onClick={()=>setShowLeaders(s=>!s)} style={{background:"#1e293b",color:"#f97316",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showLeaders?"Hide":"Show"} Leaders</button>
             {gameNum <= ALL_STAR_GAME_AT && <button onClick={()=>setShowAllStarTab(a=>!a)} style={{background:showAllStarTab?"#78350f":"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showAllStarTab?"Hide":"Show"} All-Star</button>}
@@ -3711,11 +3988,12 @@ if(phase==="teamSetup") return(
             <button onClick={()=>setShowLoadModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>📂 Load</button>
             <button onClick={()=>setShowHistoryModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Last games">📋 Last {gameHistory.length || 0}</button>
             <button onClick={()=>setShowScheduleModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Full schedule">📅 Schedule</button>
-            <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
+            <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Achievements">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
             <button onClick={()=>setShowHelp(h=>!h)} style={{width:26,height:26,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:12,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
           </div>
-          {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Trophy case</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
+          {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
           {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
+          {shareStatus&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:10,fontWeight:600,color:(typeof shareStatus==="object"&&shareStatus.type==="error")?"#f87171":(typeof shareStatus==="object"&&shareStatus.type==="success")?"#22c55e":"#60a5fa",padding:"4px 12px",background:(typeof shareStatus==="object"&&shareStatus.type==="error")?"rgba(248,113,113,0.2)":(typeof shareStatus==="object"&&shareStatus.type==="success")?"rgba(34,197,94,0.2)":"rgba(96,165,250,0.2)",borderRadius:8}}>{typeof shareStatus==="object"?shareStatus.msg:shareStatus}</div>)}
           {showHistoryModal && (
             <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowHistoryModal(false)}>
               <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:16,maxWidth:440,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
@@ -3805,16 +4083,17 @@ if(phase==="teamSetup") return(
               </div>
             </div>
           )}
-          {showHelp&&<div style={{background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #334155",fontSize:10,color:"#64748b",marginBottom:10}}>
-            <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginBottom:4}}>HOW TO PLAY</div>
-            <div style={{marginBottom:2}}>• Build your team within ${BUDGET} budget</div>
-            <div style={{marginBottom:2}}>• 30-team league (2 conferences, 6 divisions) — 82-game season</div>
-            <div style={{marginBottom:2}}>• ⚡ Chemistry: real teammates same season+team</div>
-            <div style={{marginBottom:2}}>• 🧩 Archetypes: balance your roster for bonuses</div>
-            <div style={{marginBottom:2}}>• Top 6 direct · 7-10 play-in tournament</div>
-            <div style={{marginBottom:2}}>• Difficulty: Casual = you're favored · Hardcore = CPU favored</div>
-            <div style={{fontWeight:700,fontSize:9,color:"#475569",letterSpacing:1,marginTop:6,marginBottom:2}}>OOP PENALTIES</div>
-            <div>Adjacent ×0.82 · Wrong ×0.65</div>
+          {showHelp&&<div style={{background:"linear-gradient(180deg,#0f172a 0%,#0c1222 100%)",borderRadius:12,padding:0,border:"1px solid #334155",boxShadow:"0 8px 24px rgba(0,0,0,0.3)",marginBottom:10,overflow:"hidden"}}>
+            <div style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",padding:"8px 12px",fontWeight:800,fontSize:10,color:"white",letterSpacing:1}}>HOW TO PLAY</div>
+            <div style={{padding:10,fontSize:10,color:"#94a3b8",lineHeight:1.55}}>
+              <div style={{marginBottom:5,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#60a5fa"}}>📍</span><span><strong style={{color:"#e2e8f0"}}>Positions</strong>: One per slot (PG–C). OOP: Adjacent ×0.82 · Wrong ×0.65</span></div>
+              <div style={{marginBottom:5,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#fbbf24"}}>💰</span><span><strong style={{color:"#e2e8f0"}}>Budget</strong>: ${BUDGET} for 5 players</span></div>
+              <div style={{marginBottom:5,display:"flex",gap:8,alignItems:"flex-start"}}><span>⚡</span><span><strong style={{color:"#e2e8f0"}}>Chemistry</strong>: 2+ same team+season (bigger for 3–5)</span></div>
+              <div style={{marginBottom:5,display:"flex",gap:8,alignItems:"flex-start"}}><span>🧩</span><span><strong style={{color:"#e2e8f0"}}>Archetypes</strong>: Balance roles for bonuses</span></div>
+              <div style={{marginBottom:5,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#22c55e"}}>⚖️</span><span><strong style={{color:"#e2e8f0"}}>Team balance</strong>: Need Big, Playmaker, Defense, Scoring. 3+ scorers hurt</span></div>
+              <div style={{marginBottom:5,display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#a78bfa"}}>🏀</span><span>30 teams · 82 games · Top 6 direct · 7–10 play-in</span></div>
+              <div style={{display:"flex",gap:8,alignItems:"flex-start"}}><span style={{color:"#f472b6"}}>🎚</span><span><strong style={{color:"#e2e8f0"}}>Difficulty</strong>: Casual / Standard / Hardcore</span></div>
+            </div>
           </div>}
           {showAllStarSimThroughConfirm && (
             <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowAllStarSimThroughConfirm(false)}>
@@ -4167,17 +4446,34 @@ if(phase==="teamSetup") return(
       }}
     >
       {showTutorial && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div style={{ background: "#0f172a", borderRadius: 16, border: "2px solid #334155", maxWidth: 400, padding: 24, color: "#e2e8f0" }}>
-            <div style={{ fontSize: 28, fontWeight: 900, marginBottom: 12, color: "#f59e0b" }}>How to play</div>
-            <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6, marginBottom: 20 }}>
-              <div style={{ marginBottom: 8 }}>1. <strong style={{ color: "#e2e8f0" }}>Draft 5 players</strong> (one per position) within your <strong style={{ color: "#fbbf24" }}>${BUDGET}</strong> budget and build your lineup.</div>
-              <div style={{ marginBottom: 8 }}>2. <strong style={{ color: "#e2e8f0" }}>Season</strong>: play each game, or use <strong style={{ color: "#e2e8f0" }}>Sim to break</strong> / <strong style={{ color: "#e2e8f0" }}>Sim to end</strong> to advance. 30-team league, 2 conferences, 6 divisions.</div>
-              <div style={{ marginBottom: 8 }}>3. Track <strong style={{ color: "#e2e8f0" }}>League Leaders, Season Highs, All-Star & MVP/DPOY races</strong> — your players are highlighted in green.</div>
-              <div style={{ marginBottom: 8 }}>4. <strong style={{ color: "#e2e8f0" }}>Playoffs</strong>: top 6 in each conference go straight in; seeds 7–10 play-in. Win the bracket to become champion!</div>
-              <div style={{ fontSize: 11, color: "#64748b", marginTop: 8 }}>Tap <strong style={{ color: "#94a3b8" }}>?</strong> in-game for more tips (standings, chemistry, difficulty).</div>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, backdropFilter: "blur(4px)" }}>
+          <div style={{ background: "linear-gradient(180deg,#0f172a 0%,#0c1222 100%)", borderRadius: 20, border: "1px solid #334155", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(251,191,36,0.15)", maxWidth: 420, overflow: "hidden" }}>
+            <div style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", padding: "20px 24px", textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: 900, color: "white", letterSpacing: 1, textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}>How to play</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.9)", marginTop: 4, fontWeight: 600 }}>Build your team · Win the season</div>
             </div>
-            <button onClick={dismissTutorial} style={{ width: "100%", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Got it</button>
+            <div style={{ padding: 24, fontSize: 13, color: "#94a3b8", lineHeight: 1.65 }}>
+              <div style={{ display: "flex", gap: 12, marginBottom: 14, background: "#1e293b", borderRadius: 10, padding: 14, border: "1px solid #334155" }}>
+                <span style={{ fontSize: 20 }}>🏀</span>
+                <div><strong style={{ color: "#e2e8f0" }}>Draft 5 players</strong> (PG, SG, SF, PF, C) within <strong style={{ color: "#fbbf24" }}>${BUDGET}</strong>. OOP: Adjacent ×0.82 · Wrong ×0.65</div>
+              </div>
+              <div style={{ display: "flex", gap: 12, marginBottom: 14, background: "#1e293b", borderRadius: 10, padding: 14, border: "1px solid #334155" }}>
+                <span style={{ fontSize: 20 }}>⚡</span>
+                <div><strong style={{ color: "#e2e8f0" }}>Lineup building</strong>: Chemistry (2+ same team+season), Archetypes (balance roles), Team balance (Big, Playmaker, Defense, Scoring)</div>
+              </div>
+              <div style={{ display: "flex", gap: 12, marginBottom: 14, background: "#1e293b", borderRadius: 10, padding: 14, border: "1px solid #334155" }}>
+                <span style={{ fontSize: 20 }}>📅</span>
+                <div><strong style={{ color: "#e2e8f0" }}>Season</strong>: Play or Sim. 30 teams, 2 conferences, 6 divisions. Track Leaders, All-Star, MVP/DPOY</div>
+              </div>
+              <div style={{ display: "flex", gap: 12, marginBottom: 18, background: "#1e293b", borderRadius: 10, padding: 14, border: "1px solid #334155" }}>
+                <span style={{ fontSize: 20 }}>🏆</span>
+                <div><strong style={{ color: "#e2e8f0" }}>Playoffs</strong>: Top 6 direct; 7–10 play-in. Win the bracket!</div>
+              </div>
+              <div style={{ fontSize: 11, color: "#64748b", textAlign: "center" }}>Click <strong style={{ color: "#94a3b8" }}>?</strong> anytime for help</div>
+            </div>
+            <div style={{ padding: "0 24px 24px" }}>
+              <button onClick={dismissTutorial} style={{ width: "100%", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", border: "none", borderRadius: 10, padding: 14, fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 14px rgba(245,158,11,0.4)" }}>Got it</button>
+            </div>
           </div>
         </div>
       )}
@@ -4186,7 +4482,7 @@ if(phase==="teamSetup") return(
         <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowTrophyCase(false)}>
           <div style={{ background: "#0f172a", borderRadius: 16, border: "2px solid #334155", maxWidth: 420, width: "100%", maxHeight: "85vh", overflow: "auto", padding: 20 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div style={{ fontSize: 20, fontWeight: 900, color: "#fbbf24" }}>🏆 Trophy case</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: "#fbbf24" }}>🏆 Achievements</div>
               <button onClick={() => setShowTrophyCase(false)} style={{ background: "#334155", color: "#e2e8f0", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>Close</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -4215,7 +4511,7 @@ if(phase==="teamSetup") return(
         </div>
       )}
 
-      <div style={{ position: "fixed", bottom: 16, left: 16, zIndex: 50, display: "flex", alignItems: "center", gap: 6, background: "#0f172a", border: "1px solid #334155", borderRadius: 12, padding: "8px 12px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}>
+      <div style={{ position: "fixed", bottom: 16, right: 16, zIndex: 50, display: "flex", alignItems: "center", gap: 6, background: "#0f172a", border: "1px solid #334155", borderRadius: 12, padding: "8px 12px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}>
         <button onClick={() => setSoundOn((s) => !s)} style={{ background: soundOn ? "#14532d" : "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 10px", fontSize: 14, fontWeight: 700, color: soundOn ? "#22c55e" : "#9ca3af", cursor: "pointer" }}>{soundOn ? "🔊" : "🔈"}</button>
         <button onClick={skipSong} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 10px", fontSize: 12, fontWeight: 700, color: "#e2e8f0", cursor: "pointer" }} title="Skip song">⏭ Skip</button>
       </div>
@@ -4223,50 +4519,183 @@ if(phase==="teamSetup") return(
       <Analytics />
       <SpeedInsights />
 
-      <div style={{ maxWidth: 1200, margin: "0 auto", paddingBottom: 80 }}>
-        {/* Header row */}
+      <div style={{ display: "flex", minHeight: "100vh" }}>
+        {/* Left sidebar - menu off to the side */}
+        <aside
+          style={{
+            position: "fixed",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 120,
+            background: "#0f172a",
+            borderRight: "1px solid #1e293b",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "stretch",
+            paddingTop: 12,
+            paddingLeft: 8,
+            paddingRight: 8,
+            gap: 4,
+            zIndex: 40,
+            overflow: "hidden",
+          }}
+        >
+          {phase !== "teamSetup" && (
+            <button
+              onClick={goToMainMenu}
+              style={{
+                width: "100%",
+                borderRadius: 8,
+                background: "#1e293b",
+                border: "1px solid #334155",
+                color: "#94a3b8",
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 10px",
+              }}
+            >
+              <span style={{ fontSize: 14 }}>🏠</span> Menu
+            </button>
+          )}
+          <button
+            onClick={() => setShowSaveModal(true)}
+            style={{
+              width: "100%",
+              borderRadius: 8,
+              background: "#1e293b",
+              border: "1px solid #334155",
+              color: "#a78bfa",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 10px",
+            }}
+          >
+            <span style={{ fontSize: 14 }}>💾</span> Save
+          </button>
+          <button
+            onClick={() => setShowLoadModal(true)}
+            style={{
+              width: "100%",
+              borderRadius: 8,
+              background: "#1e293b",
+              border: "1px solid #334155",
+              color: "#94a3b8",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 10px",
+            }}
+          >
+            <span style={{ fontSize: 14 }}>📂</span> Load
+          </button>
+          <button
+            onClick={() => setShowTrophyCase(true)}
+            title={`Achievements (${unlockedAchievements.length}/${ACHIEVEMENTS.length})`}
+            style={{
+              width: "100%",
+              borderRadius: 8,
+              background: "#1e293b",
+              border: "1px solid #334155",
+              color: "#fbbf24",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 10px",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              minWidth: 0,
+            }}
+          >
+            <span style={{ fontSize: 14, flexShrink: 0 }}>🏆</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{unlockedAchievements.length}/{ACHIEVEMENTS.length}</span>
+          </button>
+          <button
+            onClick={() => setShowHelp((h) => !h)}
+            title="Help"
+            style={{
+              width: "100%",
+              borderRadius: 8,
+              background: "#1e293b",
+              border: "1px solid #334155",
+              color: "#60a5fa",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              padding: "8px 10px",
+            }}
+          >
+            <span style={{ fontSize: 14, fontWeight: 900 }}>?</span>
+          </button>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={handleLoadTeamCode}
+            disabled={inSeason}
+            style={{
+              width: "100%",
+              borderRadius: 8,
+              background: "#0f172a",
+              border: "1px solid #1e293b",
+              color: "#60a5fa",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: inSeason ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 10px",
+            }}
+          >
+            <span style={{ fontSize: 14 }}>📥</span> Load code
+          </button>
+        </aside>
+
+        <div style={{ marginLeft: 120, flex: 1, maxWidth: 1200, marginRight: "auto", paddingLeft: 16, paddingRight: 16, paddingBottom: 80 }}>
+        {/* Compact top bar */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            marginBottom: 10,
+            marginBottom: 12,
             flexWrap: "wrap",
-            gap: 8,
+            gap: 10,
+            paddingTop: 12,
           }}
         >
-          <div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
             <h1
               style={{
                 margin: 0,
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: 900,
                 background: "linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
               }}
             >
-              💰 NBA BUDGET BALL{" "}
-              <span
-                style={{
-                  fontSize: 11,
-                  color: "#475569",
-                  WebkitTextFillColor: "#475569",
-                }}
-              >
-                v1.0
-              </span>
+              💰 NBA BUDGET BALL
             </h1>
-            <div
-              style={{
-                fontSize: 10,
-                color: "#475569",
-                marginTop: 1,
-              }}
-            >
-              {playerPool.length} players · Budget ${BUDGET} · {SEASON_LENGTH}
-              -game season · Play-in + Playoffs
-            </div>
+            <span style={{ fontSize: 10, color: "#475569", fontWeight: 600 }}>v1.0</span>
             {phase !== "teamSetup" && (
               <button
                 type="button"
@@ -4274,212 +4703,61 @@ if(phase==="teamSetup") return(
                   const v = window.prompt("League name:", leagueName || "NBA");
                   if (v != null) setLeagueName(v.trim() || "NBA");
                 }}
-                style={{ background: "none", border: "none", padding: 0, marginTop: 4, cursor: "pointer", fontSize: 10, color: "#64748b", fontWeight: 600 }}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11, color: "#64748b", fontWeight: 600 }}
                 title="Click to rename league"
               >
                 {(leagueName && leagueName.trim()) ? leagueName.trim() : "NBA"}
               </button>
             )}
+            <span style={{ fontSize: 10, color: "#475569" }}>
+              {playerPool.length} players · ${BUDGET} · {SEASON_LENGTH} games
+            </span>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-              justifyContent: "flex-end",
-              flex: 1,
-            }}
-          >
-            <button
-              onClick={() => setShowTrophyCase(true)}
-              style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: "#fbbf24", cursor: "pointer" }}
-              title="Trophy case"
-            >
-              🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}
-            </button>
-            {/* Difficulty */}
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+              {[
+                ["casual", "Casual"],
+                ["standard", "Standard"],
+                ["hardcore", "Hardcore"],
+              ].map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => !inSeason && setDifficulty(val)}
+                  style={{
+                    background: difficulty === val ? "#4b5563" : "#111827",
+                    color: difficulty === val ? "#fef3c7" : "#9ca3af",
+                    border: "1px solid #374151",
+                    borderRadius: 999,
+                    padding: "4px 8px",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    cursor: inSeason ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 4, alignItems: "center", padding: "4px 6px", background: "#0f172a", borderRadius: 8, border: "1px solid #334155" }}>
+              <button onClick={handleCopyTeamCode} title="Copy team code" style={{ background: "#1e293b", color: "#94a3b8", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>🔗 Copy code</button>
+              <button onClick={handleShareLineup} title="Share link" style={{ background: "#1e293b", color: "#94a3b8", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>📤 Share link</button>
+              <button onClick={handleCopyLineupImage} title="Copy lineup image" style={{ background: "linear-gradient(135deg,#60a5fa,#a78bfa)", color: "#0f172a", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>🖼️ Share image</button>
+            </div>
+            {shareStatus && (
               <span
                 style={{
-                  fontSize: 9,
-                  color: "#475569",
-                  fontWeight: 700,
-                  letterSpacing: 1,
-                }}
-              >
-                DIFFICULTY
-              </span>
-              <div style={{ display: "flex", gap: 3 }}>
-                {[
-                  ["casual", "CASUAL"],
-                  ["standard", "STANDARD"],
-                  ["hardcore", "HARDCORE"],
-                ].map(([val, label]) => (
-                  <button
-                    key={val}
-                    onClick={() => !inSeason && setDifficulty(val)}
-                    style={{
-                      background:
-                        difficulty === val ? "#4b5563" : "#111827",
-                      color:
-                        difficulty === val ? "#fef3c7" : "#9ca3af",
-                      border: "1px solid #374151",
-                      borderRadius: 999,
-                      padding: "3px 8px",
-                      fontSize: 9,
-                      fontWeight: 700,
-                      cursor: inSeason ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Share / New season */}
-            <div
-              style={{
-                display: "flex",
-                gap: 6,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              {phase !== "teamSetup" && (
-                <button
-                  onClick={goToMainMenu}
-                  style={{
-                    background: "#1e293b",
-                    color: "#94a3b8",
-                    border: "1px solid #334155",
-                    borderRadius: 8,
-                    padding: "6px 10px",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  🏠 Main menu
-                </button>
-              )}
-              <div
-                style={{
-                  display: "flex",
-                  gap: 4,
-                  alignItems: "center",
-                  padding: "4px 6px",
-                  background: "#0f172a",
-                  borderRadius: 8,
-                  border: "1px solid #334155",
-                }}
-              >
-                <button
-                  onClick={handleCopyTeamCode}
-                  disabled={inSeason}
-                  title="Copy team code"
-                  style={{
-                    background: "#1e293b",
-                    color: "#94a3b8",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "5px 10px",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    cursor: inSeason ? "not-allowed" : "pointer",
-                    opacity: inSeason ? 0.6 : 1,
-                  }}
-                >
-                  🔗 Code
-                </button>
-                <button
-                  onClick={handleShareLineup}
-                  disabled={inSeason}
-                  title="Copy share text (code + link)"
-                  style={{
-                    background: "#1e293b",
-                    color: "#94a3b8",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "5px 10px",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    cursor: inSeason ? "not-allowed" : "pointer",
-                    opacity: inSeason ? 0.6 : 1,
-                  }}
-                >
-                  📤 Share
-                </button>
-                <button
-                  onClick={handleCopyLineupImage}
-                  disabled={inSeason}
-                  title="Copy lineup as image"
-                  style={{
-                    background: "linear-gradient(135deg,#60a5fa,#a78bfa)",
-                    color: "#0f172a",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "5px 10px",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    cursor: inSeason ? "not-allowed" : "pointer",
-                    opacity: inSeason ? 0.6 : 1,
-                  }}
-                >
-                  🖼️ Image
-                </button>
-              </div>
-              {shareStatus && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: (typeof shareStatus === "object" && shareStatus.type === "error") ? "#f87171" : (typeof shareStatus === "object" && shareStatus.type === "success") ? "#22c55e" : (typeof shareStatus === "object" && shareStatus.type === "loading") ? "#94a3b8" : "#60a5fa",
-                    padding: "2px 8px",
-                    background: (typeof shareStatus === "object" && shareStatus.type === "error") ? "rgba(248,113,113,0.15)" : (typeof shareStatus === "object" && shareStatus.type === "success") ? "rgba(34,197,94,0.15)" : "rgba(148,163,184,0.1)",
-                    borderRadius: 6,
-                    animation: (typeof shareStatus === "object" && shareStatus.type === "loading") ? "pulse 1.5s ease-in-out infinite" : "none",
-                  }}
-                >
-                  {(typeof shareStatus === "object" && shareStatus.type === "loading") ? "⏳ " : (typeof shareStatus === "object" && shareStatus.type === "success") ? "✓ " : (typeof shareStatus === "object" && shareStatus.type === "error") ? "✕ " : ""}
-                  {typeof shareStatus === "object" ? shareStatus.msg : shareStatus}
-                </span>
-              )}
-              <button
-                onClick={handleLoadTeamCode}
-                disabled={inSeason}
-                style={{
-                  background: "#0f172a",
-                  color: "#60a5fa",
-                  border: "1px solid #1e293b",
-                  borderRadius: 8,
-                  padding: "6px 10px",
                   fontSize: 10,
-                  fontWeight: 700,
-                  cursor: inSeason ? "not-allowed" : "pointer",
-                }}
-              >
-                📥 Load Code
-              </button>
-              <button
-                onClick={() => setShowTutorial(true)}
-                style={{
-                  background: "#0f172a",
-                  color: "#f59e0b",
-                  border: "1px solid #1e293b",
+                  fontWeight: 600,
+                  color: (typeof shareStatus === "object" && shareStatus.type === "error") ? "#f87171" : (typeof shareStatus === "object" && shareStatus.type === "success") ? "#22c55e" : (typeof shareStatus === "object" && shareStatus.type === "loading") ? "#94a3b8" : "#60a5fa",
+                  padding: "2px 8px",
+                  background: (typeof shareStatus === "object" && shareStatus.type === "error") ? "rgba(248,113,113,0.15)" : (typeof shareStatus === "object" && shareStatus.type === "success") ? "rgba(34,197,94,0.15)" : "rgba(148,163,184,0.1)",
                   borderRadius: 6,
-                  padding: "4px 8px",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  cursor: "pointer",
                 }}
-                title="How to play"
               >
-                ? How to play
-              </button>
-            </div>
+                {(typeof shareStatus === "object" && shareStatus.type === "loading") ? "⏳" : (typeof shareStatus === "object" && shareStatus.type === "success") ? "✓" : (typeof shareStatus === "object" && shareStatus.type === "error") ? "✕" : ""} {typeof shareStatus === "object" ? shareStatus.msg : shareStatus}
+              </span>
+            )}
           </div>
         </div>
 
@@ -4939,67 +5217,39 @@ if(phase==="teamSetup") return(
                 >
                   ✕ Clear lineup
                 </button>
-                <button
-                  onClick={() => setShowHelp((o) => !o)}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "50%",
-                    background: "#1e293b",
-                    border: "1px solid #334155",
-                    color: "#60a5fa",
-                    fontSize: 14,
-                    fontWeight: 900,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  ?
-                </button>
               </div>
               {showHelp && (
                 <div
                   style={{
-                    background: "#0f172a",
-                    borderRadius: 10,
-                    padding: 10,
+                    background: "linear-gradient(180deg,#0f172a 0%,#0c1222 100%)",
+                    borderRadius: 12,
+                    padding: 0,
                     border: "1px solid #334155",
-                    fontSize: 10,
-                    color: "#64748b",
-                    marginTop: 6,
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                    marginTop: 8,
+                    overflow: "hidden",
                   }}
                 >
                   <div
                     style={{
-                      fontWeight: 700,
-                      fontSize: 9,
-                      color: "#475569",
+                      background: "linear-gradient(135deg,#f59e0b,#d97706)",
+                      padding: "8px 12px",
+                      fontWeight: 800,
+                      fontSize: 10,
+                      color: "white",
                       letterSpacing: 1,
-                      marginBottom: 4,
                     }}
                   >
                     HOW TO PLAY
                   </div>
-                  <div style={{ marginBottom: 2 }}>
-                    • Build your team within ${BUDGET} budget
-                  </div>
-                  <div style={{ marginBottom: 2 }}>
-                    • 30-team league (2 conferences, 6 divisions) — 82-game
-                    season
-                  </div>
-                  <div style={{ marginBottom: 2 }}>
-                    • ⚡ Chemistry: real teammates same season+team
-                  </div>
-                  <div style={{ marginBottom: 2 }}>
-                    • 🧩 Archetypes: balance your roster for bonuses
-                  </div>
-                  <div style={{ marginBottom: 2 }}>
-                    • Top 6 direct · 7-10 play-in tournament
-                  </div>
-                  <div style={{ marginBottom: 2 }}>
-                    • Difficulty: Casual = you're favored · Hardcore = CPU favored
+                  <div style={{ padding: 12, fontSize: 10, color: "#94a3b8", lineHeight: 1.55 }}>
+                    <div style={{ marginBottom: 6, display: "flex", gap: 8, alignItems: "flex-start" }}><span style={{ color: "#60a5fa" }}>📍</span><span><strong style={{ color: "#e2e8f0" }}>Positions</strong>: One per slot (PG–C). OOP: Adjacent ×0.82 · Wrong ×0.65</span></div>
+                    <div style={{ marginBottom: 6, display: "flex", gap: 8, alignItems: "flex-start" }}><span style={{ color: "#fbbf24" }}>💰</span><span><strong style={{ color: "#e2e8f0" }}>Budget</strong>: ${BUDGET} for 5 players</span></div>
+                    <div style={{ marginBottom: 6, display: "flex", gap: 8, alignItems: "flex-start" }}><span>⚡</span><span><strong style={{ color: "#e2e8f0" }}>Chemistry</strong>: 2+ same team+season (bigger for 3–5)</span></div>
+                    <div style={{ marginBottom: 6, display: "flex", gap: 8, alignItems: "flex-start" }}><span>🧩</span><span><strong style={{ color: "#e2e8f0" }}>Archetypes</strong>: Balance roles for bonuses</span></div>
+                    <div style={{ marginBottom: 6, display: "flex", gap: 8, alignItems: "flex-start" }}><span style={{ color: "#22c55e" }}>⚖️</span><span><strong style={{ color: "#e2e8f0" }}>Team balance</strong>: Need Big, Playmaker, Defense, Scoring. 3+ scorers hurt</span></div>
+                    <div style={{ marginBottom: 6, display: "flex", gap: 8, alignItems: "flex-start" }}><span style={{ color: "#a78bfa" }}>🏀</span><span>30 teams · 82 games · Top 6 direct · 7–10 play-in</span></div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}><span style={{ color: "#f472b6" }}>🎚</span><span><strong style={{ color: "#e2e8f0" }}>Difficulty</strong>: Casual / Standard / Hardcore</span></div>
                   </div>
                 </div>
               )}
@@ -5515,6 +5765,7 @@ if(phase==="teamSetup") return(
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

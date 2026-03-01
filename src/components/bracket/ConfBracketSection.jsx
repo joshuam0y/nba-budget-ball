@@ -1,6 +1,6 @@
 import { MatchupCard } from "./MatchupCard";
 
-export function ConfBracketSection({ sub, confLabel, prefix, onSelectMatch, onPlayMatch, activeMatchId, nextPlayerMatchId, isMobile, density }) {
+export function ConfBracketSection({ sub, confLabel, prefix, onSelectMatch, onPlayMatch, onSimSeries, activeMatchId, nextPlayerMatchId, isMobile, density }) {
   if (!sub || !sub.playIn) return null;
   const { playIn, firstRound, semis, finals } = sub;
   const pi1done = !!playIn[0].winner, pi2done = !!playIn[1].winner, pi3done = !!playIn[2].winner, playInDone = pi1done && pi2done && pi3done;
@@ -20,6 +20,7 @@ export function ConfBracketSection({ sub, confLabel, prefix, onSelectMatch, onPl
       isYourNextGame={id === nextPlayerMatchId}
       onSelectMatch={onSelectMatch}
       onPlayMatch={onPlayMatch}
+      onSimSeries={onSimSeries}
       isMobile={isMobile}
       density={density}
     />

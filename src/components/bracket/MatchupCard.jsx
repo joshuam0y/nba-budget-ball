@@ -1,4 +1,4 @@
-export function MatchupCard({ matchup, matchId, isActive, onSelectMatch, onPlayMatch, isYourNextGame, isMobile, density }) {
+export function MatchupCard({ matchup, matchId, isActive, onSelectMatch, onPlayMatch, onSimSeries, isYourNextGame, isMobile, density }) {
   const { top, bot, winner, games, label } = matchup;
   const wA = games.filter((g) => g.winnerIdx === 0).length, wB = games.filter((g) => g.winnerIdx === 1).length, done = !!winner;
   const hasUser = top?.isPlayer || bot?.isPlayer;
@@ -6,6 +6,10 @@ export function MatchupCard({ matchup, matchId, isActive, onSelectMatch, onPlayM
   const handlePlayClick = (e) => {
     e?.stopPropagation?.();
     onPlayMatch?.(matchId);
+  };
+  const handleSimSeriesClick = (e) => {
+    e?.stopPropagation?.();
+    onSimSeries?.(matchId);
   };
   const slot = matchId === "finals" ? "finals" : (matchId?.split("-")?.[1] ?? "");
   const isPi1 = slot === "pi1";
@@ -75,26 +79,48 @@ export function MatchupCard({ matchup, matchId, isActive, onSelectMatch, onPlayM
         </div>
       )}
       {!done && top && bot && onPlayMatch && (
-        <button
-          type="button"
-          onClick={handlePlayClick}
-          style={{
-            width: "100%",
-            marginTop: 10,
-            minHeight: isMobile ? 44 : undefined,
-            background: hasUser ? "linear-gradient(135deg,#22c55e,#16a34a)" : "linear-gradient(135deg,#475569,#64748b)",
-            color: "white",
-            border: "none",
-            borderRadius: 8,
-            padding: isMobile ? "12px 14px" : "10px 12px",
-            fontSize: isMobile ? 13 : 12,
-            fontWeight: 800,
-            cursor: "pointer",
-            boxShadow: hasUser ? "0 2px 8px rgba(34,197,94,0.3)" : "0 2px 6px rgba(0,0,0,0.3)",
-          }}
-        >
-          {hasUser ? `▶ Play Game ${games.length + 1}` : `⚡ Sim Game ${games.length + 1}`}
-        </button>
+        <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={handlePlayClick}
+            style={{
+              flex: hasUser ? 1 : undefined,
+              minWidth: hasUser ? 0 : "100%",
+              minHeight: isMobile ? 44 : undefined,
+              background: hasUser ? "linear-gradient(135deg,#22c55e,#16a34a)" : "linear-gradient(135deg,#475569,#64748b)",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              padding: isMobile ? "12px 14px" : "10px 12px",
+              fontSize: isMobile ? 13 : 12,
+              fontWeight: 800,
+              cursor: "pointer",
+              boxShadow: hasUser ? "0 2px 8px rgba(34,197,94,0.3)" : "0 2px 6px rgba(0,0,0,0.3)",
+            }}
+          >
+            {hasUser ? `▶ Play Game ${games.length + 1}` : "⚡ Sim round"}
+          </button>
+          {hasUser && onSimSeries && (
+            <button
+              type="button"
+              onClick={handleSimSeriesClick}
+              style={{
+                minHeight: isMobile ? 44 : undefined,
+                background: "#1e293b",
+                color: "#94a3b8",
+                border: "1px solid #475569",
+                borderRadius: 8,
+                padding: isMobile ? "12px 14px" : "10px 12px",
+                fontSize: isMobile ? 12 : 11,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+              title="Sim all remaining games in this series"
+            >
+              ⚡ Sim series
+            </button>
+          )}
+        </div>
       )}
       {done && (
         <div style={{ textAlign: "center", fontSize: isMobile ? 12 : 11, color: "#22c55e", marginTop: 8, fontWeight: 700 }}>
