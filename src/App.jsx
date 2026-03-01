@@ -890,16 +890,13 @@ export default function App(){
     }
     const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
     const code = ids.join("-");
-    const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
-    if (url) url.searchParams.set("roster", code);
-    const shareUrl = url ? url.toString() : null;
-    const baseUrl = shareUrl || (typeof window !== "undefined" ? window.location.origin : "");
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
     const name = (myTeamName && myTeamName.trim()) ? myTeamName.trim() : "my";
-    const shareText = "Here's " + name + "'s lineup — paste the code to try it or build your own!\nCode: " + code + "\nPlay: " + baseUrl;
+    const shareText = "Here's " + name + "'s lineup — paste the code to try it or build your own!\nCode: " + code + "\nPlay: " + origin;
     const nav = typeof navigator !== "undefined" ? navigator : null;
     try {
       if (nav?.share && /mobile|android|iphone|ipad/i.test(navigator.userAgent)) {
-        await nav.share({ title: "NBA Budget Ball", text: shareText, url: shareUrl || baseUrl });
+        await nav.share({ title: "NBA Budget Ball", text: shareText, url: origin });
         setShareStatus({ type: "success", msg: "Shared!" });
       } else {
         await nav?.clipboard?.writeText(shareText);
@@ -930,10 +927,8 @@ export default function App(){
     try {
       const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
       const code = ids.join("-");
-      const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
-      if (url) url.searchParams.set("roster", code);
-      const shareUrl = url ? url.toString() : null;
-      const blob = await generateLineupImageBlob(roster, myTeamName, shareUrl, code);
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const blob = await generateLineupImageBlob(roster, myTeamName, origin, code);
       const file = new File([blob], "nba-budget-ball-lineup.png", { type: "image/png" });
       const nav = typeof navigator !== "undefined" ? navigator : null;
       if (nav?.share && nav?.canShare?.({ files: [file] })) {
@@ -2663,7 +2658,15 @@ if(phase==="teamSetup") return(
           }}
           maxLength={20}
           placeholder="e.g. Hardwood Kings..."
-          style={{width:"100%",background:"#080f1e",border:"1px solid #334155",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#e2e8f0",outline:"none",boxSizing:"border-box",marginBottom:16,textAlign:"center"}}
+          style={{width:"100%",background:"#080f1e",border:"1px solid #334155",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#e2e8f0",outline:"none",boxSizing:"border-box",marginBottom:12,textAlign:"center"}}
+        />
+        <div style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1,marginBottom:6}}>LEAGUE</div>
+        <input
+          value={leagueName||"NBA"}
+          onChange={e=>setLeagueName((e.target.value||"").trim()||"NBA")}
+          placeholder="NBA"
+          maxLength={24}
+          style={{width:"100%",background:"#080f1e",border:"1px solid #334155",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#94a3b8",outline:"none",boxSizing:"border-box",marginBottom:16,textAlign:"center"}}
         />
         {teamNameHistory.length>0&&(
           <div style={{marginBottom:12,fontSize:10,color:"#64748b"}}>
@@ -4265,17 +4268,17 @@ if(phase==="teamSetup") return(
               -game season · Play-in + Playoffs
             </div>
             {phase !== "teamSetup" && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 9, color: "#64748b", fontWeight: 700 }}>League:</span>
-                <input
-                  type="text"
-                  value={leagueName || "NBA"}
-                  onChange={(e) => setLeagueName((e.target.value || "NBA").trim() || "NBA")}
-                  placeholder="NBA"
-                  maxLength={24}
-                  style={{ width: 90, background: "#0f172a", border: "1px solid #334155", borderRadius: 6, padding: "4px 8px", fontSize: 10, color: "#e2e8f0" }}
-                />
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const v = window.prompt("League name:", leagueName || "NBA");
+                  if (v != null) setLeagueName(v.trim() || "NBA");
+                }}
+                style={{ background: "none", border: "none", padding: 0, marginTop: 4, cursor: "pointer", fontSize: 10, color: "#64748b", fontWeight: 600 }}
+                title="Click to rename league"
+              >
+                {(leagueName && leagueName.trim()) ? leagueName.trim() : "NBA"}
+              </button>
             )}
           </div>
 
