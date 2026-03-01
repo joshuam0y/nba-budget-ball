@@ -1045,9 +1045,9 @@ export function getArchetype(p) {
     if (score > best.score) best = { id: "playmaker", label: "PLAYMAKER", color: "#fbbf24", score };
   }
 
-  // 7. Lockdown – defensive specialist (slightly lower bar, wider range for level spread)
-  if (p.stl >= 0.8 || (isBig && p.blk >= 1.0)) {
-    const score = archScore(0.8, 2.4, p.stl) * 0.55 + archScore(0.4, 2.4, p.blk) * 0.45;
+  // 7. Lockdown – defensive specialist (low bar so more Lockdown 1s; level bands spread 1/2/3)
+  if (p.stl >= 0.7 || (isBig && p.blk >= 0.9)) {
+    const score = archScore(0.7, 2.4, p.stl) * 0.55 + archScore(0.35, 2.4, p.blk) * 0.45;
     if (score > best.score) best = { id: "lockdown", label: "LOCKDOWN", color: "#f87171", score };
   }
 
@@ -1065,9 +1065,9 @@ export function getArchetype(p) {
     if (score > best.score) best = { id: "spotUp", label: "SPOT-UP", color: "#38bdf8", score };
   }
 
-  // 10. Scorer – primary scoring (wide range so many Scorer 1s and 3s, not just 2)
+  // 10. Scorer – primary scoring (wide range; level bands give more Scorer 1s)
   if (p.pts >= 8) {
-    const score = archScore(8, 28, p.pts) * 0.7 + archScore(34, 56, p.rating ?? 0) * 0.3;
+    const score = archScore(8, 26, p.pts) * 0.7 + archScore(34, 55, p.rating ?? 0) * 0.3;
     if (score > best.score) best = { id: "scorer", label: "SCORER", color: "#f97316", score };
   }
 
@@ -1081,8 +1081,22 @@ export function getArchetype(p) {
     }
   }
 
-  // Spaced level bands so categories spread across 1/2/3
-  const level = best.score < 30 ? 1 : best.score < 60 ? 2 : 3;
+  // Per-archetype level bands so we don’t cluster in 2 (more 1s and 3s)
+  const bands = {
+    threeD: [26, 56],   // spread 3&D 2s → more 3&D 1 and 3&D 3
+    lockdown: [26, 56], // more Lockdown 1s
+    scorer: [34, 62],   // more Scorer 1s (wider band 1)
+    rimProt: [28, 58],
+    pmBig: [28, 58],
+    interior: [28, 58],
+    stretch: [28, 58],
+    spotUp: [28, 58],
+    playmaker: [30, 60],
+    versatile: [30, 60],
+    role: [30, 60],
+  };
+  const [t1, t2] = bands[best.id] ?? [30, 60];
+  const level = best.score < t1 ? 1 : best.score < t2 ? 2 : 3;
   const labelWithLevel = `${best.label} ${level}`;
   return { id: best.id, label: labelWithLevel, color: best.color, level };
 }
