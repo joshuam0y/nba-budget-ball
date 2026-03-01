@@ -3108,8 +3108,8 @@ if(phase==="teamSetup") return(
                 <button onClick={handleShareLineup} title="Share link" style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "8px 10px" : "5px 10px",fontSize: isMobile ? 12 : 11}}>📤 Share link</button>
                 <button onClick={handleCopyLineupImage} title="Copy lineup image" style={{...btnBase,background:"linear-gradient(135deg,#60a5fa,#a78bfa)",color:"#0f172a",border:"none",padding: isMobile ? "8px 10px" : "5px 10px",fontSize: isMobile ? 12 : 11}}>🖼️ Share image</button>
               </div>
-              {nextPlayerMatchId && (
-                <button onClick={()=>{ setActiveMatchId(nextPlayerMatchId); setPlayoffResult(null); }} style={{...btnBase,background:"#052e16",color:"#86efac",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,border:"1px solid #14532d"}}>⏭ Next game</button>
+              {nextPlayerMatchId && (activeMatchId === null || nextPlayerMatchId !== activeMatchId) && (
+                <button onClick={()=>{ setActiveMatchId(nextPlayerMatchId); setPlayoffResult(null); setTimeout(()=>{ const el=document.getElementById(`match-${nextPlayerMatchId}`); if(el)el.scrollIntoView({behavior:"smooth",block:"center"}); },50); }} style={{...btnBase,background:"#052e16",color:"#86efac",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,border:"1px solid #14532d"}} title="Jump to your next series">⏭ Next series</button>
               )}
               <button onClick={()=>setShowStandings(s=>!s)} style={{...btnBase,background:showStandings?"#1e3a5f":"#1e293b",color:"#60a5fa",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>{showStandings?"Hide":"Show"} Standings</button>
               <button onClick={()=>setShowPlayoffLeaders(s=>!s)} style={{...btnBase,background:showPlayoffLeaders?"#431407":"#1e293b",color:"#f97316",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>{showPlayoffLeaders?"Hide":"Show"} Leaders</button>
