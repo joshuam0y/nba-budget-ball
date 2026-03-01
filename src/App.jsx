@@ -86,16 +86,6 @@ function groupAwardsByType(list) {
   }));
 }
 
-/** Format award for team summary: "Won MVP for the 1st time (S1)" or "Made All-NBA 1st Team for the 2nd time (S1, S2)" */
-function formatAwardForSummary(label, award, seasons) {
-  const n = seasons.length;
-  const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th";
-  const sStr = seasons.map((s) => `S${s}`).join(", ");
-  const wonAwards = ["MVP", "DPOY", "TMVP", "CHAMP", "FINALSMVP"];
-  if (wonAwards.includes(award)) return `Won ${label} for the ${ord} time (${sStr})`;
-  return `Made ${label} for the ${ord} time (${sStr})`;
-}
-
 /** One row per roster player: merge awards from playerAwards[name] and playerAwards[fullName], dedupe by (season, award). */
 function getMyTeamAwardsByPlayer(roster, playerAwards) {
   const awards = playerAwards || {};
@@ -2878,7 +2868,7 @@ if(phase==="teamSetup") return(
                             <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
                               {grouped.map(({ award, label, seasons }) => (
                                 <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
-                                  {formatAwardForSummary(label, award, seasons)}
+                                  {label} ({seasons.map((s) => `S${s}`).join(", ")})
                                 </span>
                               ))}
                             </div>
@@ -3032,7 +3022,7 @@ if(phase==="teamSetup") return(
                         <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
                           {grouped.map(({ award, label, seasons }) => (
                             <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
-                              {formatAwardForSummary(label, award, seasons)}
+                              {label} ({seasons.map((s) => `S${s}`).join(", ")})
                             </span>
                           ))}
                         </div>
@@ -3296,6 +3286,24 @@ if(phase==="teamSetup") return(
               const west = [...(allStarSelections.west?.starters || []), ...(allStarSelections.west?.reserves || [])];
               return east.concat(west).filter((p) => p?.team === myTeamName);
             })() : [];
+            const careerDefCount = (name, award) => (playerAwards[name] || []).filter((e) => e.award === award).length;
+            const myAllDefensiveThisSeason = (() => {
+              const list = [];
+              const seen = new Set();
+              POSITIONS.forEach((pos) => {
+                const p = roster[pos];
+                if (!p) return;
+                const awards = [...(playerAwards[p.name] || []), ...(playerAwards[p.fullName] || []).filter((e) => e && p.name !== p.fullName)];
+                awards.forEach((e) => {
+                  if (e.season !== seasonNumber || (e.award !== "DEF1" && e.award !== "DEF2")) return;
+                  const key = `${p.name}|${e.award}`;
+                  if (seen.has(key)) return;
+                  seen.add(key);
+                  list.push({ name: p.name, award: e.award });
+                });
+              });
+              return list;
+            })();
             const bestWin = (seasonGameResults || []).filter((r) => r && r.won && r.myScore != null && r.oppScore != null).reduce((best, r) => {
               const diff = (r.myScore || 0) - (r.oppScore || 0);
               return !best || diff > ((best.myScore || 0) - (best.oppScore || 0)) ? r : best;
@@ -3314,6 +3322,7 @@ if(phase==="teamSetup") return(
                   {leaderReb && <div>{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG)</div>}
                   {leaderAst && <div>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG)</div>}
                   {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name}>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</div> : null; })}
+                  {myAllDefensiveThisSeason.map(({ name, award }) => { const n = careerDefCount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`}>{name} made {AWARD_LABELS[award] || award} for the {ord} time</div>; })}
                   {bestWin && (() => {
               const oppLabel = (bestWin.oppName || "Opponent") + (bestWin.oppName ? (String(bestWin.oppName).endsWith("s") ? "'" : "'s") : "");
               const p = bestWin.pog;
@@ -3435,7 +3444,7 @@ if(phase==="teamSetup") return(
                         <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
                           {grouped.map(({ award, label, seasons }) => (
                             <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
-                              {formatAwardForSummary(label, award, seasons)}
+                              {label} ({seasons.map((s) => `S${s}`).join(", ")})
                             </span>
                           ))}
                         </div>
@@ -4001,7 +4010,7 @@ if(phase==="teamSetup") return(
                           <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
                             {grouped.map(({ award, label, seasons }) => (
                               <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
-                                {formatAwardForSummary(label, award, seasons)}
+                                {label} ({seasons.map((s) => `S${s}`).join(", ")})
                               </span>
                             ))}
                           </div>
