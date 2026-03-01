@@ -1023,15 +1023,15 @@ export function getArchetype(p) {
     if (score > best.score) best = { id: "rimProt", label: "RIM PROTECTOR", color: "#60a5fa", score };
   }
 
-  // 4. Interior – big, boards, not a stretch
-  if (isBig && p.reb >= 6 && tR < 0.28) {
-    const score = archScore(6, 16, p.reb) * 0.6 + archScore(44, 58, fg) * 0.4;
+  // 4. Interior – big, boards, not a stretch (broad bar so more bigs land here)
+  if (isBig && p.reb >= 5 && tR < 0.32) {
+    const score = archScore(5, 16, p.reb) * 0.6 + archScore(42, 58, fg) * 0.4;
     if (score > best.score) best = { id: "interior", label: "INTERIOR BIG", color: "#4ade80", score };
   }
 
-  // 5. Stretch – meaningful 3P volume and %
-  if (tR >= 0.18 && tpPct >= 28) {
-    const score = archScore(0.18, 0.55, tR) * 0.5 + archScore(28, 42, tpPct) * 0.5;
+  // 5. Stretch – any real 3P volume and % (broad so more wings/bigs get Stretch 1/2)
+  if (tR >= 0.14 && tpPct >= 26) {
+    const score = archScore(0.14, 0.55, tR) * 0.5 + archScore(26, 42, tpPct) * 0.5;
     if (score > best.score) best = { id: "stretch", label: "STRETCH", color: "#67e8f9", score };
   }
 
@@ -1051,31 +1051,36 @@ export function getArchetype(p) {
     if (score > best.score) best = { id: "lockdown", label: "LOCKDOWN", color: "#f87171", score };
   }
 
-  // 8. 3&D – shoot and defend
-  if (tpPct >= 32 && tR >= 0.32 && (p.stl >= 0.6 || p.blk >= 0.5)) {
-    const score = (archScore(32, 42, tpPct) + archScore(0.32, 0.6, tR)) * 0.5 + archScore(0.6, 1.8, p.stl + p.blk) * 0.5;
+  // 8. 3&D – shoot and defend (spaced: lower bar so more 3&D 1/2, not just 3)
+  if (tpPct >= 30 && tR >= 0.26 && (p.stl >= 0.5 || p.blk >= 0.4)) {
+    const score = (archScore(30, 42, tpPct) + archScore(0.26, 0.6, tR)) * 0.5 + archScore(0.5, 2, p.stl + p.blk) * 0.5;
     if (score > best.score) best = { id: "threeD", label: "3&D", color: "#34d399", score };
   }
 
-  // 9. Spot-up – shooter first, lower bar than 3&D
-  if (tR >= 0.28 && tpPct >= 30 && p.pts < 22) {
-    const score = archScore(0.28, 0.55, tR) * 0.5 + archScore(30, 42, tpPct) * 0.5;
+  // 9. Spot-up – shooter first (broad so R. Hinson–type and others get a home)
+  if (tR >= 0.20 && tpPct >= 26 && p.pts < 26) {
+    const score = archScore(0.20, 0.55, tR) * 0.5 + archScore(26, 42, tpPct) * 0.5;
     if (score > best.score) best = { id: "spotUp", label: "SPOT-UP", color: "#38bdf8", score };
   }
 
-  // 10. Scorer – primary scoring (broad so many qualify)
-  if (p.pts >= 12) {
-    const score = archScore(12, 30, p.pts) * 0.7 + archScore(40, 58, p.rating ?? 0) * 0.3;
+  // 10. Scorer – primary scoring (broad; include 8+ ppg so borderline “role” types become Scorer 1)
+  if (p.pts >= 8) {
+    const score = archScore(8, 30, p.pts) * 0.7 + archScore(36, 58, p.rating ?? 0) * 0.3;
     if (score > best.score) best = { id: "scorer", label: "SCORER", color: "#f97316", score };
   }
 
-  // 11. Role – fallback; level from rating so everyone is tiered
+  // 11. Role – fallback only; level from rating
   if (best.id === "role") {
-    const score = archScore(30, 55, p.rating ?? 35);
-    best = { id: "role", label: "ROLE", color: "#94a3b8", score };
+    const roleScore = archScore(28, 54, p.rating ?? 32);
+    best = { id: "role", label: "ROLE", color: "#94a3b8", score: roleScore };
+    // Avoid lone "Role 2"s: if they have any real scoring, give them Scorer 1
+    if (p.pts >= 6 && (p.rating ?? 0) >= 34) {
+      best = { id: "scorer", label: "SCORER", color: "#f97316", score: archScore(6, 18, p.pts) * 0.6 + archScore(34, 52, p.rating ?? 0) * 0.4 };
+    }
   }
 
-  const level = best.score < 40 ? 1 : best.score < 68 ? 2 : 3;
+  // Spaced level bands so categories spread across 1/2/3
+  const level = best.score < 30 ? 1 : best.score < 60 ? 2 : 3;
   const labelWithLevel = `${best.label} ${level}`;
   return { id: best.id, label: labelWithLevel, color: best.color, level };
 }
