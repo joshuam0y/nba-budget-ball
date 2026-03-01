@@ -298,6 +298,7 @@ export default function App(){
   const volume = 1; // 100%
   const [aiTeams,setAiTeams]=useState([]);
   const [schedule,setSchedule]=useState(null);
+  const [scheduleHome, setScheduleHome] = useState(null); // scheduleHome[i][g] = true if team i is home in game g
   const [result,setResult]=useState(null);
   const [season,setSeason]=useState(emptySeason());
   const [gameNum,setGameNum]=useState(1);
@@ -368,8 +369,9 @@ export default function App(){
   const [leagueName, setLeagueName] = useState("NBA");
   const [gameHistory, setGameHistory] = useState([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showTrophyCase, setShowTrophyCase] = useState(false);
-  const [seasonGameResults, setSeasonGameResults] = useState([]); // [{ won }] for streak calc
+  const [seasonGameResults, setSeasonGameResults] = useState([]); // [{ oppName, home, myScore, oppScore, won, pog }] per game
   const [unlockedAchievements, setUnlockedAchievements] = useState([]); // per-save; persisted with slot
   const [newlyUnlockedAchievements, setNewlyUnlockedAchievements] = useState([]);
   const [hintsDismissed, setHintsDismissed] = useState(() => {
@@ -478,6 +480,7 @@ export default function App(){
         }
         if (saved.season) setSeason(saved.season);
         if (saved.schedule) setSchedule(saved.schedule);
+        if (saved.scheduleHome) setScheduleHome(saved.scheduleHome);
         if (saved.aiTeams) setAiTeams(saved.aiTeams);
         if (typeof saved.gameNum === "number") setGameNum(saved.gameNum);
         if (typeof saved.inSeason === "boolean") setInSeason(saved.inSeason);
@@ -506,6 +509,8 @@ export default function App(){
           if (saved.phase === "allStarBreak") allStarComputedRef.current = true;
         }
         if (Array.isArray(saved.achievementsUnlocked)) setUnlockedAchievements(saved.achievementsUnlocked);
+        if (Array.isArray(saved.seasonGameResults)) setSeasonGameResults(saved.seasonGameResults);
+        if (Array.isArray(saved.gameHistory)) setGameHistory(saved.gameHistory);
 
         restored =
           !!saved.inSeason ||
@@ -558,6 +563,7 @@ export default function App(){
         phase,
         season,
         schedule,
+        scheduleHome,
         aiTeams,
         gameNum,
         inSeason,
@@ -589,6 +595,8 @@ export default function App(){
         mvpVotes,
         dpoyVotes,
         achievementsUnlocked: unlockedAchievements,
+        seasonGameResults: seasonGameResults || [],
+        gameHistory: gameHistory || [],
       };
       const saveKey = currentSaveSlot ? `nba_budget_ball_save_${currentSaveSlot}` : "nba-budget-ball-state";
       window.localStorage.setItem(saveKey, JSON.stringify(payload));
@@ -596,7 +604,7 @@ export default function App(){
     } catch {
       // ignore localStorage issues
     }
-  }, [roster, myTeamName, leagueName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot, gamePogs, allStarVotes, allStarSelections, mvpVotes, dpoyVotes, unlockedAchievements]);
+  }, [roster, myTeamName, leagueName, difficulty, phase, season, schedule, scheduleHome, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot, gamePogs, allStarVotes, allStarSelections, mvpVotes, dpoyVotes, unlockedAchievements, seasonGameResults, gameHistory]);
 
   const rememberTeamName = useCallback((name) => {
     const trimmed = (name || "").trim();
@@ -717,6 +725,7 @@ export default function App(){
       if (saved.phase) setPhase(saved.phase);
       if (saved.season) setSeason(saved.season);
       if (saved.schedule) setSchedule(saved.schedule);
+      if (saved.scheduleHome) setScheduleHome(saved.scheduleHome);
       if (saved.aiTeams) setAiTeams(saved.aiTeams);
       if (typeof saved.gameNum === "number") setGameNum(saved.gameNum);
       if (typeof saved.inSeason === "boolean") setInSeason(saved.inSeason);
@@ -742,6 +751,8 @@ export default function App(){
         setAllStarSelections(saved.allStarSelections);
         if (saved.phase === "allStarBreak") allStarComputedRef.current = true;
       }
+      if (Array.isArray(saved.seasonGameResults)) setSeasonGameResults(saved.seasonGameResults);
+      if (Array.isArray(saved.gameHistory)) setGameHistory(saved.gameHistory);
       if (Array.isArray(saved.achievementsUnlocked)) setUnlockedAchievements(saved.achievementsUnlocked);
       else setUnlockedAchievements([]);
       seasonEndRecordedRef.current = !!saved.season?.gp && saved.phase === "seasonEnd";
@@ -823,19 +834,21 @@ export default function App(){
       const rosterIds = {};
       POSITIONS.forEach((pos) => { rosterIds[pos] = roster[pos]?.id ?? null; });
       const payload = {
-        teamName: myTeamName, leagueName: leagueName || "NBA", roster: rosterIds, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason,
+        teamName: myTeamName, leagueName: leagueName || "NBA", roster: rosterIds, difficulty, phase, season, schedule, scheduleHome, aiTeams, gameNum, inSeason,
         bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs,
         playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode,
         teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot: slot,
         gamePogs, allStarSelections,
         achievementsUnlocked: unlockedAchievements,
+        seasonGameResults: seasonGameResults || [],
+        gameHistory: gameHistory || [],
       };
       window.localStorage.setItem(getSaveKey(slot), JSON.stringify(payload));
       window.localStorage.setItem("nba_budget_ball_last_key", getSaveKey(slot));
     } catch {
       window.alert("Could not save.");
     }
-  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, gamePogs, allStarSelections, unlockedAchievements, getSaveKey]);
+  }, [roster, myTeamName, difficulty, phase, season, schedule, scheduleHome, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, gamePogs, allStarSelections, unlockedAchievements, seasonGameResults, gameHistory, getSaveKey]);
 
   const [shareImageStatus, setShareImageStatus] = useState(null);
   const handleShareLineup = useCallback(async () => {
@@ -1787,7 +1800,8 @@ const startSeason = async () => {
     l: 0,
     gameLog: Array(SEASON_LENGTH).fill(null),
   }));
-  setSchedule(sched);
+  setSchedule(sched.schedule);
+  setScheduleHome(sched.scheduleHome);
   setAiTeams(ai);
   setInSeason(true);
   setSeason(emptySeason());
@@ -1843,7 +1857,8 @@ const startSeason = async () => {
               gameLog: Array(SEASON_LENGTH).fill(null),
             }));
           })();
-    setSchedule(sched);
+    setSchedule(sched.schedule);
+    setScheduleHome(sched.scheduleHome);
     setAiTeams(ai);
     setInSeason(true);
     setSeason(emptySeason());
@@ -1881,7 +1896,8 @@ const startSeason = async () => {
     const oppIndex = schedule[USER_INDEX][gameNum - 1];
     const opp = aiTeams[oppIndex];
     if (!opp) return;
-    const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty });
+    const isHome = scheduleHome?.[USER_INDEX]?.[gameNum - 1] ?? null;
+    const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty, isHome });
     const won = res.myScore > res.oppScore;
     const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
     setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
@@ -1918,7 +1934,12 @@ const startSeason = async () => {
       const entry = { gameNum, oppName: opp?.name || "Opponent", myScore: res.myScore, oppScore: res.oppScore, won, myStats: res.myStats, oppStats: res.oppStats };
       return [entry, ...prev].slice(0, GAME_HISTORY_MAX);
     });
-    setSeasonGameResults((prev) => [...prev, { won }]);
+    const pogEntry = pog ? { name: pog.name, team: pog.team } : null;
+    setSeasonGameResults((prev) => {
+      const next = [...prev];
+      next[dayIndex] = { oppName: opp?.name || "Opponent", home: isHome, myScore: res.myScore, oppScore: res.oppScore, won, pog: pogEntry };
+      return next;
+    });
     setResult(res);
   };
 
@@ -2010,11 +2031,20 @@ const startSeason = async () => {
         const oppIndex = schedule[USER_INDEX]?.[g - 1];
         const opp = oppIndex != null ? accAiTeams[oppIndex] : null;
         if (!opp?.lineup) continue;
-        const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty });
+        const isHome = scheduleHome?.[USER_INDEX]?.[g - 1] ?? null;
+        const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty, isHome });
         const won = res.myScore > res.oppScore;
-        accSimHistory.push({ gameNum: g, oppName: opp?.name || "Opponent", myScore: res.myScore, oppScore: res.oppScore, won, myStats: res.myStats, oppStats: res.oppStats });
         const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
         const dayIndex = g - 1;
+        const allStats = [
+          ...(res.myStats || []).map((s) => ({ ...s, team: myTeamName })),
+          ...(res.oppStats || []).map((s) => ({ ...s, team: opp?.name || "Opponent" })),
+        ];
+        const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.5 + (s.ast || 0) * 0.5;
+        const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
+        const pogEntry = pog ? { name: pog.name, team: pog.team } : null;
+        accSimHistory.push({ gameNum: g, oppName: opp?.name || "Opponent", myScore: res.myScore, oppScore: res.oppScore, won, myStats: res.myStats, oppStats: res.oppStats });
+        accSimResults.push({ oppName: opp?.name || "Opponent", home: isHome, myScore: res.myScore, oppScore: res.oppScore, won, pog: pogEntry });
         setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
         const dayResult = applyDayResults(dayIndex, oppIndex, won, accAiTeams);
         if (dayResult?.nextAiTeams) accAiTeams = dayResult.nextAiTeams;
@@ -2032,13 +2062,6 @@ const startSeason = async () => {
         mergeGameIntoLeaders(accLeaders, res, myTeamName, opp?.name || "Opponent");
         localGp++;
         if (won) localW++; else localL++;
-        accSimResults.push({ won });
-        const allStats = [
-          ...(res.myStats || []).map((s) => ({ ...s, team: myTeamName })),
-          ...(res.oppStats || []).map((s) => ({ ...s, team: opp?.name || "Opponent" })),
-        ];
-        const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.5 + (s.ast || 0) * 0.5;
-        const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
         if (pog) {
           accPogs[dayIndex] = { name: pog.name, team: pog.team };
           setGamePogs((prev) => { const n = [...prev]; n[dayIndex] = { name: pog.name, team: pog.team }; return n; });
@@ -2057,7 +2080,11 @@ const startSeason = async () => {
         setMvpVotes(() => ({ ...accMvpVotes }));
         setDpoyVotes(() => ({ ...accDpoyVotes }));
       }
-      if (accSimResults.length > 0) setSeasonGameResults((prev) => [...prev, ...accSimResults]);
+      if (accSimResults.length > 0) setSeasonGameResults((prev) => {
+        const next = [...prev];
+        accSimResults.forEach((r, i) => { next[gameNum - 1 + i] = r; });
+        return next;
+      });
       if (accSimHistory.length > 0) {
         const recent = accSimHistory.slice(-GAME_HISTORY_MAX).reverse();
         setGameHistory((prev) => [...recent, ...prev].slice(0, GAME_HISTORY_MAX));
@@ -2676,6 +2703,9 @@ if(phase==="teamSetup") return(
                 <div style={{background:"linear-gradient(180deg,#1e293b 0%,#0f172a 100%)",borderRadius:14,padding: isMobile ? 14 : 16,border:"2px solid #334155",marginBottom:12,boxShadow:"0 4px 16px rgba(0,0,0,0.2)"}}>
                   <div style={{fontSize:10,color:"#64748b",letterSpacing:1,marginBottom:6,textTransform:"uppercase",fontWeight:700}}>Selected matchup</div>
                   <div style={{fontWeight:800,fontSize: isMobile ? 15 : 14,color:"#e2e8f0",marginBottom:8,lineHeight:1.3}}>{matchup.label}</div>
+                  {pInv && (matchup.top?.isPlayer ? matchup.bot?.name : matchup.bot?.isPlayer ? matchup.top?.name : null) && (
+                    <div style={{fontSize:11,color:"#f59e0b",fontWeight:700,marginBottom:8}}>Your opponent: {matchup.top?.isPlayer ? matchup.bot?.name : matchup.top?.name}</div>
+                  )}
                   <div style={{display:"flex",alignItems:"center",gap: isMobile ? 8 : 12,flexWrap:"wrap",marginBottom:12}}>
                     <span style={{fontSize: isMobile ? 13 : 12,color:"#94a3b8",flex: isMobile ? "1 1 100%" : undefined}}>{matchup.top?.name ?? "TBD"}</span>
                     <span style={{fontSize: isMobile ? 16 : 14,fontWeight:900,color:"#64748b",flexShrink:0}}>{wT} – {wB}</span>
@@ -3030,15 +3060,36 @@ if(phase==="teamSetup") return(
               const west = [...(allStarSelections.west?.starters || []), ...(allStarSelections.west?.reserves || [])];
               return east.concat(west).filter((p) => p?.team === myTeamName).length;
             })() : 0;
-            const bestStreak = (() => { let max = 0, cur = 0; (seasonGameResults || []).forEach(({ won }) => { if (won) { cur++; max = Math.max(max, cur); } else cur = 0; }); return max; })();
+            const bestStreak = (() => { let max = 0, cur = 0; (seasonGameResults || []).forEach((r) => { const won = r && r.won; if (won) { cur++; max = Math.max(max, cur); } else cur = 0; }); return max; })();
+            const leaderPts = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.ppg || 0) > (best.ppg || 0) ? p : best), null) : null;
+            const leaderReb = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.rpg || 0) > (best.rpg || 0) ? p : best), null) : null;
+            const leaderAst = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.apg || 0) > (best.apg || 0) ? p : best), null) : null;
+            const careerAllStarCount = (name) => (playerAwards[name] || []).filter((e) => e.award && String(e.award).startsWith("AS-")).length;
+            const myAllStarsThisSeason = allStarSelections ? (() => {
+              const east = [...(allStarSelections.east?.starters || []), ...(allStarSelections.east?.reserves || [])];
+              const west = [...(allStarSelections.west?.starters || []), ...(allStarSelections.west?.reserves || [])];
+              return east.concat(west).filter((p) => p?.team === myTeamName);
+            })() : [];
+            const bestWin = (seasonGameResults || []).filter((r) => r && r.won && r.myScore != null && r.oppScore != null).reduce((best, r) => {
+              const diff = (r.myScore || 0) - (r.oppScore || 0);
+              return !best || diff > ((best.myScore || 0) - (best.oppScore || 0)) ? r : best;
+            }, null);
             return (
               <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #475569"}}>
                 <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>📊 SEASON SUMMARY — {leagueName || "NBA"}</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:12,fontSize:11,color:"#94a3b8"}}>
+                <div style={{display:"flex",flexWrap:"wrap",gap:12,fontSize:11,color:"#94a3b8",marginBottom:10}}>
                   <span>Record: {userW}–{userL}</span>
                   <span>PPG: {ppg} · OPP: {papg}</span>
                   {bestStreak > 0 && <span>Best win streak: {bestStreak}</span>}
                   {allStarCount > 0 && <span>All-Stars: {allStarCount}</span>}
+                </div>
+                <div style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1,marginBottom:6}}>KEY MOMENTS</div>
+                <div style={{display:"flex",flexDirection:"column",gap:4,fontSize:11,color:"#e2e8f0"}}>
+                  {leaderPts && <div>{leaderPts.name} led the team in points ({rf(leaderPts.ppg, 1)} PPG)</div>}
+                  {leaderReb && <div>{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG)</div>}
+                  {leaderAst && <div>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG)</div>}
+                  {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name}>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</div> : null; })}
+                  {bestWin && <div>Best win: {bestWin.myScore}–{bestWin.oppScore} over the {bestWin.oppName || "Opponent"}{bestWin.oppName ? (String(bestWin.oppName).endsWith("s") ? "'" : "'s") : ""} — {bestWin.pog?.name || "—"} won Player of the Game</div>}
                 </div>
               </div>
             );
@@ -3318,6 +3369,7 @@ if(phase==="teamSetup") return(
             <button onClick={()=>setShowSaveModal(true)} style={{background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Save to a slot">💾 Save</button>
             <button onClick={()=>setShowLoadModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>📂 Load</button>
             <button onClick={()=>setShowHistoryModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Last games">📋 Last {gameHistory.length || 0}</button>
+            <button onClick={()=>setShowScheduleModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Full schedule">📅 Schedule</button>
             <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
             <button onClick={()=>setShowHelp(h=>!h)} style={{width:26,height:26,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:12,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
           </div>
@@ -3345,6 +3397,40 @@ if(phase==="teamSetup") return(
                   </div>
                 )}
                 <button type="button" onClick={()=>setShowHistoryModal(false)} style={{marginTop:12,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Close</button>
+              </div>
+            </div>
+          )}
+          {showScheduleModal && schedule && aiTeams && (
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowScheduleModal(false)}>
+              <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:16,maxWidth:520,width:"100%",maxHeight:"85vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+                <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>📅 Full schedule</div>
+                <div style={{fontSize:10,color:"#64748b",marginBottom:8}}>H = Home · A = Away</div>
+                <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                  {Array.from({ length: SEASON_LENGTH }, (_, i) => {
+                    const g = i + 1;
+                    const oppIdx = schedule[NUM_TEAMS - 1]?.[i];
+                    const opp = oppIdx != null ? aiTeams[oppIdx] : null;
+                    const oppName = opp?.name ?? "—";
+                    const home = scheduleHome?.[NUM_TEAMS - 1]?.[i];
+                    const ha = home === true ? "H" : home === false ? "A" : "—";
+                    const r = seasonGameResults[i];
+                    const played = r && (r.won != null || r.myScore != null);
+                    return (
+                      <div key={g} style={{display:"flex",alignItems:"center",gap:8,background:"#1e293b",borderRadius:6,padding:"6px 10px",border:"1px solid #334155",fontSize:11}}>
+                        <span style={{width:28,fontWeight:700,color:"#94a3b8"}}>G{g}</span>
+                        <span style={{width:24,fontWeight:700,color:"#64748b"}}>{ha}</span>
+                        <span style={{flex:1,color:"#e2e8f0"}}>vs {oppName}</span>
+                        {played ? (
+                          <span style={{fontWeight:800,color:r.won?"#22c55e":"#f87171"}}>{r.won?"W":"L"}{r.myScore != null && r.oppScore != null ? ` ${r.myScore}–${r.oppScore}` : ""}</span>
+                        ) : (
+                          <span style={{color:"#64748b"}}>—</span>
+                        )}
+                        {played && r?.pog?.name && <span style={{fontSize:9,color:"#94a3b8"}}>POG: {r.pog.name}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                <button type="button" onClick={()=>setShowScheduleModal(false)} style={{marginTop:12,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Close</button>
               </div>
             </div>
           )}

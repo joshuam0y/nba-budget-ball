@@ -384,8 +384,19 @@ function buildNBASchedule() {
   return schedule;
 }
 
+/** Returns { schedule, scheduleHome }. scheduleHome[i][g] = true if team i is home in game g (41 home, 41 away). */
 export function buildSeasonSchedule() {
-  return buildNBASchedule();
+  const schedule = buildNBASchedule();
+  const n = schedule.length;
+  const scheduleHome = Array.from({ length: n }, () => {
+    const arr = Array.from({ length: SEASON_LENGTH }, (_, i) => i < 41);
+    for (let k = arr.length - 1; k > 0; k--) {
+      const r = Math.floor(Math.random() * (k + 1));
+      [arr[k], arr[r]] = [arr[r], arr[k]];
+    }
+    return arr;
+  });
+  return { schedule, scheduleHome };
 }
 
 export function generateLeague(myLineup, pool, userTeamName) {
@@ -465,12 +476,15 @@ export function simulate(
   teamRoster,
   options = {}
 ) {
-  const { difficulty = "standard" } = options;
+  const { difficulty = "standard", isHome = null } = options;
   const isPlayoffGame = !!teamRoster?._playoff;
 
   // Difficulty: casual = you're favored, hardcore = CPU favored. Standard = even.
   let myE = teamEff(myLineup, teamRoster);
   let oppE = teamEff(oppLineup, teamRoster);
+  // Home/away: +1 efficiency for home team (light modifier so schedule feels meaningful)
+  if (isHome === true) myE += 1;
+  else if (isHome === false) oppE += 1;
   if (difficulty === "casual") {
     myE *= 1.14;
     oppE *= 0.88;
