@@ -151,7 +151,6 @@ function generateLineupImageBlob(roster, teamName, shareUrl, teamCode) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
   const totalCost = POSITIONS.reduce((s, pos) => s + (roster[pos]?.cost || 0), 0);
-  const filledCount = POSITIONS.filter((pos) => roster[pos]).length;
 
   function roundRect(x, y, w, h, r) {
     const rr = Math.min(r, h / 2, w / 2);
@@ -284,13 +283,11 @@ function generateLineupImageBlob(roster, teamName, shareUrl, teamCode) {
   const summaryY = H - 64;
   ctx.font = "11px system-ui, sans-serif";
   const costText = `💰 Budget: $${totalCost}/${BUDGET}`;
-  const filledText = `📋 Slots: ${filledCount}/5`;
   const codeText = teamCode ? `🔗 Code: ${teamCode}` : "";
   const smallGap = 14;
   const costW = ctx.measureText(costText).width;
-  const filledW = ctx.measureText(filledText).width;
   const codeW = codeText ? ctx.measureText(codeText).width : 0;
-  const totalStripW = costW + filledW + (codeText ? codeW + smallGap * 2 : 0) + smallGap * 2;
+  const totalStripW = costW + (codeText ? codeW + smallGap * 2 : 0) + smallGap * 2;
   const stripX = (W - totalStripW) / 2;
 
   const stripGrad = ctx.createLinearGradient(stripX - 10, 0, stripX + totalStripW + 10, 0);
@@ -326,9 +323,6 @@ function generateLineupImageBlob(roster, teamName, shareUrl, teamCode) {
   let cursorX = stripX;
   ctx.fillText(costText, cursorX, summaryY);
   cursorX += costW + smallGap;
-  ctx.fillStyle = "#a5b4fc";
-  ctx.fillText(filledText, cursorX, summaryY);
-  cursorX += filledW + smallGap;
   if (codeText) {
     ctx.fillStyle = "#94a3b8";
     ctx.fillText(codeText, cursorX, summaryY);
