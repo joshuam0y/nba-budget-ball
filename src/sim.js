@@ -1005,21 +1005,21 @@ export function getArchetype(p) {
 
   let best = { id: "role", label: "ROLE", color: "#94a3b8", score: 0 };
 
-  // 1. Versatile – high pts, ast, reb (do-everything)
-  if (p.pts >= 16 && p.ast >= 3.5 && p.reb >= 4 && (p.rating ?? 0) >= 42) {
-    const score = archScore(16, 28, p.pts) * 0.35 + archScore(3.5, 9, p.ast) * 0.35 + archScore(4, 12, p.reb) * 0.3;
+  // 1. Versatile – only true do-everything stars (strict so most land in Scorer/Playmaker/pmBig)
+  if (p.pts >= 22 && p.ast >= 5.5 && p.reb >= 6 && (p.rating ?? 0) >= 46) {
+    const score = archScore(22, 36, p.pts) * 0.35 + archScore(5.5, 12, p.ast) * 0.35 + archScore(6, 14, p.reb) * 0.3;
     if (score > best.score) best = { id: "versatile", label: "VERSATILE", color: "#f472b6", score };
   }
 
-  // 2. Playmaking big – PF/C with real playmaking
-  if (isBig && p.ast >= 3) {
-    const score = archScore(3, 8, p.ast) * 0.6 + archScore(5, 14, p.reb) * 0.4;
+  // 2. Playmaking big – PF/C with real playmaking (ast >= 4 so 3-ast bigs → Interior/Stretch/Scorer)
+  if (isBig && p.ast >= 4) {
+    const score = archScore(4, 9, p.ast) * 0.6 + archScore(5, 14, p.reb) * 0.4;
     if (score > best.score) best = { id: "pmBig", label: "PLAYMAKING BIG", color: "#a78bfa", score };
   }
 
-  // 3. Rim protector – big, blocks
+  // 3. Rim protector – big, blocks (wider score range so more 1s and 3s)
   if (isBig && p.blk >= 1) {
-    const score = archScore(1, 3.5, p.blk) * 0.65 + archScore(6, 14, p.reb) * 0.35;
+    const score = archScore(1, 3.2, p.blk) * 0.65 + archScore(5, 14, p.reb) * 0.35;
     if (score > best.score) best = { id: "rimProt", label: "RIM PROTECTOR", color: "#60a5fa", score };
   }
 
@@ -1045,15 +1045,17 @@ export function getArchetype(p) {
     if (score > best.score) best = { id: "playmaker", label: "PLAYMAKER", color: "#fbbf24", score };
   }
 
-  // 7. Lockdown – defensive specialist
-  if (p.stl >= 0.9 || (isBig && p.blk >= 1.2)) {
-    const score = archScore(0.9, 2.5, p.stl) * 0.55 + archScore(0.5, 2.5, p.blk) * 0.45;
+  // 7. Lockdown – defensive specialist (slightly lower bar, wider range for level spread)
+  if (p.stl >= 0.8 || (isBig && p.blk >= 1.0)) {
+    const score = archScore(0.8, 2.4, p.stl) * 0.55 + archScore(0.4, 2.4, p.blk) * 0.45;
     if (score > best.score) best = { id: "lockdown", label: "LOCKDOWN", color: "#f87171", score };
   }
 
-  // 8. 3&D – shoot and defend (spaced: lower bar so more 3&D 1/2, not just 3)
-  if (tpPct >= 30 && tR >= 0.26 && (p.stl >= 0.5 || p.blk >= 0.4)) {
-    const score = (archScore(30, 42, tpPct) + archScore(0.26, 0.6, tR)) * 0.5 + archScore(0.5, 2, p.stl + p.blk) * 0.5;
+  // 8. 3&D – shoot and defend (wider score range so more 3&D 1 and 3&D 3, not just 2)
+  if (tpPct >= 29 && tR >= 0.24 && (p.stl >= 0.5 || p.blk >= 0.35)) {
+    const shoot = (archScore(29, 42, tpPct) + archScore(0.24, 0.58, tR)) * 0.5;
+    const def = archScore(0.45, 2, p.stl + p.blk);
+    const score = shoot * 0.55 + def * 0.45;
     if (score > best.score) best = { id: "threeD", label: "3&D", color: "#34d399", score };
   }
 
@@ -1063,9 +1065,9 @@ export function getArchetype(p) {
     if (score > best.score) best = { id: "spotUp", label: "SPOT-UP", color: "#38bdf8", score };
   }
 
-  // 10. Scorer – primary scoring (broad; include 8+ ppg so borderline “role” types become Scorer 1)
+  // 10. Scorer – primary scoring (wide range so many Scorer 1s and 3s, not just 2)
   if (p.pts >= 8) {
-    const score = archScore(8, 30, p.pts) * 0.7 + archScore(36, 58, p.rating ?? 0) * 0.3;
+    const score = archScore(8, 28, p.pts) * 0.7 + archScore(34, 56, p.rating ?? 0) * 0.3;
     if (score > best.score) best = { id: "scorer", label: "SCORER", color: "#f97316", score };
   }
 
