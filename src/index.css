@@ -53,6 +53,11 @@ input:focus {
   border-radius: 3px;
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .player-card:hover {
   background: #131a2e !important;
   border-color: #6366f1 !important;

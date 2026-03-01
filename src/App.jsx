@@ -139,79 +139,95 @@ async function getTopPicks(limit = 5) {
 }
 
 function generateLineupImageBlob(roster, teamName, shareUrl, teamCode) {
-  const W = 600, H = 420;
+  const W = 640, H = 480;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d");
   if (!ctx) return Promise.reject(new Error("Canvas not supported"));
 
-  ctx.fillStyle = "#0f172a";
+  // Gradient background
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, "#0f172a");
+  bg.addColorStop(0.5, "#1e293b");
+  bg.addColorStop(1, "#0f172a");
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = "#334155";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(1, 1, W - 2, H - 2);
 
-  ctx.textAlign = "center";
+  // Subtle inner border
+  ctx.strokeStyle = "rgba(148, 163, 184, 0.2)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(2, 2, W - 4, H - 4);
+
+  // Header with accent bar
   ctx.fillStyle = "#f59e0b";
-  ctx.font = "bold 26px system-ui, sans-serif";
-  ctx.fillText("NBA BUDGET BALL", W / 2, 44);
+  ctx.fillRect(0, 0, W, 4);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fef3c7";
+  ctx.font = "bold 28px system-ui, sans-serif";
+  ctx.fillText("NBA BUDGET BALL", W / 2, 52);
   if (teamName && teamName.trim()) {
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "15px system-ui, sans-serif";
-    ctx.fillText(teamName.trim(), W / 2, 72);
+    ctx.font = "16px system-ui, sans-serif";
+    ctx.fillText(teamName.trim(), W / 2, 82);
   }
   ctx.fillStyle = "#64748b";
-  ctx.font = "10px system-ui, sans-serif";
-  ctx.fillText("STARTING 5", W / 2, 96);
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.fillText("STARTING 5", W / 2, 108);
 
-  const y0 = 118;
-  const lineH = 50;
+  // Player rows with card-style layout
+  const y0 = 132;
+  const lineH = 56;
+  const cardPad = 24;
   POSITIONS.forEach((pos, i) => {
     const p = roster[pos];
     const y = y0 + i * lineH;
-    const pillX = 32;
-    ctx.fillStyle = "#1e293b";
-    ctx.fillRect(pillX, y - 14, 40, 28);
+    const pillX = cardPad;
+    // Position pill
+    ctx.fillStyle = "#334155";
+    ctx.fillRect(pillX, y - 16, 48, 32);
     ctx.strokeStyle = "#475569";
     ctx.lineWidth = 1;
-    ctx.strokeRect(pillX, y - 14, 40, 28);
+    ctx.strokeRect(pillX, y - 16, 48, 32);
     ctx.fillStyle = "#60a5fa";
-    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.font = "bold 12px system-ui, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(pos, pillX + 10, y + 5);
-    ctx.fillStyle = "#e2e8f0";
-    ctx.font = "bold 19px system-ui, sans-serif";
-    ctx.fillText(p ? p.name : "—", 88, y + 5);
+    ctx.fillText(pos, pillX + 12, y + 6);
+    // Player name
+    ctx.fillStyle = "#f1f5f9";
+    ctx.font = "bold 20px system-ui, sans-serif";
+    ctx.fillText(p ? p.name : "—", 96, y + 6);
     if (p) {
       ctx.fillStyle = "#fbbf24";
-      ctx.font = "15px system-ui, sans-serif";
+      ctx.font = "bold 16px system-ui, sans-serif";
       ctx.textAlign = "right";
-      ctx.fillText("$" + p.cost, W - 36, y + 5);
+      ctx.fillText("$" + p.cost, W - cardPad - 12, y + 6);
     }
     ctx.textAlign = "left";
   });
 
+  // Footer
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const name = (teamName && teamName.trim()) ? teamName.trim() : "my";
   ctx.fillStyle = "#94a3b8";
-  ctx.font = "9px system-ui, sans-serif";
+  ctx.font = "11px system-ui, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("Here's " + name + "'s lineup — paste the code to try it or build your own!", W / 2, H - 42);
+  ctx.fillText("Paste the code to try it or build your own!", W / 2, H - 52);
   if (teamCode) {
     ctx.fillStyle = "#64748b";
-    ctx.fillText("Code: " + teamCode, W / 2, H - 30);
+    ctx.font = "10px system-ui, sans-serif";
+    ctx.fillText("Code: " + teamCode, W / 2, H - 36);
   }
   ctx.fillStyle = "#475569";
   const linkText = shareUrl || origin;
   let drawUrl = linkText;
-  if (shareUrl && ctx.measureText(linkText).width > W - 24) {
+  if (shareUrl && ctx.measureText(linkText).width > W - 48) {
     for (let i = linkText.length; i > 0; i--) {
       const t = linkText.slice(0, i) + "…";
-      if (ctx.measureText(t).width <= W - 24) { drawUrl = t; break; }
+      if (ctx.measureText(t).width <= W - 48) { drawUrl = t; break; }
     }
   }
-  ctx.fillText(shareUrl ? "Play: " + drawUrl : "Play at " + origin, W / 2, H - 16);
+  ctx.fillText(shareUrl ? "Play: " + drawUrl : "Play at " + origin, W / 2, H - 20);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))), "image/png");
@@ -858,44 +874,59 @@ export default function App(){
     }
   }, [roster, myTeamName, difficulty, phase, season, schedule, scheduleHome, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, gamePogs, allStarSelections, unlockedAchievements, seasonGameResults, gameHistory, lastEliminatorTeamName, getSaveKey]);
 
-  const [shareImageStatus, setShareImageStatus] = useState(null);
+  const [shareStatus, setShareStatus] = useState(null);
+  const shareStatusTimerRef = useRef(null);
+  const clearShareStatus = useCallback(() => {
+    if (shareStatusTimerRef.current) clearTimeout(shareStatusTimerRef.current);
+    shareStatusTimerRef.current = setTimeout(() => setShareStatus(null), 3000);
+  }, []);
   const handleShareLineup = useCallback(async () => {
     if (inSeason) return;
     const filled = POSITIONS.every((pos) => roster[pos]);
     if (!filled) {
-      setShareImageStatus("Complete your lineup first");
-      setTimeout(() => setShareImageStatus(null), 2000);
+      setShareStatus({ type: "error", msg: "Complete your lineup first" });
+      clearShareStatus();
       return;
     }
     const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
     const code = ids.join("-");
     const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
     if (url) url.searchParams.set("roster", code);
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+    const shareUrl = url ? url.toString() : null;
+    const baseUrl = shareUrl || (typeof window !== "undefined" ? window.location.origin : "");
     const name = (myTeamName && myTeamName.trim()) ? myTeamName.trim() : "my";
     const shareText = "Here's " + name + "'s lineup — paste the code to try it or build your own!\nCode: " + code + "\nPlay: " + baseUrl;
     const nav = typeof navigator !== "undefined" ? navigator : null;
     try {
-      await nav?.clipboard?.writeText(shareText);
-      setShareImageStatus("message_copied");
-    } catch {
-      window.prompt("Copy this message:", shareText);
-      setShareImageStatus("Copy the message above");
-      setTimeout(() => setShareImageStatus(null), 3000);
-      return;
+      if (nav?.share && /mobile|android|iphone|ipad/i.test(navigator.userAgent)) {
+        await nav.share({ title: "NBA Budget Ball", text: shareText, url: shareUrl || baseUrl });
+        setShareStatus({ type: "success", msg: "Shared!" });
+      } else {
+        await nav?.clipboard?.writeText(shareText);
+        setShareStatus({ type: "success", msg: "Copied to clipboard" });
+      }
+    } catch (e) {
+      if (e?.name === "AbortError") return;
+      try {
+        await nav?.clipboard?.writeText(shareText);
+        setShareStatus({ type: "success", msg: "Copied to clipboard" });
+      } catch {
+        window.prompt("Copy this message:", shareText);
+        setShareStatus({ type: "info", msg: "Paste from the prompt above" });
+      }
     }
-    setTimeout(() => setShareImageStatus(null), 5000);
-  }, [roster, myTeamName, inSeason]);
+    clearShareStatus();
+  }, [roster, myTeamName, inSeason, clearShareStatus]);
 
   const handleCopyLineupImage = useCallback(async () => {
     if (inSeason) return;
     const filled = POSITIONS.every((pos) => roster[pos]);
     if (!filled) {
-      setShareImageStatus("Complete your lineup first");
-      setTimeout(() => setShareImageStatus(null), 2000);
+      setShareStatus({ type: "error", msg: "Complete your lineup first" });
+      clearShareStatus();
       return;
     }
-    setShareImageStatus("Creating image…");
+    setShareStatus({ type: "loading", msg: "Creating image…" });
     try {
       const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
       const code = ids.join("-");
@@ -903,22 +934,32 @@ export default function App(){
       if (url) url.searchParams.set("roster", code);
       const shareUrl = url ? url.toString() : null;
       const blob = await generateLineupImageBlob(roster, myTeamName, shareUrl, code);
-      if (navigator?.clipboard?.write) {
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setShareImageStatus("Image copied!");
+      const file = new File([blob], "nba-budget-ball-lineup.png", { type: "image/png" });
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      if (nav?.share && nav?.canShare?.({ files: [file] })) {
+        await nav.share({
+          title: "NBA Budget Ball Lineup",
+          text: (myTeamName && myTeamName.trim()) ? myTeamName.trim() + "'s lineup" : "My lineup",
+          files: [file],
+        });
+        setShareStatus({ type: "success", msg: "Shared!" });
+      } else if (nav?.clipboard?.write) {
+        await nav.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        setShareStatus({ type: "success", msg: "Image copied!" });
       } else {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = "nba-budget-ball-lineup.png";
         a.click();
         URL.revokeObjectURL(a.href);
-        setShareImageStatus("Downloaded");
+        setShareStatus({ type: "success", msg: "Image downloaded" });
       }
-    } catch {
-      setShareImageStatus("Couldn’t copy image");
+    } catch (e) {
+      if (e?.name === "AbortError") return;
+      setShareStatus({ type: "error", msg: "Couldn't copy image" });
     }
-    setTimeout(() => setShareImageStatus(null), 2500);
-  }, [roster, myTeamName, inSeason]);
+    clearShareStatus();
+  }, [roster, myTeamName, inSeason, clearShareStatus]);
 
 const soundtrackRef = useRef(null);
   const trackIndexRef = useRef(0);
@@ -3287,6 +3328,28 @@ if(phase==="teamSetup") return(
               return east.concat(west).filter((p) => p?.team === myTeamName);
             })() : [];
             const careerDefCount = (name, award) => (playerAwards[name] || []).filter((e) => e.award === award).length;
+            const careerNBACount = (name, award) => (playerAwards[name] || []).filter((e) => e.award === award).length;
+            const myMVPThisSeason = (() => {
+              let out = null;
+              POSITIONS.forEach((pos) => {
+                const p = roster[pos];
+                if (!p) return;
+                const awards = [...(playerAwards[p.name] || []), ...(playerAwards[p.fullName] || []).filter((e) => e && p.name !== p.fullName)];
+                if (awards.some((e) => e.season === seasonNumber && e.award === "MVP")) out = p;
+              });
+              return out;
+            })();
+            const myDPOYThisSeason = (() => {
+              let out = null;
+              POSITIONS.forEach((pos) => {
+                const p = roster[pos];
+                if (!p) return;
+                const awards = [...(playerAwards[p.name] || []), ...(playerAwards[p.fullName] || []).filter((e) => e && p.name !== p.fullName)];
+                if (awards.some((e) => e.season === seasonNumber && e.award === "DPOY")) out = p;
+              });
+              return out;
+            })();
+            const careerAwardCount = (p, award) => { const fromName = (playerAwards[p?.name] || []).filter((e) => e.award === award); const fromFull = (p?.fullName && p.name !== p.fullName ? (playerAwards[p.fullName] || []) : []).filter((e) => e.award === award); const seen = new Set(); [...fromName, ...fromFull].forEach((e) => { if (e.season != null) seen.add(e.season); }); return seen.size; };
             const myAllDefensiveThisSeason = (() => {
               const list = [];
               const seen = new Set();
@@ -3304,6 +3367,23 @@ if(phase==="teamSetup") return(
               });
               return list;
             })();
+            const myAllNBAThisSeason = (() => {
+              const list = [];
+              const seen = new Set();
+              POSITIONS.forEach((pos) => {
+                const p = roster[pos];
+                if (!p) return;
+                const awards = [...(playerAwards[p.name] || []), ...(playerAwards[p.fullName] || []).filter((e) => e && p.name !== p.fullName)];
+                awards.forEach((e) => {
+                  if (e.season !== seasonNumber || (e.award !== "NBA1" && e.award !== "NBA2" && e.award !== "NBA3")) return;
+                  const key = `${p.name}|${e.award}`;
+                  if (seen.has(key)) return;
+                  seen.add(key);
+                  list.push({ name: p.name, award: e.award });
+                });
+              });
+              return list;
+            })();
             const bestWin = (seasonGameResults || []).filter((r) => r && r.won && r.myScore != null && r.oppScore != null).reduce((best, r) => {
               const diff = (r.myScore || 0) - (r.oppScore || 0);
               return !best || diff > ((best.myScore || 0) - (best.oppScore || 0)) ? r : best;
@@ -3311,22 +3391,22 @@ if(phase==="teamSetup") return(
             return (
               <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #475569"}}>
                 <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>📊 SEASON SUMMARY — {leagueName || "NBA"}</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:12,fontSize:11,color:"#94a3b8",marginBottom:10}}>
-                  {bestStreak > 0 && <span>Best win streak: {bestStreak}</span>}
-                  {allStarCount > 0 && <span>All-Stars: {allStarCount}</span>}
-                </div>
                 <div style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1,marginBottom:6}}>KEY MOMENTS</div>
                 <div style={{display:"flex",flexDirection:"column",gap:4,fontSize:11,color:"#e2e8f0"}}>
-                  {bestStreak >= 3 && <div>Longest win streak: {bestStreak} games</div>}
-                  {leaderPts && <div>{leaderPts.name} led the team in points ({rf(leaderPts.ppg, 1)} PPG)</div>}
-                  {leaderReb && <div>{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG)</div>}
-                  {leaderAst && <div>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG)</div>}
+                  {myMVPThisSeason && (() => { const n = careerAwardCount(myMVPThisSeason, "MVP"); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key="mvp">{myMVPThisSeason.name} won MVP for the {ord} time</div>; })()}
+                  {myDPOYThisSeason && (() => { const n = careerAwardCount(myDPOYThisSeason, "DPOY"); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key="dpoy">{myDPOYThisSeason.name} won DPOY for the {ord} time</div>; })()}
                   {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name}>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</div> : null; })}
+                  {myAllNBAThisSeason.map(({ name, award }) => { const n = careerNBACount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`}>{name} made {AWARD_LABELS[award] || award} for the {ord} time</div>; })}
                   {myAllDefensiveThisSeason.map(({ name, award }) => { const n = careerDefCount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`}>{name} made {AWARD_LABELS[award] || award} for the {ord} time</div>; })}
+                  {leaderPts && <div key="pts">{leaderPts.name} led the team in points ({rf(leaderPts.ppg, 1)} PPG)</div>}
+                  {leaderReb && <div key="reb">{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG)</div>}
+                  {leaderAst && <div key="ast">{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG)</div>}
+                  {bestStreak > 0 && <div key="streak">Best win streak: {bestStreak} games</div>}
+                  {allStarCount > 0 && <div key="allstar">All-Stars: {allStarCount}</div>}
                   {bestWin && (() => {
               const oppLabel = (bestWin.oppName || "Opponent") + (bestWin.oppName ? (String(bestWin.oppName).endsWith("s") ? "'" : "'s") : "");
               const p = bestWin.pog;
-              if (!p?.name) return <div>Best win: {bestWin.myScore}–{bestWin.oppScore} over the {oppLabel}.</div>;
+              if (!p?.name) return <div key="bestWin">Best win: {bestWin.myScore}–{bestWin.oppScore} over the {oppLabel}.</div>;
               const pts = p.pts != null ? Number(p.pts) : null;
               const reb = p.reb != null ? Number(p.reb) : null;
               const ast = p.ast != null ? Number(p.ast) : null;
@@ -3343,7 +3423,7 @@ if(phase==="teamSetup") return(
               const statLine = parts.length > 0 ? parts.join(", ") : null;
               const threeLine = (tpa != null && tpa > 0 && tpm != null) ? ` and went ${tpm}-for-${tpa} from three` : (tpm != null && tpm > 0 ? ` and hit ${tpm} three${tpm === 1 ? "" : "s"}` : "");
               return (
-                <div>
+                <div key="bestWin">
                   Best win: {bestWin.myScore}–{bestWin.oppScore} over the {oppLabel} — {p.name} won Player of the Game
                   {statLine ? <> with {statLine}{threeLine}.</> : threeLine ? <> and performed well from three.</> : "."}
                 </div>
@@ -4260,7 +4340,7 @@ if(phase==="teamSetup") return(
             <div
               style={{
                 display: "flex",
-                gap: 4,
+                gap: 6,
                 alignItems: "center",
                 flexWrap: "wrap",
               }}
@@ -4272,8 +4352,8 @@ if(phase==="teamSetup") return(
                     background: "#1e293b",
                     color: "#94a3b8",
                     border: "1px solid #334155",
-                    borderRadius: 6,
-                    padding: "4px 8px",
+                    borderRadius: 8,
+                    padding: "6px 10px",
                     fontSize: 10,
                     fontWeight: 700,
                     cursor: "pointer",
@@ -4282,38 +4362,88 @@ if(phase==="teamSetup") return(
                   🏠 Main menu
                 </button>
               )}
-              <button
-                onClick={handleCopyTeamCode}
-                disabled={inSeason}
+              <div
                 style={{
+                  display: "flex",
+                  gap: 4,
+                  alignItems: "center",
+                  padding: "4px 6px",
                   background: "#0f172a",
-                  color: "#e2e8f0",
-                  border: "1px solid #1e293b",
-                  borderRadius: 6,
-                  padding: "4px 8px",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  cursor: inSeason ? "not-allowed" : "pointer",
+                  borderRadius: 8,
+                  border: "1px solid #334155",
                 }}
               >
-                🔗 Copy Code
-              </button>
-              <button
-                onClick={handleShareLineup}
-                disabled={inSeason}
-                style={{
-                  background: "#0f172a",
-                  color: "#e2e8f0",
-                  border: "1px solid #1e293b",
-                  borderRadius: 6,
-                  padding: "4px 8px",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  cursor: inSeason ? "not-allowed" : "pointer",
-                }}
-              >
-                📤 Share
-              </button>
+                <button
+                  onClick={handleCopyTeamCode}
+                  disabled={inSeason}
+                  title="Copy team code"
+                  style={{
+                    background: "#1e293b",
+                    color: "#94a3b8",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "5px 10px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    cursor: inSeason ? "not-allowed" : "pointer",
+                    opacity: inSeason ? 0.6 : 1,
+                  }}
+                >
+                  🔗 Code
+                </button>
+                <button
+                  onClick={handleShareLineup}
+                  disabled={inSeason}
+                  title="Copy share text (code + link)"
+                  style={{
+                    background: "#1e293b",
+                    color: "#94a3b8",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "5px 10px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    cursor: inSeason ? "not-allowed" : "pointer",
+                    opacity: inSeason ? 0.6 : 1,
+                  }}
+                >
+                  📤 Share
+                </button>
+                <button
+                  onClick={handleCopyLineupImage}
+                  disabled={inSeason}
+                  title="Copy lineup as image"
+                  style={{
+                    background: "linear-gradient(135deg,#60a5fa,#a78bfa)",
+                    color: "#0f172a",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "5px 10px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    cursor: inSeason ? "not-allowed" : "pointer",
+                    opacity: inSeason ? 0.6 : 1,
+                  }}
+                >
+                  🖼️ Image
+                </button>
+              </div>
+              {shareStatus && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: (typeof shareStatus === "object" && shareStatus.type === "error") ? "#f87171" : (typeof shareStatus === "object" && shareStatus.type === "success") ? "#22c55e" : (typeof shareStatus === "object" && shareStatus.type === "loading") ? "#94a3b8" : "#60a5fa",
+                    padding: "2px 8px",
+                    background: (typeof shareStatus === "object" && shareStatus.type === "error") ? "rgba(248,113,113,0.15)" : (typeof shareStatus === "object" && shareStatus.type === "success") ? "rgba(34,197,94,0.15)" : "rgba(148,163,184,0.1)",
+                    borderRadius: 6,
+                    animation: (typeof shareStatus === "object" && shareStatus.type === "loading") ? "pulse 1.5s ease-in-out infinite" : "none",
+                  }}
+                >
+                  {(typeof shareStatus === "object" && shareStatus.type === "loading") ? "⏳ " : (typeof shareStatus === "object" && shareStatus.type === "success") ? "✓ " : (typeof shareStatus === "object" && shareStatus.type === "error") ? "✕ " : ""}
+                  {typeof shareStatus === "object" ? shareStatus.msg : shareStatus}
+                </span>
+              )}
               <button
                 onClick={handleLoadTeamCode}
                 disabled={inSeason}
@@ -4321,8 +4451,8 @@ if(phase==="teamSetup") return(
                   background: "#0f172a",
                   color: "#60a5fa",
                   border: "1px solid #1e293b",
-                  borderRadius: 6,
-                  padding: "4px 8px",
+                  borderRadius: 8,
+                  padding: "6px 10px",
                   fontSize: 10,
                   fontWeight: 700,
                   cursor: inSeason ? "not-allowed" : "pointer",
