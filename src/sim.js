@@ -1159,6 +1159,13 @@ export function getActiveSynergies(lineup) {
   return list;
 }
 
+// Balance categories (match archetype vocabulary). Satisfied by:
+// Big: RIM PROTECTOR, INTERIOR BIG, STRETCH, VERSATILE, or any PF/C
+// Playmaker: PLAYMAKER, VERSATILE
+// Defense: LOCKDOWN, 3&D, RIM PROTECTOR, VERSATILE
+// Scoring: SCORER, SPOT-UP, STRETCH, VERSATILE
+const BALANCE_MISSING_LABELS = { big: "Big", playmaker: "Playmaker", defense: "Defense", scoring: "Scoring" };
+
 /** Returns balance flags for a lineup; used for UI (getTeamBalance) and for complete-team bonus in sim (teamEff). */
 function getBalanceFlags(lineup) {
   if (!lineup || lineup.length !== 5) return { hasBig: false, hasPlaymaker: false, hasDefense: false, hasScoring: false };
@@ -1188,10 +1195,10 @@ export function getTeamBalance(lineup) {
   if (scorerCount >= 3) score -= 3;
   else if (scorerCount >= 2) score -= 1;
   const missing = [];
-  if (!hasBig) missing.push("Big Man");
-  if (!hasPlaymaker) missing.push("Playmaker");
-  if (!hasDefense) missing.push("Defender");
-  if (!hasScoring) missing.push("Scorer");
+  if (!hasBig) missing.push(BALANCE_MISSING_LABELS.big);
+  if (!hasPlaymaker) missing.push(BALANCE_MISSING_LABELS.playmaker);
+  if (!hasDefense) missing.push(BALANCE_MISSING_LABELS.defense);
+  if (!hasScoring) missing.push(BALANCE_MISSING_LABELS.scoring);
   // Letter grade: if you're missing a category, cap the grade so it matches the "Missing: X" message
   let grade =
     score >= 6 ? "A+" : score >= 5 ? "A" : score >= 4 ? "B+" : score >= 3 ? "B" : score >= 2 ? "C" : "D";

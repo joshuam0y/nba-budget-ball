@@ -4336,7 +4336,7 @@ if(phase==="teamSetup") return(
               {myLineup && (() => {
                 const bal = getTeamBalance(myLineup);
                 if (!bal) return null;
-                const suggested = bal.missing?.length > 0 ? (bal.missing[0] === "Big Man" ? "Add a big" : bal.missing[0] === "Playmaker" ? "Add a playmaker" : bal.missing[0] === "Defender" ? "Add defense" : bal.missing[0] === "Scorer" ? "Add shooting" : "Add " + bal.missing[0].toLowerCase()) : null;
+                const suggested = bal.missing?.length > 0 ? (bal.missing[0] === "Big" ? "Add a big" : bal.missing[0] === "Playmaker" ? "Add a playmaker" : bal.missing[0] === "Defense" ? "Add defense" : bal.missing[0] === "Scoring" ? "Add scoring" : "Add " + (bal.missing[0] || "").toLowerCase()) : null;
                 return (
                   <>
                     {openPositions.length > 0 && suggested && (
