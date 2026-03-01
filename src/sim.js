@@ -804,14 +804,14 @@ function emptyPlayerStat() {
 export function addToSeason(season, gameStats, won, myScore, oppScore, lineupWhenNoStats = null) {
   if ((season.gp ?? 0) >= SEASON_LENGTH) return season;
   const next = { ...season, players: {}, gameLog: [...(season.gameLog || [])] };
-  Object.entries(season.players).forEach(
+  Object.entries(season.players || {}).forEach(
     ([k, v]) => (next.players[k] = { ...v })
   );
-  next.gp++;
-  if (won) next.w++;
-  else next.l++;
-  next.ptsFor += myScore;
-  next.ptsAgainst += oppScore;
+  next.gp = (next.gp ?? 0) + 1;
+  next.w = (next.w ?? 0) + (won ? 1 : 0);
+  next.l = (next.l ?? 0) + (won ? 0 : 1);
+  next.ptsFor = (next.ptsFor ?? 0) + myScore;
+  next.ptsAgainst = (next.ptsAgainst ?? 0) + oppScore;
   next.gameLog.push({ gp: next.gp, won, myScore, oppScore });
   const hasStats = gameStats && gameStats.length > 0;
   if (hasStats) {
