@@ -3756,6 +3756,7 @@ if(phase==="teamSetup") return(
                   list.push({ name: p.name, award: e.award });
                 });
               });
+              list.sort((a, b) => (a.award === "DEF1" ? 0 : 1) - (b.award === "DEF1" ? 0 : 1));
               return list;
             })();
             const myAllNBAThisSeason = (() => {
@@ -3773,6 +3774,8 @@ if(phase==="teamSetup") return(
                   list.push({ name: p.name, award: e.award });
                 });
               });
+              const nbaOrder = { NBA1: 0, NBA2: 1, NBA3: 2 };
+              list.sort((a, b) => (nbaOrder[a.award] ?? 3) - (nbaOrder[b.award] ?? 3));
               return list;
             })();
             const bestWin = (seasonGameResults || []).filter((r) => r && r.won && r.myScore != null && r.oppScore != null).reduce((best, r) => {
