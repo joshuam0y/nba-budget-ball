@@ -178,11 +178,13 @@ const ADJ = {
 
 export function posMult(player, slot) {
   if (player.pos === slot) return 1.0;
+  const arch = getArchetype(player).id;
+  const isBigArch = (player.pos === "PF" || player.pos === "C") && arch === "playmaker";
   if (
-    (getArchetype(player).id === "pmBig" ||
-      getArchetype(player).id === "stretch" ||
-      getArchetype(player).id === "rimProt" ||
-      getArchetype(player).id === "interior") &&
+    (isBigArch ||
+      arch === "stretch" ||
+      arch === "rimProt" ||
+      arch === "interior") &&
     (slot === "PG" || slot === "SG")
   )
     return 0.45;
@@ -256,7 +258,7 @@ export function genLineup(excludeIds = new Set(), pool = [], excludeNames = new 
 export function generateRivalLineup(myLineup, pool, excludeIds) {
   const archs = myLineup.map(({ player }) => getArchetype(player).id);
   const hasScorers = archs.some((a) => a === "scorer");
-  const hasPassers = archs.some((a) => ["playmaker", "pmBig"].includes(a));
+  const hasPassers = archs.some((a) => a === "playmaker");
   const hasBigs = archs.some((a) => ["rimProt", "interior", "stretch"].includes(a));
   const used = new Set(excludeIds);
   const team = [];
@@ -1002,19 +1004,13 @@ export function getArchetype(p) {
 
   let best = { id: "role", label: "ROLE", color: "#94a3b8", score: 0 };
 
-  // 1. Versatile – do-everything (slightly easier bar so a few more qualify)
-  if (p.pts >= 20 && p.ast >= 5 && p.reb >= 5.5 && (p.rating ?? 0) >= 44) {
-    const score = archScore(20, 34, p.pts) * 0.35 + archScore(5, 11, p.ast) * 0.35 + archScore(5.5, 13, p.reb) * 0.3;
+  // 1. Versatile – do-everything (slightly easier so a few more qualify; satisfies Big + Playmaker + Defense + Scoring in balance)
+  if (p.pts >= 18 && p.ast >= 4.5 && p.reb >= 5 && (p.rating ?? 0) >= 42) {
+    const score = archScore(18, 32, p.pts) * 0.35 + archScore(4.5, 10, p.ast) * 0.35 + archScore(5, 12, p.reb) * 0.3;
     if (score > best.score) best = { id: "versatile", label: "VERSATILE", color: "#f472b6", score };
   }
 
-  // 2. Playmaking big – PF/C with any real playmaking (ast >= 3 so more bigs land here)
-  if (isBig && p.ast >= 3) {
-    const score = archScore(3, 9, p.ast) * 0.6 + archScore(5, 14, p.reb) * 0.4;
-    if (score > best.score) best = { id: "pmBig", label: "PLAYMAKING BIG", color: "#a78bfa", score };
-  }
-
-  // 3. Rim protector – big, blocks (wider score range so more 1s and 3s)
+  // 2. Rim protector – big, blocks (wider score range so more 1s and 3s)
   if (isBig && p.blk >= 1) {
     const score = archScore(1, 3.2, p.blk) * 0.65 + archScore(5, 14, p.reb) * 0.35;
     if (score > best.score) best = { id: "rimProt", label: "RIM PROTECTOR", color: "#60a5fa", score };
@@ -1032,7 +1028,11 @@ export function getArchetype(p) {
     if (score > best.score) best = { id: "stretch", label: "STRETCH", color: "#67e8f9", score };
   }
 
-  // 6. Playmaker – guard/wing/point-forward, sets up others
+  // 6. Playmaker – one archetype for all facilitators (guard/wing/PF/C)
+  if (isBig && p.ast >= 3) {
+    const score = archScore(3, 9, p.ast) * 0.6 + archScore(5, 14, p.reb) * 0.4;
+    if (score > best.score) best = { id: "playmaker", label: "PLAYMAKER", color: "#fbbf24", score };
+  }
   if (isWingOrGuard && p.ast >= 4) {
     const score = archScore(4, 11, p.ast) * 0.7 + archScore(42, 58, p.rating ?? 0) * 0.3;
     if (score > best.score) best = { id: "playmaker", label: "PLAYMAKER", color: "#fbbf24", score };
@@ -1081,7 +1081,7 @@ export function archetypeMatchupFactor(defArch, offArch) {
   const off = offArch?.id;
   const b = {
     lockdown: { scorer: 0.87, versatile: 0.91 },
-    rimProt: { interior: 0.84, pmBig: 0.87, stretch: 0.88 },
+    rimProt: { interior: 0.84, playmaker: 0.87, stretch: 0.88 },
     threeD: { spotUp: 0.9, scorer: 0.91 },
     playmaker: { versatile: 0.93 },
   };
@@ -1104,7 +1104,6 @@ export function archetypeChemBonus(lineup) {
   if (archs.includes("lockdown") && archs.includes("threeD")) bonus += 5;
 
   // Inside-out (bigs + spacing)
-  if (archs.includes("pmBig") && (archs.includes("spotUp") || archs.includes("stretch"))) bonus += 6;
   if (archs.includes("interior") && (archs.includes("spotUp") || archs.includes("stretch"))) bonus += 5;
 
   // 3&D + scorers
@@ -1143,7 +1142,6 @@ export function getActiveSynergies(lineup) {
   if (archs.includes("rimProt") && archs.includes("lockdown")) list.push({ label: "Rim Protector + Lockdown", bonus: 7 });
   if (archs.includes("rimProt") && archs.includes("threeD")) list.push({ label: "Rim Protector + 3&D", bonus: 4 });
   if (archs.includes("lockdown") && archs.includes("threeD")) list.push({ label: "Lockdown + 3&D", bonus: 5 });
-  if (archs.includes("pmBig") && (archs.includes("spotUp") || archs.includes("stretch"))) list.push({ label: "Playmaking Big + Spacing", bonus: 6 });
   if (archs.includes("interior") && (archs.includes("spotUp") || archs.includes("stretch"))) list.push({ label: "Interior + Spacing", bonus: 5 });
   if (archs.includes("threeD") && archs.includes("scorer")) list.push({ label: "3&D + Scorer", bonus: 6 });
   if (archs.includes("threeD") && archs.includes("spotUp")) list.push({ label: "3&D + Spot-up", bonus: 4 });
@@ -1166,10 +1164,10 @@ function getBalanceFlags(lineup) {
   if (!lineup || lineup.length !== 5) return { hasBig: false, hasPlaymaker: false, hasDefense: false, hasScoring: false };
   const archs = lineup.map(({ player }) => getArchetype(player).id);
   const hasBig =
-    archs.some((a) => ["rimProt", "interior", "pmBig", "stretch", "versatile"].includes(a)) ||
+    archs.some((a) => ["rimProt", "interior", "stretch", "versatile"].includes(a)) ||
     lineup.some(({ player }) => player.pos === "C" || player.pos === "PF");
-  const hasPlaymaker = archs.some((a) => ["playmaker", "versatile", "pmBig"].includes(a));
-  const hasDefense = archs.some((a) => ["lockdown", "threeD", "rimProt"].includes(a));
+  const hasPlaymaker = archs.some((a) => ["playmaker", "versatile"].includes(a));
+  const hasDefense = archs.some((a) => ["lockdown", "threeD", "rimProt", "versatile"].includes(a));
   const hasScoring = archs.some((a) => ["scorer", "spotUp", "versatile", "stretch"].includes(a));
   return { hasBig, hasPlaymaker, hasDefense, hasScoring };
 }
