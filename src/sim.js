@@ -571,8 +571,6 @@ export function simulate(
     const clutchMult =
       isClutch && (offArch.id === "scorer" || offArch.id === "versatile")
         ? 1.08
-        : isClutch && offArch.id === "role"
-        ? 0.92
         : 1.0;
     const matchupMult = archetypeMatchupFactor(defArch, offArch);
     const defFactor = clamp(
@@ -581,8 +579,7 @@ export function simulate(
       1.04
     );
     const base = is3 ? (sp.tpPct > 0 ? sp.tpPct : baseFg * 0.65) : baseFg * (m * 0.1 + 0.9);
-    const archVar =
-      offArch.id === "spotUp" ? 1.8 : offArch.id === "role" ? 0.8 : 1.2;
+    const archVar = offArch.id === "spotUp" ? 1.8 : 1.2;
 
     // Shooting: nudge FG% and 3P% up a little (no change to points/pace)
     const raw = base * clutchMult + gauss(archVar);
@@ -1005,15 +1002,15 @@ export function getArchetype(p) {
 
   let best = { id: "role", label: "ROLE", color: "#94a3b8", score: 0 };
 
-  // 1. Versatile – only true do-everything stars (strict so most land in Scorer/Playmaker/pmBig)
-  if (p.pts >= 22 && p.ast >= 5.5 && p.reb >= 6 && (p.rating ?? 0) >= 46) {
-    const score = archScore(22, 36, p.pts) * 0.35 + archScore(5.5, 12, p.ast) * 0.35 + archScore(6, 14, p.reb) * 0.3;
+  // 1. Versatile – do-everything (slightly easier bar so a few more qualify)
+  if (p.pts >= 20 && p.ast >= 5 && p.reb >= 5.5 && (p.rating ?? 0) >= 44) {
+    const score = archScore(20, 34, p.pts) * 0.35 + archScore(5, 11, p.ast) * 0.35 + archScore(5.5, 13, p.reb) * 0.3;
     if (score > best.score) best = { id: "versatile", label: "VERSATILE", color: "#f472b6", score };
   }
 
-  // 2. Playmaking big – PF/C with real playmaking (ast >= 4 so 3-ast bigs → Interior/Stretch/Scorer)
-  if (isBig && p.ast >= 4) {
-    const score = archScore(4, 9, p.ast) * 0.6 + archScore(5, 14, p.reb) * 0.4;
+  // 2. Playmaking big – PF/C with any real playmaking (ast >= 3 so more bigs land here)
+  if (isBig && p.ast >= 3) {
+    const score = archScore(3, 9, p.ast) * 0.6 + archScore(5, 14, p.reb) * 0.4;
     if (score > best.score) best = { id: "pmBig", label: "PLAYMAKING BIG", color: "#a78bfa", score };
   }
 
@@ -1065,20 +1062,15 @@ export function getArchetype(p) {
     if (score > best.score) best = { id: "spotUp", label: "SPOT-UP", color: "#38bdf8", score };
   }
 
-  // 10. Scorer – primary scoring (wide range; level bands give more Scorer 1s)
-  if (p.pts >= 8) {
-    const score = archScore(8, 26, p.pts) * 0.7 + archScore(34, 55, p.rating ?? 0) * 0.3;
+  // 10. Scorer – primary scoring (15+ ppg) or catch-all for anyone who didn’t fit above (no Role)
+  if (p.pts >= 15) {
+    const score = archScore(15, 30, p.pts) * 0.7 + archScore(38, 56, p.rating ?? 0) * 0.3;
     if (score > best.score) best = { id: "scorer", label: "SCORER", color: "#f97316", score };
   }
 
-  // 11. Role – fallback only; level from rating
+  // 11. Everyone else → Scorer (no Role; catch-all so every player has an archetype)
   if (best.id === "role") {
-    const roleScore = archScore(28, 54, p.rating ?? 32);
-    best = { id: "role", label: "ROLE", color: "#94a3b8", score: roleScore };
-    // Avoid lone "Role 2"s: if they have any real scoring, give them Scorer 1
-    if (p.pts >= 6 && (p.rating ?? 0) >= 34) {
-      best = { id: "scorer", label: "SCORER", color: "#f97316", score: archScore(6, 18, p.pts) * 0.6 + archScore(34, 52, p.rating ?? 0) * 0.4 };
-    }
+    best = { id: "scorer", label: "SCORER", color: "#f97316", score: archScore(4, 22, p.pts) * 0.6 + archScore(32, 52, p.rating ?? 32) * 0.4 };
   }
 
   return { id: best.id, label: best.label, color: best.color };
