@@ -1081,24 +1081,7 @@ export function getArchetype(p) {
     }
   }
 
-  // Per-archetype level bands so we don’t cluster in 2 (more 1s and 3s)
-  const bands = {
-    threeD: [26, 56],   // spread 3&D 2s → more 3&D 1 and 3&D 3
-    lockdown: [26, 56], // more Lockdown 1s
-    scorer: [34, 62],   // more Scorer 1s (wider band 1)
-    rimProt: [28, 58],
-    pmBig: [28, 58],
-    interior: [28, 58],
-    stretch: [28, 58],
-    spotUp: [28, 58],
-    playmaker: [30, 60],
-    versatile: [30, 60],
-    role: [30, 60],
-  };
-  const [t1, t2] = bands[best.id] ?? [30, 60];
-  const level = best.score < t1 ? 1 : best.score < t2 ? 2 : 3;
-  const labelWithLevel = `${best.label} ${level}`;
-  return { id: best.id, label: labelWithLevel, color: best.color, level };
+  return { id: best.id, label: best.label, color: best.color };
 }
 
 export function archetypeMatchupFactor(defArch, offArch) {
