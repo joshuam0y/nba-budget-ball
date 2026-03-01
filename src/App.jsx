@@ -354,6 +354,7 @@ export default function App(){
   const [inspectPlayer, setInspectPlayer] = useState(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [simMessage, setSimMessage] = useState("");
   const [gamePogs, setGamePogs] = useState(() => Array(SEASON_LENGTH).fill(null));
   const [allStarVotes, setAllStarVotes] = useState({});
   const [mvpVotes, setMvpVotes] = useState({});
@@ -374,6 +375,9 @@ export default function App(){
   const [seasonGameResults, setSeasonGameResults] = useState([]); // [{ oppName, home, myScore, oppScore, won, pog }] per game
   const [unlockedAchievements, setUnlockedAchievements] = useState([]); // per-save; persisted with slot
   const [newlyUnlockedAchievements, setNewlyUnlockedAchievements] = useState([]);
+  const [reachedFirstRoundThisPlayoffs, setReachedFirstRoundThisPlayoffs] = useState(false);
+  const [playerPlayoffSeedThisYear, setPlayerPlayoffSeedThisYear] = useState(null); // 1-10 when in playoffs
+  const [lastEliminatorTeamName, setLastEliminatorTeamName] = useState(null); // team that eliminated us last run; for revenge
   const [hintsDismissed, setHintsDismissed] = useState(() => {
     if (typeof window === "undefined") return {};
     const o = {};
@@ -511,6 +515,7 @@ export default function App(){
         if (Array.isArray(saved.achievementsUnlocked)) setUnlockedAchievements(saved.achievementsUnlocked);
         if (Array.isArray(saved.seasonGameResults)) setSeasonGameResults(saved.seasonGameResults);
         if (Array.isArray(saved.gameHistory)) setGameHistory(saved.gameHistory);
+        if (saved.lastEliminatorTeamName != null) setLastEliminatorTeamName(saved.lastEliminatorTeamName);
 
         restored =
           !!saved.inSeason ||
@@ -597,6 +602,7 @@ export default function App(){
         achievementsUnlocked: unlockedAchievements,
         seasonGameResults: seasonGameResults || [],
         gameHistory: gameHistory || [],
+        lastEliminatorTeamName: lastEliminatorTeamName || null,
       };
       const saveKey = currentSaveSlot ? `nba_budget_ball_save_${currentSaveSlot}` : "nba-budget-ball-state";
       window.localStorage.setItem(saveKey, JSON.stringify(payload));
@@ -604,7 +610,7 @@ export default function App(){
     } catch {
       // ignore localStorage issues
     }
-  }, [roster, myTeamName, leagueName, difficulty, phase, season, schedule, scheduleHome, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot, gamePogs, allStarVotes, allStarSelections, mvpVotes, dpoyVotes, unlockedAchievements, seasonGameResults, gameHistory]);
+  }, [roster, myTeamName, leagueName, difficulty, phase, season, schedule, scheduleHome, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot, gamePogs, allStarVotes, allStarSelections, mvpVotes, dpoyVotes, unlockedAchievements, seasonGameResults, gameHistory, lastEliminatorTeamName]);
 
   const rememberTeamName = useCallback((name) => {
     const trimmed = (name || "").trim();
@@ -755,6 +761,7 @@ export default function App(){
       if (Array.isArray(saved.gameHistory)) setGameHistory(saved.gameHistory);
       if (Array.isArray(saved.achievementsUnlocked)) setUnlockedAchievements(saved.achievementsUnlocked);
       else setUnlockedAchievements([]);
+      if (saved.lastEliminatorTeamName != null) setLastEliminatorTeamName(saved.lastEliminatorTeamName);
       seasonEndRecordedRef.current = !!saved.season?.gp && saved.phase === "seasonEnd";
       playoffRecordedRef.current = !!saved.bracket?.champion;
       seasonAwardsRecordedRef.current = !!saved.season?.gp && saved.phase === "seasonEnd";
@@ -842,13 +849,14 @@ export default function App(){
         achievementsUnlocked: unlockedAchievements,
         seasonGameResults: seasonGameResults || [],
         gameHistory: gameHistory || [],
+        lastEliminatorTeamName: lastEliminatorTeamName || null,
       };
       window.localStorage.setItem(getSaveKey(slot), JSON.stringify(payload));
       window.localStorage.setItem("nba_budget_ball_last_key", getSaveKey(slot));
     } catch {
       window.alert("Could not save.");
     }
-  }, [roster, myTeamName, difficulty, phase, season, schedule, scheduleHome, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, gamePogs, allStarSelections, unlockedAchievements, seasonGameResults, gameHistory, getSaveKey]);
+  }, [roster, myTeamName, difficulty, phase, season, schedule, scheduleHome, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, gamePogs, allStarSelections, unlockedAchievements, seasonGameResults, gameHistory, lastEliminatorTeamName, getSaveKey]);
 
   const [shareImageStatus, setShareImageStatus] = useState(null);
   const handleShareLineup = useCallback(async () => {
@@ -937,13 +945,11 @@ const soundtrackRef = useRef(null);
     const all = [userRecord, ...aiTeams.map((t) => ({ ...t, isPlayer: false }))];
     const confTeams = all.filter((t) => t.conference === userMeta.conference).sort(standingsSort);
     const myRankInConf = confTeams.findIndex((t) => t.isPlayer) + 1;
-    const madePlayoffs = myRankInConf <= 10;
     setCareerStats((prev) => ({
       ...prev,
       seasonsPlayed: prev.seasonsPlayed + 1,
       totalWins: prev.totalWins + (season.w || 0),
       totalLosses: prev.totalLosses + (season.l || 0),
-      playoffAppearances: prev.playoffAppearances + (madePlayoffs ? 1 : 0),
       bestSeasonWins: Math.max(prev.bestSeasonWins, season.w || 0),
     }));
   }, [phase, season, aiTeams, myTeamName]);
@@ -1011,6 +1017,10 @@ const soundtrackRef = useRef(null);
     allNBA.third.forEach((p) => toAdd.push([p.name, "NBA3"]));
     allDefensive.first.forEach((p) => toAdd.push([p.name, "DEF1"]));
     allDefensive.second.forEach((p) => toAdd.push([p.name, "DEF2"]));
+    const myTeamAllNBA = [...allNBA.first, ...allNBA.second, ...allNBA.third].some((p) => p.team === myTeamName);
+    if (myTeamAllNBA && unlockAchievementForSave("all_nba_winner")) setNewlyUnlockedAchievements((prev) => [...prev, "all_nba_winner"]);
+    const myTeamAllDef = [...(allDefensive.first || []), ...(allDefensive.second || [])].some((p) => p.team === myTeamName);
+    if (myTeamAllDef && unlockAchievementForSave("all_defensive_winner")) setNewlyUnlockedAchievements((prev) => [...prev, "all_defensive_winner"]);
     setPlayerAwards((prev) => {
       const next = { ...prev };
       toAdd.forEach(([name, award]) => {
@@ -1018,8 +1028,8 @@ const soundtrackRef = useRef(null);
         next[name] = [...(next[name] || []), { season: seasonNumber, award }];
       });
       return next;
-    });
-  }, [phase, season, aiTeams, myTeamName, leagueLeaders, seasonNumber, mvpVotes, dpoyVotes]);
+});
+    }, [phase, season, aiTeams, myTeamName, leagueLeaders, seasonNumber, mvpVotes, dpoyVotes, unlockAchievementForSave]);
 
   // Achievements: check at season end and set newly unlocked for toast
   const maxWinStreak = useMemo(() => {
@@ -1067,9 +1077,22 @@ const soundtrackRef = useRef(null);
       const idx = conf.findIndex((t) => t.name === myTeamName);
       return idx >= 0 ? idx + 1 : 15;
     })();
-    if (confRank <= 10 && unlockAchievementForSave("first_playoff")) unlocked.push("first_playoff");
+    if (userW >= 50 && unlockAchievementForSave("fifty_wins")) unlocked.push("fifty_wins");
+    if (confRank === 1 && unlockAchievementForSave("one_seed")) unlocked.push("one_seed");
+    if (userW > 41 && unlockAchievementForSave("winning_season")) unlocked.push("winning_season");
+    const homeAway = (seasonGameResults || []).reduce((acc, r) => {
+      if (r && r.home === true) acc.homeW += r.won ? 1 : 0; else if (r && r.home === false) acc.awayW += r.won ? 1 : 0;
+      if (r && r.home === true) acc.homeL += r.won ? 0 : 1; else if (r && r.home === false) acc.awayL += r.won ? 0 : 1;
+      return acc;
+    }, { homeW: 0, homeL: 0, awayW: 0, awayL: 0 });
+    if (homeAway.homeW === 41 && homeAway.homeL === 0 && unlockAchievementForSave("home_court")) unlocked.push("home_court");
+    if (homeAway.awayW >= 25 && unlockAchievementForSave("road_warrior")) unlocked.push("road_warrior");
+    if (seasonNumber >= 10 && unlockAchievementForSave("seasons_10")) unlocked.push("seasons_10");
+    if (seasonNumber >= 20 && unlockAchievementForSave("seasons_20")) unlocked.push("seasons_20");
+    if (seasonNumber >= 50 && unlockAchievementForSave("seasons_50")) unlocked.push("seasons_50");
+    if (seasonNumber >= 100 && unlockAchievementForSave("seasons_100")) unlocked.push("seasons_100");
     if (unlocked.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...unlocked]);
-  }, [phase, season, allStarSelections, myTeamName, mvpVotes, dpoyVotes, roster, aiTeams, maxWinStreak, unlockAchievementForSave]);
+  }, [phase, season, allStarSelections, myTeamName, mvpVotes, dpoyVotes, roster, aiTeams, maxWinStreak, unlockAchievementForSave, seasonGameResults, seasonNumber]);
 
   const allStarComputedRef = useRef(false);
   useEffect(() => {
@@ -1142,7 +1165,21 @@ const soundtrackRef = useRef(null);
     runSimGames(count);
   }, [phase, gameNum]);
 
-  // Record championships/finals when playoffs end (one-time per playoff) + CHAMP & FINALSMVP awards
+  // When we reach first round (or started in it): count as "made playoffs" and unlock first_playoff / play_in_survivor
+  useEffect(() => {
+    if (phase !== "playoffs" || !bracket) return;
+    const nextId = getNextPlayerMatchId(bracket);
+    if (!nextId) return;
+    const isPlayIn = /-(pi1|pi2|pi3)$/.test(nextId);
+    if (isPlayIn) return;
+    setReachedFirstRoundThisPlayoffs(true);
+    const ach = [];
+    if (unlockAchievementForSave("first_playoff")) ach.push("first_playoff");
+    if (playerPlayoffSeedThisYear >= 7 && playerPlayoffSeedThisYear <= 10 && unlockAchievementForSave("play_in_survivor")) ach.push("play_in_survivor");
+    if (ach.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...ach]);
+  }, [phase, bracket, playerPlayoffSeedThisYear, unlockAchievementForSave]);
+
+  // Record championships/finals when playoffs end (one-time per playoff) + CHAMP & FINALSMVP awards + playoffAppearances (first round only)
   useEffect(() => {
     if (phase !== "playoffs" || !bracket?.champion) return;
     if (playoffRecordedRef.current) return;
@@ -1153,6 +1190,7 @@ const soundtrackRef = useRef(null);
       ...prev,
       championships: prev.championships + (wonChip ? 1 : 0),
       finalsAppearances: prev.finalsAppearances + (madeFinals ? 1 : 0),
+      playoffAppearances: prev.playoffAppearances + (reachedFirstRoundThisPlayoffs ? 1 : 0),
     }));
     // CHAMP: every player on champion lineup; FINALSMVP: best from finals leaders (champion team only) or fallback
     const champLineup = bracket.champion?.lineup || [];
@@ -1191,9 +1229,21 @@ const soundtrackRef = useRef(null);
     const ach = [];
     if (wonChip && unlockAchievementForSave("first_championship")) ach.push("first_championship");
     if (wonChip && (careerStats?.championships ?? 0) + 1 >= 3 && unlockAchievementForSave("three_peat")) ach.push("three_peat");
-    if (wonChip && finalsMVPName && champPlayerNames.has(finalsMVPName) && unlockAchievementForSave("finals_mvp")) ach.push("finals_mvp");
+    if (wonChip && (careerStats?.championships ?? 0) + 1 >= 5 && unlockAchievementForSave("dynasty")) ach.push("dynasty");
+    if (wonChip && playerPlayoffSeedThisYear >= 6 && playerPlayoffSeedThisYear <= 8 && unlockAchievementForSave("cinderella")) ach.push("cinderella");
+    const rosterNames = new Set(POSITIONS.map((p) => roster[p]).filter(Boolean).map((p) => [p.name, p.fullName]).flat().filter(Boolean));
+    const hasMVPThisSeason = rosterNames.size > 0 && Object.entries(playerAwards || {}).some(([name, list]) => rosterNames.has(name) && list.some((e) => e.season === seasonNumber && e.award === "MVP"));
+    if (wonChip && hasMVPThisSeason && unlockAchievementForSave("triple_crown")) ach.push("triple_crown");
+    const finalsLoser = bracket.finals?.top && bracket.champion ? (bracket.champion === bracket.finals.top ? bracket.finals.bot : bracket.finals.top) : null;
+    if (wonChip && lastEliminatorTeamName && finalsLoser?.name === lastEliminatorTeamName && unlockAchievementForSave("revenge")) {
+      ach.push("revenge");
+      setLastEliminatorTeamName(null);
+    }
+    if (madeFinals && unlockAchievementForSave("first_finals")) ach.push("first_finals");
     if (ach.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...ach]);
-  }, [phase, bracket, finalsLeaders, seasonNumber, careerStats, unlockAchievementForSave]);
+    setReachedFirstRoundThisPlayoffs(false);
+    setPlayerPlayoffSeedThisYear(null);
+  }, [phase, bracket, finalsLeaders, seasonNumber, careerStats, unlockAchievementForSave, playerPlayoffSeedThisYear, playerAwards, roster, lastEliminatorTeamName, reachedFirstRoundThisPlayoffs]);
 
   const pickNextTrack = useCallback((excludeIndex) => {
     const others = [0, 1, 2, 3].filter((i) => i !== excludeIndex);
@@ -2178,10 +2228,17 @@ const startSeason = async () => {
       finals: finalsMatchup,
       champion: null,
     };
+    const nextPlayerId = getNextPlayerMatchId(newBracket) || getNextAIMatchId(newBracket);
+    const isPlayInSlot = nextPlayerId && /-(pi1|pi2|pi3)$/.test(nextPlayerId);
+    const myConf = userMeta.conference;
+    const seeds = myConf === "East" ? eastSeeds : westSeeds;
+    const mySeed = seeds.findIndex((t) => t.isPlayer) + 1;
+    if (mySeed >= 1 && mySeed <= 10) setPlayerPlayoffSeedThisYear(mySeed);
+    setReachedFirstRoundThisPlayoffs(!isPlayInSlot && !!nextPlayerId);
     setBracket(newBracket);
     setPhase("playoffs");
     setPlayoffResult(null);
-    setActiveMatchId(getNextPlayerMatchId(newBracket) || getNextAIMatchId(newBracket) || null);
+    setActiveMatchId(nextPlayerId || null);
     setElimInPlayoffs(false);
     setPlayoffLeaders({});
     setPlayoffHighs({});
@@ -2331,16 +2388,81 @@ const startSeason = async () => {
     return stageKey;
   }
 
+  function getRoundLabel(stageKey) {
+    if (!stageKey) return "";
+    if (stageKey.startsWith("pi")) return "Play-in";
+    if (stageKey.startsWith("fr")) return "First round";
+    if (stageKey.startsWith("sf")) return "Conference semis";
+    if (stageKey === "confF") return "Conference finals";
+    if (stageKey === "finals") return "Finals";
+    return stageKey;
+  }
+
   const playPlayoffGame=(matchId)=>{
     if(!bracket) return;
     const b = JSON.parse(JSON.stringify(bracket));
     const out = runOnePlayoffGame(b, matchId, teamRoster, myLineup, difficulty);
-    if (out.playerEliminated) setElimInPlayoffs(true);
+    if (out.playerEliminated) {
+      setElimInPlayoffs(true);
+      if (out.result?.winner?.name) setLastEliminatorTeamName(out.result.winner?.name);
+      const parsed = getPlayoffMatchup(out.bracket, matchId);
+      const m = parsed?.matchup;
+      if (m?.games) {
+        const ourIdx = m.top?.isPlayer ? 0 : 1;
+        const ourWins = m.games.filter((g) => g.winnerIdx === ourIdx).length;
+        if (ourWins >= 1 && unlockAchievementForSave("no_sweep")) setNewlyUnlockedAchievements((prev) => [...prev, "no_sweep"]);
+      }
+    }
+    if (out.result?.seriesOver && out.result?.winner?.isPlayer && out.result?.topName && out.result?.botName) {
+      const beaten = out.result.playerIsTop ? out.result.botName : out.result.topName;
+      if (lastEliminatorTeamName && beaten === lastEliminatorTeamName && unlockAchievementForSave("revenge")) {
+        setNewlyUnlockedAchievements((prev) => [...prev, "revenge"]);
+        setLastEliminatorTeamName(null);
+      }
+    }
     setBracket(out.bracket);
     setPlayoffResult(out.result);
     if (matchId === "finals" && out.result && out.result.myStats) {
       updateFinalsLeaders(out.result, out.result.topName, out.result.botName);
     }
+  };
+
+  const simMySeries = (matchId) => {
+    if (!bracket || !teamRoster) return;
+    const parsed = getPlayoffMatchup(bracket, matchId);
+    const matchup = parsed?.matchup;
+    if (!matchup || matchup.winner || !matchup.top?.isPlayer && !matchup.bot?.isPlayer) return;
+    const winsNeeded = parsed?.slot?.startsWith("pi") ? 1 : 4;
+    let b = JSON.parse(JSON.stringify(bracket));
+    let lastResult = null;
+    while (true) {
+      const out = runOnePlayoffGame(b, matchId, teamRoster, myLineup, difficulty);
+      b = out.bracket;
+      lastResult = out.result;
+      if (out.playerEliminated) {
+        setElimInPlayoffs(true);
+        if (out.result?.winner?.name) setLastEliminatorTeamName(out.result.winner?.name);
+        const parsedEl = getPlayoffMatchup(b, matchId);
+        const mel = parsedEl?.matchup;
+        if (mel?.games) {
+          const ourIdx = mel.top?.isPlayer ? 0 : 1;
+          const ourWins = mel.games.filter((g) => g.winnerIdx === ourIdx).length;
+          if (ourWins >= 1 && unlockAchievementForSave("no_sweep")) setNewlyUnlockedAchievements((prev) => [...prev, "no_sweep"]);
+        }
+      }
+      if (out.result?.seriesOver && out.result?.winner?.isPlayer && lastEliminatorTeamName && (out.result.playerIsTop ? out.result.botName : out.result.topName) === lastEliminatorTeamName && unlockAchievementForSave("revenge")) {
+        setNewlyUnlockedAchievements((prev) => [...prev, "revenge"]);
+        setLastEliminatorTeamName(null);
+      }
+      if (matchId === "finals" && out.result?.myStats) {
+        updateFinalsLeaders(out.result, out.result.topName, out.result.botName);
+      }
+      const parsed2 = getPlayoffMatchup(b, matchId);
+      if (parsed2?.matchup?.winner) break;
+    }
+    setBracket(b);
+    setPlayoffResult(lastResult);
+    setActiveMatchId(matchId);
   };
 
   const simAllAIGames = useCallback(() => {
@@ -2395,15 +2517,78 @@ const startSeason = async () => {
     } catch (err) {
       console.error("Sim CPU round error:", err);
     } finally {
+      setSimMessage("");
+      setIsSimulating(false);
+    }
+  }, [bracket, teamRoster, myLineup, difficulty]);
+
+  const simAllCPURounds = useCallback(() => {
+    if (!bracket || !teamRoster) {
+      setIsSimulating(false);
+      return;
+    }
+    try {
+      let b = JSON.parse(JSON.stringify(bracket));
+      let roundCount = 0;
+      while (true) {
+        const firstAIMatchId = getNextAIMatchId(b);
+        if (!firstAIMatchId) break;
+        const stageKey = getStageKey(firstAIMatchId);
+        const targetGroup = getStageGroup(stageKey);
+        if (!targetGroup) break;
+        const stageKeysForGroup = PLAYOFF_STAGE_ORDER.filter((k) => getStageGroup(k) === targetGroup);
+        const groupMatchIds = [];
+        for (const sk of stageKeysForGroup) {
+          groupMatchIds.push(...getMatchIdsForStage(sk));
+        }
+        let progressed = false;
+        while (true) {
+          let inner = false;
+          for (const matchId of groupMatchIds) {
+            const parsed = getPlayoffMatchup(b, matchId);
+            const m = parsed?.matchup;
+            if (!m || m.winner || !m.top || !m.bot || m.top.isPlayer || m.bot.isPlayer) continue;
+            if (!Array.isArray(m.top.lineup) || !Array.isArray(m.bot.lineup)) continue;
+            const out = runOnePlayoffGame(b, matchId, teamRoster, myLineup, difficulty);
+            b = out.bracket;
+            progressed = true;
+            inner = true;
+            if (out.playerEliminated) setElimInPlayoffs(true);
+            if (matchId === "finals" && out.result?.myStats) {
+              updateFinalsLeaders(out.result, out.result.topName, out.result.botName);
+            }
+          }
+          if (!inner) break;
+        }
+        if (progressed) roundCount++;
+        else break;
+      }
+      setBracket(b);
+      setPlayoffResult(null);
+      setActiveMatchId(getNextPlayerMatchId(b) || null);
+    } catch (err) {
+      console.error("Sim all CPU error:", err);
+    } finally {
+      setSimMessage("");
       setIsSimulating(false);
     }
   }, [bracket, teamRoster, myLineup, difficulty]);
 
   const runSimAllAIGames = () => {
     if (isSimulating || !bracket || !teamRoster) return;
-    if (typeof window !== "undefined" && isMobile && !window.confirm("Sim all CPU games in the current round?")) return;
+    const nextAI = getNextAIMatchId(bracket);
+    const rLabel = nextAI ? getRoundLabel(getStageKey(nextAI)) : "";
+    setSimMessage(rLabel ? `Simulating ${rLabel}…` : "Simulating…");
     setIsSimulating(true);
     setTimeout(() => simAllAIGames(), 0);
+  };
+
+  const runSimAllCPURounds = () => {
+    if (isSimulating || !bracket || !teamRoster) return;
+    if (typeof window !== "undefined" && isMobile && !window.confirm("Sim all CPU games until your next matchup?")) return;
+    setSimMessage("Simulating all CPU games…");
+    setIsSimulating(true);
+    setTimeout(() => simAllCPURounds(), 0);
   };
 
 if(phase==="teamSetup") return(
@@ -2524,39 +2709,12 @@ if(phase==="teamSetup") return(
     const champion=bracket.champion,playerWon=champion?.isPlayer;
     const finalAiRec = aiTeams;
     const nextPlayerMatchId = getNextPlayerMatchId(bracket) || null;
-    const finalsMVP = champion && (() => {
-      const champName = champion.name;
-      const champPlayerNames = new Set();
-      (champion.lineup || []).forEach(({ player }) => {
-        if (player?.fullName) champPlayerNames.add(player.fullName);
-        if (player?.name) champPlayerNames.add(player.name);
-      });
-      const arr = Object.values(finalsLeaders || {}).filter((p) => p.team === champName && champPlayerNames.has(p.name));
-      if (arr.length > 0) {
-        const withScore = arr.map((p) => {
-          const gp = p.gp || 1;
-          const ppg = p.pts / gp;
-          const rpg = p.reb / gp;
-          const apg = p.ast / gp;
-          return { ...p, gp, ppg, rpg, apg, fmvpScore: ppg * 2 + rpg * 0.8 + apg * 1.5 };
-        });
-        const best = withScore.reduce((best, p) => (!best || p.fmvpScore > best.fmvpScore ? p : best), null);
-        if (best && best.team === champName) return best;
-      }
-      const lineup = champion.lineup;
-      if (lineup && lineup.length) {
-        const best = lineup.reduce((a, b) => ((a?.player?.rating ?? 0) >= (b?.player?.rating ?? 0) ? a : b));
-        const p = best?.player;
-        if (p) return { name: p.fullName || p.name, pos: p.pos, team: champion.name, ppg: p.pts ?? 0, rpg: p.reb ?? 0, apg: p.ast ?? 0 };
-      }
-      return null;
-    })();
     const btnBase = { border:"1px solid #334155", borderRadius:10, fontWeight:700, cursor:"pointer", minHeight: isMobile ? 44 : undefined };
     const simulatingOverlayPlayoffs = isSimulating && (
       <div style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(8,15,30,0.85)",flexDirection:"column",gap:16}}>
         <style>{`@keyframes simSpin{to{transform:rotate(360deg);}}`}</style>
         <div style={{width:48,height:48,border:"4px solid #334155",borderTopColor:"#60a5fa",borderRadius:"50%",animation:"simSpin 0.8s linear infinite"}}/>
-        <div style={{fontSize:14,fontWeight:700,color:"#94a3b8"}}>Simulating…</div>
+        <div style={{fontSize:14,fontWeight:700,color:"#94a3b8"}}>{simMessage || "Simulating…"}</div>
       </div>
     );
     return(
@@ -2577,7 +2735,17 @@ if(phase==="teamSetup") return(
               )}
               <button onClick={()=>setShowStandings(s=>!s)} style={{...btnBase,background:showStandings?"#1e3a5f":"#1e293b",color:"#60a5fa",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>{showStandings?"Hide":"Show"} Standings</button>
               <button onClick={()=>setShowPlayoffLeaders(s=>!s)} style={{...btnBase,background:showPlayoffLeaders?"#431407":"#1e293b",color:"#f97316",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>{showPlayoffLeaders?"Hide":"Show"} Leaders</button>
-              {getNextAIMatchId(bracket)&&<button onClick={runSimAllAIGames} disabled={isSimulating} style={{...btnBase,background:isSimulating?"#374151":"linear-gradient(135deg,#475569,#334155)",color:"#e2e8f0",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,boxShadow:"0 2px 8px rgba(0,0,0,0.2)",opacity:isSimulating?0.8:1,cursor:isSimulating?"wait":"pointer"}}>⚡ Sim CPU round</button>}
+              {(() => {
+                const nextAI = getNextAIMatchId(bracket);
+                const rLabel = nextAI ? getRoundLabel(getStageKey(nextAI)) : "";
+                if (!nextAI) return null;
+                return (
+                  <>
+                    <button onClick={runSimAllAIGames} disabled={isSimulating} title={rLabel ? `Sim all CPU games in ${rLabel}` : "Sim CPU round"} style={{...btnBase,background:isSimulating?"#374151":"linear-gradient(135deg,#475569,#334155)",color:"#e2e8f0",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,boxShadow:"0 2px 8px rgba(0,0,0,0.2)",opacity:isSimulating?0.8:1,cursor:isSimulating?"wait":"pointer"}}>⚡ Sim round{rLabel ? ` (${rLabel})` : ""}</button>
+                    <button onClick={runSimAllCPURounds} disabled={isSimulating} title="Sim all CPU games until your next matchup" style={{...btnBase,background:isSimulating?"#374151":"linear-gradient(135deg,#334155,#1e293b)",color:"#94a3b8",border:"1px solid #475569",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,opacity:isSimulating?0.8:1,cursor:isSimulating?"wait":"pointer"}}>⚡ Sim all CPU</button>
+                  </>
+                );
+              })()}
               <button onClick={()=>setBracketDensity(d=>d==="compact"?"comfortable":"compact")} style={{...btnBase,background:bracketDensity==="compact"?"#111827":"#1e293b",color:"#e2e8f0",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>{bracketDensity==="compact"?"Compact ✓":"Compact"}</button>
               <button onClick={goToMainMenu} style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>🏠 Main menu</button>
               <button onClick={()=>setShowSaveModal(true)} style={{...btnBase,background:"#1e293b",color:"#a78bfa",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>💾 Save</button>
@@ -2642,18 +2810,6 @@ if(phase==="teamSetup") return(
               <div style={{textAlign:"center",padding: isMobile ? 14 : 16,background:playerWon?"linear-gradient(135deg,#78350f,#92400e)":"#0f172a",borderRadius:16,border:`2px solid ${playerWon?"#fbbf24":"#475569"}`,marginBottom:12}}>
                 <div style={{fontSize: isMobile ? 32 : 36}}>{playerWon?"🏆":"👑"}</div>
                 <div style={{fontSize: isMobile ? 18 : 22,fontWeight:900,color:playerWon?"#fbbf24":"#e2e8f0",letterSpacing:2,lineHeight:1.3}}>{playerWon?"YOU ARE CHAMPIONS!":champion.name+" WIN THE CHAMPIONSHIP!"}</div>
-              </div>
-              <div style={{textAlign:"center",padding: isMobile ? 14 : 12,background:"#0f172a",borderRadius:12,border:"1px solid #eab308",marginBottom:12}}>
-                <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:4}}>🏆 FINALS MVP</div>
-                {finalsMVP ? (
-                  <>
-                    <div style={{fontSize: isMobile ? 16 : 18,fontWeight:900}}>{finalsMVP.name}</div>
-                    <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{finalsMVP.pos || "—"} · {finalsMVP.team}</div>
-                    <div style={{fontSize: isMobile ? 13 : 12,color:"#e5e7eb",marginTop:4}}>{rf(finalsMVP.ppg,1)} PPG · {rf(finalsMVP.rpg,1)} RPG · {rf(finalsMVP.apg,1)} APG</div>
-                  </>
-                ) : (
-                  <div style={{fontSize: 12, color: "#64748b"}}>—</div>
-                )}
               </div>
               {(careerStats.seasonsPlayed > 0 || careerStats.championships > 0) && (
               <div style={{ fontSize: 11, color: "#a78bfa", marginBottom: 10, fontWeight: 700, textAlign: "center" }}>
@@ -2725,10 +2881,13 @@ if(phase==="teamSetup") return(
                     <span style={{fontSize: isMobile ? 13 : 12,color:"#94a3b8",flex: isMobile ? "1 1 100%" : undefined}}>{matchup.bot?.name ?? "TBD"}</span>
                   </div>
                   {!done&&matchup.top&&matchup.bot&&(
-                    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                      {pInv?(
-                        <button onClick={()=>playPlayoffGame(activeMatchId)} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding: isMobile ? "14px 24px" : "12px 28px",fontSize: isMobile ? 14 : 13,fontWeight:800,cursor:"pointer",boxShadow:"0 4px 14px rgba(34,197,94,0.35)", minHeight: isMobile ? 48 : undefined}}>▶ Play Game {matchup.games.length+1}</button>
-                      ):(
+                    <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+                      {pInv ? (
+                        <>
+                          <button onClick={()=>playPlayoffGame(activeMatchId)} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:10,padding: isMobile ? "14px 24px" : "12px 28px",fontSize: isMobile ? 14 : 13,fontWeight:800,cursor:"pointer",boxShadow:"0 4px 14px rgba(34,197,94,0.35)", minHeight: isMobile ? 48 : undefined}}>▶ Play Game {matchup.games.length+1}</button>
+                          <button onClick={()=>simMySeries(activeMatchId)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #475569",borderRadius:10,padding: isMobile ? "14px 18px" : "12px 20px",fontSize: isMobile ? 13 : 12,fontWeight:700,cursor:"pointer", minHeight: isMobile ? 48 : undefined}} title="Sim remaining games in this series">⚡ Sim series</button>
+                        </>
+                      ) : (
                         <button onClick={()=>playPlayoffGame(activeMatchId)} style={{background:"linear-gradient(135deg,#475569,#64748b)",color:"white",border:"none",borderRadius:10,padding: isMobile ? "14px 24px" : "12px 28px",fontSize: isMobile ? 14 : 13,fontWeight:800,cursor:"pointer", minHeight: isMobile ? 48 : undefined}}>⚡ Sim Game {matchup.games.length+1}</button>
                       )}
                     </div>
@@ -2776,15 +2935,20 @@ if(phase==="teamSetup") return(
             const btnLabel = pInv ? `▶ Play Game ${matchup.games.length + 1}` : `⚡ Sim Game ${matchup.games.length + 1}`;
             return (
               <div style={{ position:"fixed", left:12, right:12, bottom:12, background:"linear-gradient(180deg,#0f172a 0%,#0b1220 100%)", border:"1px solid #334155", borderRadius:14, padding:12, boxShadow:"0 10px 30px rgba(0,0,0,0.45)", zIndex:50 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"center" }}>
-                  <div style={{ minWidth:0 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                  <div style={{ minWidth:0, flex:"1 1 120px" }}>
                     <div style={{ fontSize:10, color:"#64748b", fontWeight:900, letterSpacing:1, textTransform:"uppercase" }}>Selected</div>
                     <div style={{ fontSize:12, color:"#e2e8f0", fontWeight:900, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{matchup.label}</div>
                     {oppName && <div style={{ fontSize:11, color:"#fbbf24", fontWeight:700, marginTop:2 }}>vs {oppName}</div>}
                   </div>
-                  <button onClick={()=>playPlayoffGame(activeMatchId)} style={{ background: pInv ? "linear-gradient(135deg,#22c55e,#16a34a)" : "linear-gradient(135deg,#475569,#64748b)", color:"white", border:"none", borderRadius:12, padding:"12px 14px", fontSize:13, fontWeight:900, minHeight:44, cursor:"pointer", flexShrink:0 }}>
-                    {btnLabel}
-                  </button>
+                  <div style={{ display:"flex", gap:8, flexShrink:0 }}>
+                    <button onClick={()=>playPlayoffGame(activeMatchId)} style={{ background: pInv ? "linear-gradient(135deg,#22c55e,#16a34a)" : "linear-gradient(135deg,#475569,#64748b)", color:"white", border:"none", borderRadius:12, padding:"12px 14px", fontSize:13, fontWeight:900, minHeight:44, cursor:"pointer" }}>
+                      {btnLabel}
+                    </button>
+                    {pInv && (
+                      <button onClick={()=>simMySeries(activeMatchId)} style={{ background:"#1e293b", color:"#94a3b8", border:"1px solid #475569", borderRadius:12, padding:"12px 12px", fontSize:12, fontWeight:700, minHeight:44, cursor:"pointer" }} title="Sim series">⚡ Series</button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -3089,16 +3253,10 @@ if(phase==="teamSetup") return(
               const diff = (r.myScore || 0) - (r.oppScore || 0);
               return !best || diff > ((best.myScore || 0) - (best.oppScore || 0)) ? r : best;
             }, null);
-            const toughestLoss = (seasonGameResults || []).filter((r) => r && !r.won && r.myScore != null && r.oppScore != null).reduce((worst, r) => {
-              const diff = (r.oppScore || 0) - (r.myScore || 0);
-              return !worst || diff > ((worst.oppScore || 0) - (worst.myScore || 0)) ? r : worst;
-            }, null);
             return (
               <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #475569"}}>
                 <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>📊 SEASON SUMMARY — {leagueName || "NBA"}</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:12,fontSize:11,color:"#94a3b8",marginBottom:10}}>
-                  <span>Record: {userW}–{userL}</span>
-                  <span>PPG: {ppg} · OPP: {papg}</span>
                   {bestStreak > 0 && <span>Best win streak: {bestStreak}</span>}
                   {allStarCount > 0 && <span>All-Stars: {allStarCount}</span>}
                 </div>
@@ -3109,7 +3267,6 @@ if(phase==="teamSetup") return(
                   {leaderReb && <div>{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG)</div>}
                   {leaderAst && <div>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG)</div>}
                   {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name}>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</div> : null; })}
-                  {toughestLoss && <div>Toughest loss: {toughestLoss.myScore}–{toughestLoss.oppScore} vs the {toughestLoss.oppName || "Opponent"}</div>}
                   {bestWin && (() => {
               const oppLabel = (bestWin.oppName || "Opponent") + (bestWin.oppName ? (String(bestWin.oppName).endsWith("s") ? "'" : "'s") : "");
               const p = bestWin.pog;
@@ -3223,8 +3380,7 @@ if(phase==="teamSetup") return(
                 <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>🏅 YOUR TEAM'S AWARDS</div>
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   {myTeamAwards.map(({ displayName, list }) => {
-                    const listWithoutTmvp = (list || []).filter((e) => e.award !== "TMVP");
-                    const grouped = groupAwardsByType(listWithoutTmvp);
+                    const grouped = groupAwardsByType(list || []);
                     if (grouped.length === 0) return null;
                     return (
                       <div key={displayName} style={{fontSize:11}}>
@@ -3461,10 +3617,13 @@ if(phase==="teamSetup") return(
                     const ha = home === true ? "H" : home === false ? "A" : "—";
                     const r = seasonGameResults[i];
                     const played = r && (r.won != null || r.myScore != null);
+                    const isHome = home === true;
+                    const rowBg = isHome ? "rgba(34,197,94,0.12)" : home === false ? "rgba(251,191,36,0.1)" : "#1e293b";
+                    const haColor = isHome ? "#22c55e" : home === false ? "#f59e0b" : "#64748b";
                     return (
-                      <div key={g} style={{display:"flex",alignItems:"center",gap:8,background:"#1e293b",borderRadius:6,padding:"6px 10px",border:"1px solid #334155",fontSize:11}}>
+                      <div key={g} style={{display:"flex",alignItems:"center",gap:8,background:rowBg,borderRadius:6,padding:"6px 10px",border:"1px solid #334155",fontSize:11}}>
                         <span style={{width:28,fontWeight:700,color:"#94a3b8"}}>G{g}</span>
-                        <span style={{width:24,fontWeight:700,color:"#64748b"}}>{ha}</span>
+                        <span style={{width:24,fontWeight:700,color:haColor}}>{ha}</span>
                         <span style={{flex:1,color:"#e2e8f0"}}>vs {oppName}</span>
                         {played ? (
                           <span style={{fontWeight:800,color:r.won?"#22c55e":"#f87171"}}>{r.won?"W":"L"}{r.myScore != null && r.oppScore != null ? ` ${r.myScore}–${r.oppScore}` : ""}</span>
@@ -3650,10 +3809,11 @@ if(phase==="teamSetup") return(
                 })()}
                 {(() => {
                   const margin = (result.myScore || 0) - (result.oppScore || 0);
-                  const winLines = margin >= 30 ? ["Statement win. They never had a chance.", "Obliterated. No mercy.", "That one’s going in the highlight reel."] : margin >= 20 ? ["Dominant. Total control.", "Blowout city.", "Ran away with it."] : margin >= 10 ? ["Solid W. Kept the foot on the gas.", "Comfortable win.", "Another one in the books."] : margin >= 5 ? ["Got it done. Too close for comfort.", "Nervy finish, but a W.", "Survived a scare."] : ["Too close for comfort!", "Survived by the skin of your teeth.", "Heart-stopper. But a W."];
-                  const lossLines = margin >= -5 ? ["Heartbreaker. Get the next one.", "So close. Bounce back.", "Brutal. One possession away."] : margin >= -15 ? ["Rough one. Back to the drawing board.", "Couldn’t get it going.", "Off night. Shake it off."] : ["Rough night. Bounce back next game.", "That one got away.", "No sugarcoating it — rough loss."];
+                  const winLines = margin >= 30 ? ["Statement win. They never had a chance.", "Obliterated. No mercy.", "That one’s going in the highlight reel.", "Demolition job.", "Ran them out of the building.", "No contest from the jump.", "Total domination.", "That’s a statement.", "Ouch. For them."] : margin >= 20 ? ["Dominant. Total control.", "Blowout city.", "Ran away with it.", "Comfortable from start to finish.", "Never in doubt.", "Took care of business.", "Big win.", "Handled it.", "Smooth sailing."] : margin >= 10 ? ["Solid W. Kept the foot on the gas.", "Comfortable win.", "Another one in the books.", "Good team win.", "Took care of business.", "Got the job done.", "Clean win.", "That'll work.", "Nothing to see here — just a W."] : margin >= 5 ? ["Got it done. Too close for comfort.", "Nervy finish, but a W.", "Survived a scare.", "Close one. We'll take it.", "Dodged a bullet.", "Pulled it out.", "Barely, but it counts.", "Survived and advanced.", "Too close. But a W."] : ["Too close for comfort!", "Survived by the skin of your teeth.", "Heart-stopper. But a W.", "One possession. One W.", "Clutch when it mattered.", "Escaped with a W.", "That was a nail-biter.", "Survived.", "Could've gone either way."];
+                  const lossLines = margin >= -5 ? ["Heartbreaker. Get the next one.", "So close. Bounce back.", "Brutal. One possession away.", "One stop away.", "Tough way to lose.", "Could've gone either way.", "So close.", "Next time.", "Bitter pill."] : margin >= -15 ? ["Rough one. Back to the drawing board.", "Couldn’t get it going.", "Off night. Shake it off.", "Never found a rhythm.", "Just one of those games.", "Regroup and go.", "Forget it and move on.", "Cold night.", "Didn’t have it tonight."] : ["Rough night. Bounce back next game.", "That one got away.", "No sugarcoating it — rough loss.", "Forgot to show up.", "That's one to forget.", "Bury the tape.", "On to the next.", "Nothing went right.", "Back to the lab."];
                   const lines = won ? winLines : lossLines;
-                  const oneLiner = lines[Math.floor(Math.random() * lines.length)];
+                  const seed = (gameNum || 0) + (result.myScore || 0) + (result.oppScore || 0);
+                  const oneLiner = lines[seed % lines.length];
                   return <div style={{marginTop:8,fontSize:11,color:won?"#86efac":"#fca5a5",fontStyle:"italic"}}>"{oneLiner}"</div>;
                 })()}
               </div>
