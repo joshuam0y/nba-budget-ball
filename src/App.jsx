@@ -86,6 +86,16 @@ function groupAwardsByType(list) {
   }));
 }
 
+/** Format award for team summary: "Won MVP for the 1st time (S1)" or "Made All-NBA 1st Team for the 2nd time (S1, S2)" */
+function formatAwardForSummary(label, award, seasons) {
+  const n = seasons.length;
+  const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th";
+  const sStr = seasons.map((s) => `S${s}`).join(", ");
+  const wonAwards = ["MVP", "DPOY", "TMVP", "CHAMP", "FINALSMVP"];
+  if (wonAwards.includes(award)) return `Won ${label} for the ${ord} time (${sStr})`;
+  return `Made ${label} for the ${ord} time (${sStr})`;
+}
+
 /** One row per roster player: merge awards from playerAwards[name] and playerAwards[fullName], dedupe by (season, award). */
 function getMyTeamAwardsByPlayer(roster, playerAwards) {
   const awards = playerAwards || {};
@@ -2755,7 +2765,7 @@ if(phase==="teamSetup") return(
               <button onClick={goToMainMenu} style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>🏠 Main menu</button>
               <button onClick={()=>setShowSaveModal(true)} style={{...btnBase,background:"#1e293b",color:"#a78bfa",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>💾 Save</button>
               <button onClick={()=>setShowLoadModal(true)} style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>📂 Load</button>
-              {(elimInPlayoffs || champion) && <button onClick={runItBack} style={{...btnBase,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:800}} title="Same roster, new AI opponents">🔄 Run it back</button>}
+              {(champion || (elimInPlayoffs && !getNextAIMatchId(bracket))) && <button onClick={runItBack} style={{...btnBase,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:800}} title="Same roster, new AI opponents">🔄 Run it back</button>}
               <button onClick={()=>setShowTrophyCase(true)} style={{...btnBase,background:"#1e293b",color:"#fbbf24",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:700}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
               <button onClick={()=>setShowHelp(h=>!h)} style={{...btnBase,width: isMobile ? 40 : 32,height: isMobile ? 40 : 32,borderRadius:10,background:"#1e293b",color:"#60a5fa",fontSize:14,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>?</button>
             </div>
@@ -2816,6 +2826,38 @@ if(phase==="teamSetup") return(
                 <div style={{fontSize: isMobile ? 32 : 36}}>{playerWon?"🏆":"👑"}</div>
                 <div style={{fontSize: isMobile ? 18 : 22,fontWeight:900,color:playerWon?"#fbbf24":"#e2e8f0",letterSpacing:2,lineHeight:1.3}}>{playerWon?"YOU ARE CHAMPIONS!":champion.name+" WIN THE CHAMPIONSHIP!"}</div>
               </div>
+              {(() => {
+                const champLineup = champion?.lineup || [];
+                const champPlayerNames = new Set();
+                champLineup.forEach(({ player }) => {
+                  if (player?.fullName) champPlayerNames.add(player.fullName);
+                  if (player?.name) champPlayerNames.add(player.name);
+                });
+                let fmvp = null;
+                const arr = Object.values(finalsLeaders || {}).filter((p) => p.team === champion?.name && champPlayerNames.has(p.name));
+                if (arr.length > 0) {
+                  const withScore = arr.map((p) => {
+                    const gp = p.gp || 1;
+                    return { ...p, gp, fmvpScore: (p.pts / gp) * 2 + (p.reb / gp) * 0.8 + (p.ast / gp) * 1.5 };
+                  });
+                  const best = withScore.reduce((a, b) => (a.fmvpScore > b.fmvpScore ? a : b));
+                  fmvp = best;
+                }
+                if (!fmvp && champLineup.length) {
+                  const best = champLineup.reduce((a, b) => ((a?.player?.rating ?? 0) >= (b?.player?.rating ?? 0) ? a : b));
+                  const p = best?.player;
+                  if (p) fmvp = { name: p.fullName || p.name, pts: p.pts ?? 0, reb: p.reb ?? 0, ast: p.ast ?? 0, gp: 1 };
+                }
+                if (!fmvp) return null;
+                const gp = fmvp.gp || 1;
+                return (
+                  <div style={{textAlign:"center",padding: isMobile ? 12 : 10,background:"#0f172a",borderRadius:12,border:"1px solid #eab308",marginBottom:12}}>
+                    <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:4}}>🏆 FINALS MVP</div>
+                    <div style={{fontSize: isMobile ? 15 : 14,fontWeight:900,color:"#e2e8f0"}}>{fmvp.name}</div>
+                    <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{rf(fmvp.pts / gp, 1)} PPG · {rf(fmvp.reb / gp, 1)} RPG · {rf(fmvp.ast / gp, 1)} APG</div>
+                  </div>
+                );
+              })()}
               {(careerStats.seasonsPlayed > 0 || careerStats.championships > 0) && (
               <div style={{ fontSize: 11, color: "#a78bfa", marginBottom: 10, fontWeight: 700, textAlign: "center" }}>
                 Career: {careerStats.totalWins}–{careerStats.totalLosses} · {careerStats.championships} 🏆 · {careerStats.finalsAppearances} Finals · {careerStats.playoffAppearances} playoffs
@@ -2834,9 +2876,9 @@ if(phase==="teamSetup") return(
                           <div key={displayName} style={{fontSize:11}}>
                             <div style={{fontWeight:700,color:"#e2e8f0",marginBottom:4}}>{displayName}</div>
                             <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
-                              {grouped.map(({ label, seasons }) => (
+                              {grouped.map(({ award, label, seasons }) => (
                                 <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
-                                  {label} ({seasons.map((s) => `S${s}`).join(", ")})
+                                  {formatAwardForSummary(label, award, seasons)}
                                 </span>
                               ))}
                             </div>
@@ -2988,9 +3030,9 @@ if(phase==="teamSetup") return(
                       <div key={displayName} style={{fontSize:11}}>
                         <div style={{fontWeight:700,color:"#e2e8f0",marginBottom:4}}>{displayName}</div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
-                          {grouped.map(({ label, seasons }) => (
+                          {grouped.map(({ award, label, seasons }) => (
                             <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
-                              {label} ({seasons.map((s) => `S${s}`).join(", ")})
+                              {formatAwardForSummary(label, award, seasons)}
                             </span>
                           ))}
                         </div>
@@ -3391,9 +3433,9 @@ if(phase==="teamSetup") return(
                       <div key={displayName} style={{fontSize:11}}>
                         <div style={{fontWeight:700,color:"#e2e8f0",marginBottom:4}}>{displayName}</div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
-                          {grouped.map(({ label, seasons }) => (
+                          {grouped.map(({ award, label, seasons }) => (
                             <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
-                              {label} ({seasons.map((s) => `S${s}`).join(", ")})
+                              {formatAwardForSummary(label, award, seasons)}
                             </span>
                           ))}
                         </div>
@@ -3840,7 +3882,7 @@ if(phase==="teamSetup") return(
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:9,color:"#475569",fontWeight:700,letterSpacing:1,marginBottom:2}}>SCOUTING REPORT</div>
                   <div style={{fontSize:11,color:"#e5e7eb",fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                    {oppTopPlayer.name} · {rf(oppTopPlayer.pts,1)} PTS · {rf(oppTopPlayer.reb,1)} REB · {rf(oppTopPlayer.ast,1)} AST
+                    {oppTopPlayer.name} · {rf(oppTopPlayer.ppg ?? oppTopPlayer.pts ?? 0, 1)} PTS · {rf(oppTopPlayer.rpg ?? oppTopPlayer.reb ?? 0, 1)} REB · {rf(oppTopPlayer.apg ?? oppTopPlayer.ast ?? 0, 1)} AST
                   </div>
                 </div>
                 {oppScoutingLabel && (
@@ -3957,9 +3999,9 @@ if(phase==="teamSetup") return(
                         <div key={displayName} style={{fontSize:11}}>
                           <div style={{fontWeight:700,color:"#e2e8f0",marginBottom:4}}>{displayName}</div>
                           <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
-                            {grouped.map(({ label, seasons }) => (
+                            {grouped.map(({ award, label, seasons }) => (
                               <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
-                                {label} ({seasons.map((s) => `S${s}`).join(", ")})
+                                {formatAwardForSummary(label, award, seasons)}
                               </span>
                             ))}
                           </div>

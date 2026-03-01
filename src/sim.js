@@ -91,6 +91,9 @@ export function processCSV(text) {
     const pts = num(row, "pts");
     const ast = num(row, "ast");
     const reb = num(row, "reb");
+    const ppg = num(row, "ppg") || pts;
+    const apg = num(row, "apg") || ast;
+    const rpg = num(row, "rpg") || reb;
     const stl = num(row, "stl");
     const blk = num(row, "blk");
     const tov = num(row, "tov");
@@ -111,6 +114,9 @@ export function processCSV(text) {
       pts,
       ast,
       reb,
+      ppg,
+      rpg,
+      apg,
       stl,
       blk,
       tov,
