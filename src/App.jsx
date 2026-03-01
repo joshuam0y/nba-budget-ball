@@ -48,6 +48,7 @@ const BracketDisplayLazy = lazy(() =>
 import { ACHIEVEMENTS } from "./utils/achievements";
 
 const TUTORIAL_SEEN_KEY = "nba_budget_ball_tutorial_seen";
+const SOUND_ON_KEY = "nba_budget_ball_sound_on";
 const HINT_KEYS = { simBreak: "nba_budget_ball_hint_sim", chemistry: "nba_budget_ball_hint_chem", archetypes: "nba_budget_ball_hint_arch", difficulty: "nba_budget_ball_hint_diff" };
 const GAME_HISTORY_MAX = 5;
 
@@ -285,8 +286,16 @@ export default function App(){
   const [slotSel,setSlotSel]=useState(null);
   const [chemHoverKey, setChemHoverKey] = useState(null);
   const [rosterHoverId, setRosterHoverId] = useState(null);
-  const [soundOn, setSoundOn] = useState(true);
-  const volume = 1;
+  const [soundOn, setSoundOn] = useState(() => {
+    try {
+      if (typeof window === "undefined") return true;
+      const v = window.localStorage.getItem(SOUND_ON_KEY);
+      return v !== "0" && v !== "false";
+    } catch {
+      return true;
+    }
+  });
+  const volume = 1; // 100%
   const [aiTeams,setAiTeams]=useState([]);
   const [schedule,setSchedule]=useState(null);
   const [result,setResult]=useState(null);
@@ -406,6 +415,14 @@ export default function App(){
     const el = document.getElementById(`match-${activeMatchId}`);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [phase, activeMatchId, isMobile]);
+
+  // Persist sound preference
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined" && window.localStorage)
+        window.localStorage.setItem(SOUND_ON_KEY, soundOn ? "1" : "0");
+    } catch (_) {}
+  }, [soundOn]);
 
   // Load previously used team names (local history)
   useEffect(() => {
@@ -1180,7 +1197,7 @@ const soundtrackRef = useRef(null);
     if (soundOnRef.current) audio.play().catch(() => {});
   }, [pickNextTrack]);
 
-  // Background soundtrack: 4 tracks, random next (never same), volume 50% default
+  // Background soundtrack: 4 tracks, random next (never same)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const audio = new Audio(SOUNDTRACK_TRACKS[0]);
@@ -1224,8 +1241,9 @@ const soundtrackRef = useRef(null);
   useEffect(() => {
     const audio = soundtrackRef.current;
     if (!audio) return;
+    volumeRef.current = volume;
     audio.volume = volume;
-  }, []);
+  }, [volume]);
 
   useEffect(() => {
     const audio = soundtrackRef.current;
@@ -3174,6 +3192,10 @@ if(phase==="teamSetup") return(
     const simThroughActive = simThroughBreakRequestedRef.current;
     return (
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
+        <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+          <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
+          <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
+        </div>
         <div style={{position:"fixed",top:12,right:12,zIndex:50,display:"flex",alignItems:"center",gap:8}}>
           <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#fbbf24",cursor:"pointer"}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
         </div>

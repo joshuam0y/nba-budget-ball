@@ -182,8 +182,7 @@ export function posMult(player, slot) {
     (getArchetype(player).id === "pmBig" ||
       getArchetype(player).id === "stretch" ||
       getArchetype(player).id === "rimProt" ||
-      getArchetype(player).id === "paint" ||
-      getArchetype(player).id === "glass") &&
+      getArchetype(player).id === "interior") &&
     (slot === "PG" || slot === "SG")
   )
     return 0.45;
@@ -256,15 +255,9 @@ export function genLineup(excludeIds = new Set(), pool = [], excludeNames = new 
 
 export function generateRivalLineup(myLineup, pool, excludeIds) {
   const archs = myLineup.map(({ player }) => getArchetype(player).id);
-  const hasScorers = archs.some((a) =>
-    ["bucket", "scoringGuard", "wing"].includes(a)
-  );
-  const hasPassers = archs.some((a) =>
-    ["fg", "pmBig", "pointForward"].includes(a)
-  );
-  const hasBigs = archs.some((a) =>
-    ["rimProt", "paint", "glass", "stretch"].includes(a)
-  );
+  const hasScorers = archs.some((a) => a === "scorer");
+  const hasPassers = archs.some((a) => ["playmaker", "pmBig"].includes(a));
+  const hasBigs = archs.some((a) => ["rimProt", "interior", "stretch"].includes(a));
   const used = new Set(excludeIds);
   const team = [];
   let rem = BUDGET;
@@ -576,7 +569,7 @@ export function simulate(
     );
     const isClutch = scoreDiff <= 5 && i > pace * 1.5;
     const clutchMult =
-      isClutch && (offArch.id === "bucket" || offArch.id === "swiss")
+      isClutch && (offArch.id === "scorer" || offArch.id === "versatile")
         ? 1.08
         : isClutch && offArch.id === "role"
         ? 0.92
@@ -994,205 +987,179 @@ export function cellBg(stat, val) {
   )},${ri(50 + (1 - r) * 20)},${0.15 + r * 0.55})`;
 }
 
+// Archetype revamp: level-based (1–3), broader thresholds so more players get a real label.
+// Each archetype returns { id, label (with level), color, level }. Logic uses .id only.
+function archScore(min, max, val) {
+  if (val < min) return 0;
+  return Math.min(100, 25 + ((val - min) / Math.max(max - min, 0.001)) * 75);
+}
+
 export function getArchetype(p) {
   const isGuard = p.pos === "PG" || p.pos === "SG";
   const isWing = p.pos === "SF";
   const isBig = p.pos === "PF" || p.pos === "C";
+  const isWingOrGuard = isGuard || isWing;
+  const tR = Math.min(1, Math.max(0, p.tR ?? 0));
+  const tpPct = p.tpPct ?? 0;
+  const fg = p.fg ?? 45;
 
-  const isSwiss = p.pts > 32 && p.ast > 7 && p.reb > 9 && p.fg > 48;
+  let best = { id: "role", label: "ROLE", color: "#94a3b8", score: 0 };
 
-  const isPmBig = isBig && p.ast > 5 && p.reb > 9 && p.pts < 42 && p.rating > 53;
-  const isRimProt =
-    isBig && p.blk > 2.7 && p.reb > 10 && p.pts < 24;
-  const isPaint = isBig && p.reb > 16 && p.tR < 0.05;
-  const isStretchBig =
-    isBig &&
-    p.tR > 0.25 &&
-    p.tpPct > 30 &&
-    p.reb > 4 &&
-    p.pts > 14 &&
-    p.rating > 42;
-  const isMidrange =
-    (isBig || isWing || isGuard) &&
-    p.pts > 18 &&
-    p.tR < 0.28 &&
-    p.fg > 44 &&
-    p.rating > 46;
-  const isGlass =
-    isBig && p.reb > 12 && p.pts < 26 && p.fg > 46 && p.rating > 42;
+  // 1. Versatile – high pts, ast, reb (do-everything)
+  if (p.pts >= 16 && p.ast >= 3.5 && p.reb >= 4 && (p.rating ?? 0) >= 42) {
+    const score = archScore(16, 28, p.pts) * 0.35 + archScore(3.5, 9, p.ast) * 0.35 + archScore(4, 12, p.reb) * 0.3;
+    if (score > best.score) best = { id: "versatile", label: "VERSATILE", color: "#f472b6", score };
+  }
 
-  const isPointForward =
-    (p.pos === "SF" || p.pos === "PF") &&
-    p.ast > 4 &&
-    p.reb > 5 &&
-    p.pts < 28 &&
-    p.rating > 43;
+  // 2. Playmaking big – PF/C with real playmaking
+  if (isBig && p.ast >= 3) {
+    const score = archScore(3, 8, p.ast) * 0.6 + archScore(5, 14, p.reb) * 0.4;
+    if (score > best.score) best = { id: "pmBig", label: "PLAYMAKING BIG", color: "#a78bfa", score };
+  }
 
-  const isFloorGeneral =
-    p.ast > 11 &&
-    p.pts < 50 &&
-    (p.pos === "PG" || p.pos === "SG") &&
-    p.rating > 50;
-  const isBucketGetter =
-    (isGuard || isWing || isBig) &&
-    p.pts > 25 &&
-    p.ast < 5 &&
-    p.rating > 49;
-  const isWingScorer =
-    isWing && p.pts > 18 && p.ast >= 2 && p.reb >= 2 && p.rating > 43;
-  const isScoringGuard =
-    isGuard && p.pts > 24 && p.ast >= 3 && p.rating > 48;
+  // 3. Rim protector – big, blocks
+  if (isBig && p.blk >= 1) {
+    const score = archScore(1, 3.5, p.blk) * 0.65 + archScore(6, 14, p.reb) * 0.35;
+    if (score > best.score) best = { id: "rimProt", label: "RIM PROTECTOR", color: "#60a5fa", score };
+  }
 
-  const isLockdown =
-    p.stl > 2.0 && (p.blk > 1.0 || p.pts < 16) && p.rating > 42;
-  const is3D =
-    p.tpPct > 35 &&
-    p.tR > 0.35 &&
-    (p.stl > 1.2 || p.blk > 0.8) &&
-    p.pts < 26 &&
-    p.rating > 38;
-  const isSpotUp =
-    p.tR > 0.40 &&
-    p.tpPct > 35 &&
-    p.pts < 28 &&
-    (p.stl > 0.8 || p.reb > 2.5) &&
-    p.rating > 36;
+  // 4. Interior – big, boards, not a stretch
+  if (isBig && p.reb >= 6 && tR < 0.28) {
+    const score = archScore(6, 16, p.reb) * 0.6 + archScore(44, 58, fg) * 0.4;
+    if (score > best.score) best = { id: "interior", label: "INTERIOR BIG", color: "#4ade80", score };
+  }
 
-  if (isSwiss)
-    return { label: "SWISS ARMY KNIFE", color: "#f472b6", id: "swiss" };
-  if (isPmBig)
-    return { label: "PLAYMAKING BIG", color: "#a78bfa", id: "pmBig" };
-  if (isPaint)
-    return { label: "PAINT MONSTER", color: "#4ade80", id: "paint" };
-  if (isRimProt)
-    return { label: "RIM PROTECTOR", color: "#60a5fa", id: "rimProt" };
-  if (isStretchBig)
-    return { label: "STRETCH BIG", color: "#67e8f9", id: "stretch" };
-  if (isGlass)
-    return { label: "GLASS CLEANER", color: "#86efac", id: "glass" };
-  if (isLockdown)
-    return { label: "LOCKDOWN", color: "#f87171", id: "lockdown" };
-  if (is3D) return { label: "3&D", color: "#34d399", id: "threeD" };
-  if (isPointForward)
-    return { label: "POINT FORWARD", color: "#34d399", id: "pointForward" };
-  if (isFloorGeneral)
-    return { label: "FLOOR GENERAL", color: "#fbbf24", id: "fg" };
-  if (isWingScorer)
-    return { label: "WING SCORER", color: "#e879f9", id: "wing" };
-  if (isBucketGetter)
-    return { label: "BUCKET GETTER", color: "#f97316", id: "bucket" };
-  if (isScoringGuard)
-    return { label: "SCORING GUARD", color: "#a78bfa", id: "scoringGuard" };
-  if (isSpotUp)
-    return { label: "SPOT UP SHOOTER", color: "#38bdf8", id: "spotUp" };
-  if (isMidrange)
-    return { label: "MIDRANGE ARTIST", color: "#c084fc", id: "midrange" };
-  return { label: "ROLE PLAYER", color: "#94a3b8", id: "role" };
+  // 5. Stretch – meaningful 3P volume and %
+  if (tR >= 0.18 && tpPct >= 28) {
+    const score = archScore(0.18, 0.55, tR) * 0.5 + archScore(28, 42, tpPct) * 0.5;
+    if (score > best.score) best = { id: "stretch", label: "STRETCH", color: "#67e8f9", score };
+  }
+
+  // 6. Playmaker – guard/wing/point-forward, sets up others
+  if (isWingOrGuard && p.ast >= 4) {
+    const score = archScore(4, 11, p.ast) * 0.7 + archScore(42, 58, p.rating ?? 0) * 0.3;
+    if (score > best.score) best = { id: "playmaker", label: "PLAYMAKER", color: "#fbbf24", score };
+  }
+  if ((isWing || p.pos === "PF") && p.ast >= 3.5 && p.reb >= 4 && (p.rating ?? 0) >= 38) {
+    const score = archScore(3.5, 7, p.ast) * 0.6 + archScore(38, 52, p.rating ?? 0) * 0.4;
+    if (score > best.score) best = { id: "playmaker", label: "PLAYMAKER", color: "#fbbf24", score };
+  }
+
+  // 7. Lockdown – defensive specialist
+  if (p.stl >= 0.9 || (isBig && p.blk >= 1.2)) {
+    const score = archScore(0.9, 2.5, p.stl) * 0.55 + archScore(0.5, 2.5, p.blk) * 0.45;
+    if (score > best.score) best = { id: "lockdown", label: "LOCKDOWN", color: "#f87171", score };
+  }
+
+  // 8. 3&D – shoot and defend
+  if (tpPct >= 32 && tR >= 0.32 && (p.stl >= 0.6 || p.blk >= 0.5)) {
+    const score = (archScore(32, 42, tpPct) + archScore(0.32, 0.6, tR)) * 0.5 + archScore(0.6, 1.8, p.stl + p.blk) * 0.5;
+    if (score > best.score) best = { id: "threeD", label: "3&D", color: "#34d399", score };
+  }
+
+  // 9. Spot-up – shooter first, lower bar than 3&D
+  if (tR >= 0.28 && tpPct >= 30 && p.pts < 22) {
+    const score = archScore(0.28, 0.55, tR) * 0.5 + archScore(30, 42, tpPct) * 0.5;
+    if (score > best.score) best = { id: "spotUp", label: "SPOT-UP", color: "#38bdf8", score };
+  }
+
+  // 10. Scorer – primary scoring (broad so many qualify)
+  if (p.pts >= 12) {
+    const score = archScore(12, 30, p.pts) * 0.7 + archScore(40, 58, p.rating ?? 0) * 0.3;
+    if (score > best.score) best = { id: "scorer", label: "SCORER", color: "#f97316", score };
+  }
+
+  // 11. Role – fallback; level from rating so everyone is tiered
+  if (best.id === "role") {
+    const score = archScore(30, 55, p.rating ?? 35);
+    best = { id: "role", label: "ROLE", color: "#94a3b8", score };
+  }
+
+  const level = best.score < 40 ? 1 : best.score < 68 ? 2 : 3;
+  const labelWithLevel = `${best.label} ${level}`;
+  return { id: best.id, label: labelWithLevel, color: best.color, level };
 }
 
 export function archetypeMatchupFactor(defArch, offArch) {
+  const def = defArch?.id;
+  const off = offArch?.id;
   const b = {
-    lockdown: {
-      bucket: 0.87,
-      wing: 0.9,
-      swiss: 0.91,
-      scoringGuard: 0.89,
-    },
-    rimProt: { paint: 0.84, glass: 0.82, pmBig: 0.87, stretch: 0.88 },
-    threeD: { spotUp: 0.9, bucket: 0.92, wing: 0.92, scoringGuard: 0.91 },
-    fg: { playmaker: 0.9, swiss: 0.93 },
+    lockdown: { scorer: 0.87, versatile: 0.91 },
+    rimProt: { interior: 0.84, pmBig: 0.87, stretch: 0.88 },
+    threeD: { spotUp: 0.9, scorer: 0.91 },
+    playmaker: { versatile: 0.93 },
   };
-  return b[defArch.id]?.[offArch.id] || 1.0;
+  return b[def]?.[off] ?? 1.0;
 }
 
-// Archetype matching: bigger bonuses for synergistic combos (tuned for full-squad mode).
-// All bonuses apply to both player and AI teams in simulate() via teamEff(lineup, teamRoster).
+// Archetype matching: synergistic combos (ids are base only; level is for display).
 export function archetypeChemBonus(lineup) {
   const archs = lineup.map(({ player }) => getArchetype(player).id);
   let bonus = 0;
 
-  // Floor General synergies (playmaker + shooters/scorers)
-  if (archs.includes("fg") && archs.includes("spotUp")) bonus += 7;
-  if (archs.includes("fg") && (archs.includes("bucket") || archs.includes("scoringGuard"))) bonus += 6;
-  if (archs.includes("fg") && archs.includes("wing")) bonus += 5;
-  if (archs.includes("fg") && archs.includes("stretch")) bonus += 5;
+  // Playmaker + shooters/scorers
+  if (archs.includes("playmaker") && archs.includes("spotUp")) bonus += 7;
+  if (archs.includes("playmaker") && archs.includes("scorer")) bonus += 6;
+  if (archs.includes("playmaker") && archs.includes("stretch")) bonus += 5;
 
-  // Defensive identity (rim protector + perimeter D)
+  // Defense (rim + perimeter)
   if (archs.includes("rimProt") && archs.includes("lockdown")) bonus += 7;
   if (archs.includes("rimProt") && archs.includes("threeD")) bonus += 4;
   if (archs.includes("lockdown") && archs.includes("threeD")) bonus += 5;
 
-  // Inside-out (big + shooters)
+  // Inside-out (bigs + spacing)
   if (archs.includes("pmBig") && (archs.includes("spotUp") || archs.includes("stretch"))) bonus += 6;
-  if (archs.includes("paint") && (archs.includes("spotUp") || archs.includes("stretch"))) bonus += 5;
-  if (archs.includes("glass") && (archs.includes("spotUp") || archs.includes("stretch"))) bonus += 5;
+  if (archs.includes("interior") && (archs.includes("spotUp") || archs.includes("stretch"))) bonus += 5;
 
-  // 3&D spacing
-  if (archs.includes("threeD") && (archs.includes("bucket") || archs.includes("scoringGuard"))) bonus += 6;
+  // 3&D + scorers
+  if (archs.includes("threeD") && archs.includes("scorer")) bonus += 6;
   if (archs.includes("threeD") && archs.includes("spotUp")) bonus += 4;
 
-  // Point forward / playmaking wings
-  if (archs.includes("pointForward") && (archs.includes("wing") || archs.includes("bucket"))) bonus += 6;
-  if (archs.includes("pointForward") && archs.includes("spotUp")) bonus += 4;
+  // Versatility
+  if (archs.includes("versatile")) bonus += 4;
 
-  // Swiss Army Knife (versatility)
-  if (archs.includes("swiss")) bonus += 4;
+  // Anti-synergy: too many ball-dominant scorers
+  const scorerCount = archs.filter((a) => a === "scorer").length;
+  if (scorerCount >= 3) bonus -= 8;
+  else if (scorerCount >= 2) bonus -= 3;
 
-  // Midrange artist (elite iso spacing)
-  if (archs.includes("midrange") && (archs.includes("fg") || archs.includes("pointForward"))) bonus += 5;
+  // Too many interior bigs, no spacing
+  const interiorCount = archs.filter((a) => a === "interior").length;
+  if (interiorCount >= 2 && !archs.some((a) => ["stretch", "spotUp", "threeD"].includes(a))) bonus -= 4;
 
-  // Too many ball-dominant scorers (anti-synergy)
-  const bucketCount = archs.filter((a) => ["bucket", "scoringGuard"].includes(a)).length;
-  if (bucketCount >= 3) bonus -= 8;
-  else if (bucketCount >= 2) bonus -= 3;
+  if (!archs.includes("rimProt") && interiorCount >= 2) bonus -= 2;
 
-  // Too many paint-only bigs (spacing kill)
-  const paintCount = archs.filter((a) => ["paint", "glass"].includes(a)).length;
-  if (paintCount >= 2 && !archs.some((a) => ["stretch", "spotUp", "threeD"].includes(a))) bonus -= 4;
-
-  // No rim protector with multiple bigs (defensive gap)
-  const hasRimProt = archs.includes("rimProt");
-  if (!hasRimProt && paintCount >= 2) bonus -= 2;
-
-  // 3+ non-shooters (paint, glass, lockdown, rimProt only) — spacing kill
-  const nonShooterCount = archs.filter((a) =>
-    ["paint", "glass", "lockdown", "rimProt"].includes(a)
-  ).length;
+  const nonShooterCount = archs.filter((a) => ["interior", "lockdown", "rimProt"].includes(a)).length;
   if (nonShooterCount >= 3) bonus -= 3;
 
   return bonus;
 }
 
-// Returns list of active synergy labels and their bonus for UI (e.g. "Floor General + Spot-up (+7)").
+// Returns list of active synergy labels and their bonus for UI.
 export function getActiveSynergies(lineup) {
   if (!lineup || lineup.length !== 5) return [];
   const archs = lineup.map(({ player }) => getArchetype(player).id);
   const list = [];
 
-  if (archs.includes("fg") && archs.includes("spotUp")) list.push({ label: "Floor General + Spot-up", bonus: 7 });
-  if (archs.includes("fg") && (archs.includes("bucket") || archs.includes("scoringGuard"))) list.push({ label: "Floor General + Scorer", bonus: 6 });
-  if (archs.includes("fg") && archs.includes("wing")) list.push({ label: "Floor General + Wing", bonus: 5 });
-  if (archs.includes("fg") && archs.includes("stretch")) list.push({ label: "Floor General + Stretch", bonus: 5 });
+  if (archs.includes("playmaker") && archs.includes("spotUp")) list.push({ label: "Playmaker + Spot-up", bonus: 7 });
+  if (archs.includes("playmaker") && archs.includes("scorer")) list.push({ label: "Playmaker + Scorer", bonus: 6 });
+  if (archs.includes("playmaker") && archs.includes("stretch")) list.push({ label: "Playmaker + Stretch", bonus: 5 });
   if (archs.includes("rimProt") && archs.includes("lockdown")) list.push({ label: "Rim Protector + Lockdown", bonus: 7 });
   if (archs.includes("rimProt") && archs.includes("threeD")) list.push({ label: "Rim Protector + 3&D", bonus: 4 });
   if (archs.includes("lockdown") && archs.includes("threeD")) list.push({ label: "Lockdown + 3&D", bonus: 5 });
   if (archs.includes("pmBig") && (archs.includes("spotUp") || archs.includes("stretch"))) list.push({ label: "Playmaking Big + Spacing", bonus: 6 });
-  if (archs.includes("paint") && (archs.includes("spotUp") || archs.includes("stretch"))) list.push({ label: "Paint + Spacing", bonus: 5 });
-  if (archs.includes("glass") && (archs.includes("spotUp") || archs.includes("stretch"))) list.push({ label: "Glass + Spacing", bonus: 5 });
-  if (archs.includes("threeD") && (archs.includes("bucket") || archs.includes("scoringGuard"))) list.push({ label: "3&D + Scorer", bonus: 6 });
+  if (archs.includes("interior") && (archs.includes("spotUp") || archs.includes("stretch"))) list.push({ label: "Interior + Spacing", bonus: 5 });
+  if (archs.includes("threeD") && archs.includes("scorer")) list.push({ label: "3&D + Scorer", bonus: 6 });
   if (archs.includes("threeD") && archs.includes("spotUp")) list.push({ label: "3&D + Spot-up", bonus: 4 });
-  if (archs.includes("pointForward") && (archs.includes("wing") || archs.includes("bucket"))) list.push({ label: "Point Forward + Scorer", bonus: 6 });
-  if (archs.includes("pointForward") && archs.includes("spotUp")) list.push({ label: "Point Forward + Spot-up", bonus: 4 });
-  if (archs.includes("swiss")) list.push({ label: "Swiss Army Knife", bonus: 4 });
-  if (archs.includes("midrange") && (archs.includes("fg") || archs.includes("pointForward"))) list.push({ label: "Midrange + Playmaker", bonus: 5 });
+  if (archs.includes("versatile")) list.push({ label: "Versatile", bonus: 4 });
 
-  const bucketCount = archs.filter((a) => ["bucket", "scoringGuard"].includes(a)).length;
-  if (bucketCount >= 3) list.push({ label: "Too many ball-dominant scorers", bonus: -8 });
-  else if (bucketCount >= 2) list.push({ label: "Two ball-dominant scorers", bonus: -3 });
-  const paintCount = archs.filter((a) => ["paint", "glass"].includes(a)).length;
-  if (paintCount >= 2 && !archs.some((a) => ["stretch", "spotUp", "threeD"].includes(a))) list.push({ label: "Paint bigs, no spacing", bonus: -4 });
-  if (!archs.includes("rimProt") && paintCount >= 2) list.push({ label: "No rim protector", bonus: -2 });
-  const nonShooterCount = archs.filter((a) => ["paint", "glass", "lockdown", "rimProt"].includes(a)).length;
+  const scorerCount = archs.filter((a) => a === "scorer").length;
+  if (scorerCount >= 3) list.push({ label: "Too many scorers", bonus: -8 });
+  else if (scorerCount >= 2) list.push({ label: "Two primary scorers", bonus: -3 });
+  const interiorCount = archs.filter((a) => a === "interior").length;
+  if (interiorCount >= 2 && !archs.some((a) => ["stretch", "spotUp", "threeD"].includes(a))) list.push({ label: "Interior bigs, no spacing", bonus: -4 });
+  if (!archs.includes("rimProt") && interiorCount >= 2) list.push({ label: "No rim protector", bonus: -2 });
+  const nonShooterCount = archs.filter((a) => ["interior", "lockdown", "rimProt"].includes(a)).length;
   if (nonShooterCount >= 3) list.push({ label: "3+ non-shooters", bonus: -3 });
 
   return list;
@@ -1203,29 +1170,11 @@ function getBalanceFlags(lineup) {
   if (!lineup || lineup.length !== 5) return { hasBig: false, hasPlaymaker: false, hasDefense: false, hasScoring: false };
   const archs = lineup.map(({ player }) => getArchetype(player).id);
   const hasBig =
-    archs.some((a) =>
-      ["rimProt", "paint", "glass", "pmBig", "stretch", "swiss"].includes(a)
-    ) ||
-    lineup.some(
-      ({ player }) => player.pos === "C" || player.pos === "PF"
-    );
-  const hasPlaymaker = archs.some((a) =>
-    ["fg", "playmaker", "swiss", "pmBig", "scoringGuard", "pointForward"].includes(a)
-  );
-  const hasDefense = archs.some((a) =>
-    ["lockdown", "threeD", "rimProt"].includes(a)
-  );
-  const hasScoring = archs.some((a) =>
-    [
-      "bucket",
-      "wing",
-      "spotUp",
-      "midrange",
-      "swiss",
-      "stretch",
-      "scoringGuard",
-    ].includes(a)
-  );
+    archs.some((a) => ["rimProt", "interior", "pmBig", "stretch", "versatile"].includes(a)) ||
+    lineup.some(({ player }) => player.pos === "C" || player.pos === "PF");
+  const hasPlaymaker = archs.some((a) => ["playmaker", "versatile", "pmBig"].includes(a));
+  const hasDefense = archs.some((a) => ["lockdown", "threeD", "rimProt"].includes(a));
+  const hasScoring = archs.some((a) => ["scorer", "spotUp", "versatile", "stretch"].includes(a));
   return { hasBig, hasPlaymaker, hasDefense, hasScoring };
 }
 
@@ -1234,9 +1183,7 @@ export function getTeamBalance(lineup) {
   const archs = lineup.map(({ player }) => getArchetype(player).id);
   const unique = new Set(archs).size;
   const { hasBig, hasPlaymaker, hasDefense, hasScoring } = getBalanceFlags(lineup);
-  const bucketCount = archs.filter((a) =>
-    ["bucket", "scoringGuard"].includes(a)
-  ).length;
+  const scorerCount = archs.filter((a) => a === "scorer").length;
   let score = 0;
   if (unique >= 4) score += 2;
   else if (unique >= 3) score += 1;
@@ -1244,8 +1191,8 @@ export function getTeamBalance(lineup) {
   if (hasPlaymaker) score += 1;
   if (hasDefense) score += 1;
   if (hasScoring) score += 1;
-  if (bucketCount >= 3) score -= 3;
-  else if (bucketCount >= 2) score -= 1;
+  if (scorerCount >= 3) score -= 3;
+  else if (scorerCount >= 2) score -= 1;
   const missing = [];
   if (!hasBig) missing.push("Big Man");
   if (!hasPlaymaker) missing.push("Playmaker");
