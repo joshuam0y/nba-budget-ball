@@ -13,7 +13,7 @@ export const ALL_STAR = {
   reb: 0.5,
   ast: 0.5,
   pogBonus: 5,
-  winBonus: 2,
+  winBonus: 4, // Winning helps but doesn't overpower — stars on losing teams can still make it
 };
 
 /** MVP: per-game votes. Base = pts*P + reb*R + ast*A, +pogBonus POG, +winBonus win. */

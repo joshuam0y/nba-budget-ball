@@ -572,6 +572,9 @@ export default function App(){
   const [currentSaveSlot, setCurrentSaveSlot] = useState(null); // null = single auto-save; 1|2|3 = slot
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveToast, setSaveToast] = useState(false);
+  const [saveOverwriteSlot, setSaveOverwriteSlot] = useState(null); // slot awaiting overwrite confirm
+  const saveToastTimerRef = useRef(null);
   const [posF,setPosF]=useState("ALL");
   const [sortBy,setSortBy]=useState("cost");
   const [sortDir,setSortDir]=useState("desc"); // desc | asc
@@ -1102,6 +1105,7 @@ export default function App(){
   const saveToSlot = useCallback((slot) => {
     setCurrentSaveSlot(slot);
     setShowSaveModal(false);
+    setSaveOverwriteSlot(null);
     try {
       if (typeof window === "undefined") return;
       const rosterIds = {};
@@ -1120,10 +1124,21 @@ export default function App(){
       };
       window.localStorage.setItem(getSaveKey(slot), JSON.stringify(payload));
       window.localStorage.setItem("nba_budget_ball_last_key", getSaveKey(slot));
+      setSaveToast(true);
+      if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
+      saveToastTimerRef.current = setTimeout(() => { setSaveToast(false); saveToastTimerRef.current = null; }, 2000);
     } catch {
       window.alert("Could not save.");
     }
   }, [roster, myTeamName, difficulty, phase, season, schedule, scheduleHome, aiTeams, gameNum, result, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, gamePogs, allStarSelections, unlockedAchievements, seasonGameResults, gameHistory, lastEliminatorTeamName, getSaveKey]);
+
+  const handleSaveSlotClick = useCallback((slot, empty) => {
+    if (empty) {
+      saveToSlot(slot);
+    } else {
+      setSaveOverwriteSlot(slot);
+    }
+  }, [saveToSlot]);
 
   const [shareStatus, setShareStatus] = useState(null);
   const shareStatusTimerRef = useRef(null);
@@ -3113,6 +3128,7 @@ if(phase==="teamSetup") return(
               {(champion || (elimInPlayoffs && !getNextAIMatchId(bracket))) && <button onClick={runItBack} style={{...btnBase,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:800}} title="Same roster, new AI opponents">🔄 Next Season</button>}
             </div>
           </div>
+          {saveToast&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:12,fontWeight:700,color:"#22c55e",padding:"10px 20px",background:"rgba(34,197,94,0.2)",borderRadius:8,border:"1px solid #22c55e"}}>✓ Saved</div>)}
           {shareStatus && (
             <div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:10,fontWeight:600,color:(typeof shareStatus==="object"&&shareStatus.type==="error")?"#f87171":(typeof shareStatus==="object"&&shareStatus.type==="success")?"#22c55e":"#60a5fa",padding:"4px 12px",background:(typeof shareStatus==="object"&&shareStatus.type==="error")?"rgba(248,113,113,0.2)":(typeof shareStatus==="object"&&shareStatus.type==="success")?"rgba(34,197,94,0.2)":"rgba(96,165,250,0.2)",borderRadius:8}}>
               {typeof shareStatus==="object"?shareStatus.msg:shareStatus}
@@ -3133,11 +3149,28 @@ if(phase==="teamSetup") return(
           )}
           {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
           {showSaveModal && (
-            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowSaveModal(false)}>
-              <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:320,width:"100%"}} onClick={e=>e.stopPropagation()}>
-                <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>💾 Save to slot</div>
-                {[1,2,3].map((slot)=>(<button key={slot} type="button" onClick={()=>saveToSlot(slot)} style={{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:10,marginBottom:8,color:"#a78bfa",fontSize:12,fontWeight:700,cursor:"pointer"}}>Save to Slot {slot}</button>))}
-                <button type="button" onClick={()=>setShowSaveModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>{ setShowSaveModal(false); setSaveOverwriteSlot(null); }}>
+              <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+                <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>💾 Save</div>
+                {saveOverwriteSlot != null ? (
+                  <>
+                    <p style={{fontSize:11,color:"#94a3b8",marginBottom:14}}>Are you sure you want to overwrite Slot {saveOverwriteSlot}? This will replace the existing save.</p>
+                    <div style={{display:"flex",gap:8}}>
+                      <button type="button" onClick={()=>saveToSlot(saveOverwriteSlot)} style={{flex:1,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:8,padding:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>Yes, overwrite</button>
+                      <button type="button" onClick={()=>setSaveOverwriteSlot(null)} style={{flex:1,background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:10,fontSize:12,cursor:"pointer"}}>Cancel</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p style={{fontSize:11,color:"#64748b",marginBottom:12}}>Pick a slot. Empty slots save directly. Existing saves will ask for confirmation.</p>
+                    {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships, difficultyLabel }) => (
+                      <button key={slot} type="button" onClick={()=>handleSaveSlotClick(slot, empty)} style={{width:"100%",textAlign:"left",background:empty?"#1e293b":"#111827",border:"1px solid #334155",borderRadius:8,padding:12,marginBottom:8,color:empty?"#64748b":"#e2e8f0",fontSize:12,cursor:"pointer"}}>
+                        {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""} ${difficultyLabel?"· "+difficultyLabel:""}`}
+                      </button>
+                    ))}
+                    <button type="button" onClick={()=>setShowSaveModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -3596,12 +3629,30 @@ if(phase==="teamSetup") return(
         {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
         {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
         {shareStatus&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:10,fontWeight:600,color:(typeof shareStatus==="object"&&shareStatus.type==="error")?"#f87171":(typeof shareStatus==="object"&&shareStatus.type==="success")?"#22c55e":"#60a5fa",padding:"4px 12px",background:(typeof shareStatus==="object"&&shareStatus.type==="error")?"rgba(248,113,113,0.2)":(typeof shareStatus==="object"&&shareStatus.type==="success")?"rgba(34,197,94,0.2)":"rgba(96,165,250,0.2)",borderRadius:8}}>{typeof shareStatus==="object"?shareStatus.msg:shareStatus}</div>)}
+        {saveToast&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:12,fontWeight:700,color:"#22c55e",padding:"10px 20px",background:"rgba(34,197,94,0.2)",borderRadius:8,border:"1px solid #22c55e"}}>✓ Saved</div>)}
         {showSaveModal && (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowSaveModal(false)}>
-            <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:320,width:"100%"}} onClick={e=>e.stopPropagation()}>
-              <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>💾 Save to slot</div>
-              {[1,2,3].map((slot)=>(<button key={slot} type="button" onClick={()=>saveToSlot(slot)} style={{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:10,marginBottom:8,color:"#a78bfa",fontSize:12,fontWeight:700,cursor:"pointer"}}>Save to Slot {slot}</button>))}
-              <button type="button" onClick={()=>setShowSaveModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>{ setShowSaveModal(false); setSaveOverwriteSlot(null); }}>
+            <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+              <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>💾 Save</div>
+              {saveOverwriteSlot != null ? (
+                <>
+                  <p style={{fontSize:11,color:"#94a3b8",marginBottom:14}}>Are you sure you want to overwrite Slot {saveOverwriteSlot}? This will replace the existing save.</p>
+                  <div style={{display:"flex",gap:8}}>
+                    <button type="button" onClick={()=>saveToSlot(saveOverwriteSlot)} style={{flex:1,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:8,padding:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>Yes, overwrite</button>
+                    <button type="button" onClick={()=>setSaveOverwriteSlot(null)} style={{flex:1,background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:10,fontSize:12,cursor:"pointer"}}>Cancel</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{fontSize:11,color:"#64748b",marginBottom:12}}>Pick a slot. Empty slots save directly. Existing saves will ask for confirmation.</p>
+                  {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships, difficultyLabel }) => (
+                    <button key={slot} type="button" onClick={()=>handleSaveSlotClick(slot, empty)} style={{width:"100%",textAlign:"left",background:empty?"#1e293b":"#111827",border:"1px solid #334155",borderRadius:8,padding:12,marginBottom:8,color:empty?"#64748b":"#e2e8f0",fontSize:12,cursor:"pointer"}}>
+                      {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""} ${difficultyLabel?"· "+difficultyLabel:""}`}
+                    </button>
+                  ))}
+                  <button type="button" onClick={()=>setShowSaveModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -4074,6 +4125,7 @@ if(phase==="teamSetup") return(
           {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
           {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
           {shareStatus&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:10,fontWeight:600,color:(typeof shareStatus==="object"&&shareStatus.type==="error")?"#f87171":(typeof shareStatus==="object"&&shareStatus.type==="success")?"#22c55e":"#60a5fa",padding:"4px 12px",background:(typeof shareStatus==="object"&&shareStatus.type==="error")?"rgba(248,113,113,0.2)":(typeof shareStatus==="object"&&shareStatus.type==="success")?"rgba(34,197,94,0.2)":"rgba(96,165,250,0.2)",borderRadius:8}}>{typeof shareStatus==="object"?shareStatus.msg:shareStatus}</div>)}
+          {saveToast&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:12,fontWeight:700,color:"#22c55e",padding:"10px 20px",background:"rgba(34,197,94,0.2)",borderRadius:8,border:"1px solid #22c55e"}}>✓ Saved</div>)}
           {showHistoryModal && (
             <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowHistoryModal(false)}>
               <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:16,maxWidth:440,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
@@ -4137,12 +4189,28 @@ if(phase==="teamSetup") return(
             </div>
           )}
           {showSaveModal && (
-            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowSaveModal(false)}>
-              <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:320,width:"100%"}} onClick={e=>e.stopPropagation()}>
-                <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>💾 Save to slot</div>
-                <p style={{fontSize:11,color:"#64748b",marginBottom:12}}>Overwrites that slot. You can load it later from draft or here.</p>
-                {[1,2,3].map((slot)=>(<button key={slot} type="button" onClick={()=>saveToSlot(slot)} style={{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:10,marginBottom:8,color:"#a78bfa",fontSize:12,fontWeight:700,cursor:"pointer"}}>Save to Slot {slot}</button>))}
-                <button type="button" onClick={()=>setShowSaveModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>{ setShowSaveModal(false); setSaveOverwriteSlot(null); }}>
+              <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+                <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>💾 Save</div>
+                {saveOverwriteSlot != null ? (
+                  <>
+                    <p style={{fontSize:11,color:"#94a3b8",marginBottom:14}}>Are you sure you want to overwrite Slot {saveOverwriteSlot}? This will replace the existing save.</p>
+                    <div style={{display:"flex",gap:8}}>
+                      <button type="button" onClick={()=>saveToSlot(saveOverwriteSlot)} style={{flex:1,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:8,padding:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>Yes, overwrite</button>
+                      <button type="button" onClick={()=>setSaveOverwriteSlot(null)} style={{flex:1,background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:10,fontSize:12,cursor:"pointer"}}>Cancel</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p style={{fontSize:11,color:"#64748b",marginBottom:12}}>Pick a slot. Empty slots save directly. Existing saves will ask for confirmation.</p>
+                    {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships, difficultyLabel }) => (
+                      <button key={slot} type="button" onClick={()=>handleSaveSlotClick(slot, empty)} style={{width:"100%",textAlign:"left",background:empty?"#1e293b":"#111827",border:"1px solid #334155",borderRadius:8,padding:12,marginBottom:8,color:empty?"#64748b":"#e2e8f0",fontSize:12,cursor:"pointer"}}>
+                        {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""} ${difficultyLabel?"· "+difficultyLabel:""}`}
+                      </button>
+                    ))}
+                    <button type="button" onClick={()=>setShowSaveModal(false)} style={{marginTop:8,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Cancel</button>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -4593,6 +4661,53 @@ if(phase==="teamSetup") return(
             {newlyUnlockedAchievements.map((id) => ACHIEVEMENTS.find((a) => a.id === id)?.label).filter(Boolean).join(", ")}
           </span>
           <button onClick={() => setNewlyUnlockedAchievements([])} style={{ background: "rgba(255,255,255,0.3)", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#fff" }}>Dismiss</button>
+        </div>
+      )}
+
+      {saveToast && (
+        <div style={{ position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 9996, fontSize: 12, fontWeight: 700, color: "#22c55e", padding: "10px 20px", background: "rgba(34,197,94,0.2)", borderRadius: 8, border: "1px solid #22c55e" }}>✓ Saved</div>
+      )}
+      {showSaveModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => { setShowSaveModal(false); setSaveOverwriteSlot(null); }}>
+          <div style={{ background: "#0f172a", borderRadius: 14, border: "1px solid #334155", padding: 20, maxWidth: 360, width: "100%", maxHeight: "80vh", overflow: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12, color: "#e2e8f0" }}>💾 Save</div>
+            {saveOverwriteSlot != null ? (
+              <>
+                <p style={{ fontSize: 11, color: "#94a3b8", marginBottom: 14 }}>Are you sure you want to overwrite Slot {saveOverwriteSlot}? This will replace the existing save.</p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" onClick={() => saveToSlot(saveOverwriteSlot)} style={{ flex: 1, background: "linear-gradient(135deg,#22c55e,#16a34a)", color: "white", border: "none", borderRadius: 8, padding: 10, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Yes, overwrite</button>
+                  <button type="button" onClick={() => setSaveOverwriteSlot(null)} style={{ flex: 1, background: "#334155", color: "#e2e8f0", border: "none", borderRadius: 8, padding: 10, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: 11, color: "#64748b", marginBottom: 12 }}>Pick a slot. Empty slots save directly. Existing saves will ask for confirmation.</p>
+                {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships, difficultyLabel }) => (
+                  <button key={slot} type="button" onClick={() => handleSaveSlotClick(slot, empty)} style={{ width: "100%", textAlign: "left", background: empty ? "#1e293b" : "#111827", border: "1px solid #334155", borderRadius: 8, padding: 12, marginBottom: 8, color: empty ? "#64748b" : "#e2e8f0", fontSize: 12, cursor: "pointer" }}>
+                    {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p === "game" ? "Game " + gn : p === "seasonEnd" ? "Complete" : p === "playoffs" ? "Playoffs" : "Draft"} · ${tn} ${record !== "—" ? "· " + record : ""} ${championships > 0 ? "· " + championships + " 🏆" : ""} ${difficultyLabel ? "· " + difficultyLabel : ""}`}
+                  </button>
+                ))}
+                <button type="button" onClick={() => setShowSaveModal(false)} style={{ marginTop: 8, width: "100%", background: "#334155", color: "#e2e8f0", border: "none", borderRadius: 8, padding: 8, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {showLoadModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setShowLoadModal(false)}>
+          <div style={{ background: "#0f172a", borderRadius: 14, border: "1px solid #334155", padding: 20, maxWidth: 360, width: "100%", maxHeight: "80vh", overflow: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12, color: "#e2e8f0" }}>📂 Load save</div>
+            <p style={{ fontSize: 11, color: "#64748b", marginBottom: 12 }}>Pick a slot. Current progress will be replaced.</p>
+            {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships, difficultyLabel }) => (
+              <div key={slot} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
+                <button type="button" onClick={() => loadFromSlot(slot)} style={{ flex: 1, textAlign: "left", background: empty ? "#1e293b" : "#111827", border: "1px solid #334155", borderRadius: 8, padding: 12, color: empty ? "#64748b" : "#e2e8f0", fontSize: 12, cursor: "pointer" }}>
+                  {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p === "game" ? "Game " + gn : p === "seasonEnd" ? "Complete" : p === "playoffs" ? "Playoffs" : "Draft"} · ${tn} ${record !== "—" ? "· " + record : ""} ${championships > 0 ? "· " + championships + " 🏆" : ""} ${difficultyLabel ? "· " + difficultyLabel : ""}`}
+                </button>
+                {!empty && <button type="button" onClick={(e) => { e.stopPropagation(); deleteSave(slot); }} style={{ background: "#7f1d1d", color: "#fca5a5", border: "1px solid #991b1b", borderRadius: 8, padding: "12px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }} title="Delete save">🗑</button>}
+              </div>
+            ))}
+            <button type="button" onClick={() => setShowLoadModal(false)} style={{ marginTop: 8, width: "100%", background: "#334155", color: "#e2e8f0", border: "none", borderRadius: 8, padding: 8, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+          </div>
         </div>
       )}
 
