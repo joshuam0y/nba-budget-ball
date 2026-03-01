@@ -32,7 +32,7 @@ import {
   emptySeason,
   addToSeason,
 } from "./sim";
-import { buildAllStarSelections, computeAllStarVotesForGame, computeMvpVotesForGame, computeDpoyVotesForGame } from "./utils/allStarSelection";
+import { buildAllStarSelections, computeAllStarVotesForGame, computeMvpVotesForGame, computeDpoyVotesForGame, playerVoteKey } from "./utils/allStarSelection";
 
 // Lazy-loaded heavy components for better initial bundle size
 const LeagueLeadersLazy = lazy(() =>
@@ -624,7 +624,8 @@ export default function App(){
         const gp = (s.season?.gp ?? 0) || (w + l);
         const record = gp > 0 ? `${w}–${l}` : "—";
         const chips = s.careerStats?.championships ?? 0;
-        return { slot, empty: false, seasonNumber: sn, gameNum: gn, phase, teamName, record, championships: chips };
+        const difficultyLabel = s.difficulty === "casual" ? "Casual" : s.difficulty === "hardcore" ? "Hardcore" : s.difficulty ? "Standard" : "";
+        return { slot, empty: false, seasonNumber: sn, gameNum: gn, phase, teamName, record, championships: chips, difficultyLabel };
       } catch {
         return { slot, empty: true };
       }
@@ -1228,7 +1229,7 @@ const soundtrackRef = useRef(null);
 
   const getPlayerSeasonLine = useCallback(
     (name, teamLabel) => {
-      const key = `${name}|${teamLabel}`;
+      const key = playerVoteKey(name, teamLabel);
       const rec = leagueLeaders[key];
       if (!rec || !rec.gp) return { pts: 0, reb: 0, ast: 0 };
       return {
@@ -1318,7 +1319,7 @@ const soundtrackRef = useRef(null);
       const next = { ...prev };
       const applyTeam = (stats, teamLabel) => {
         stats.forEach((s) => {
-          const key = `${s.name}|${teamLabel}`;
+          const key = playerVoteKey(s.name, teamLabel);
           const cur = next[key] || {
             name: s.name,
             team: teamLabel,
@@ -1368,7 +1369,7 @@ const soundtrackRef = useRef(null);
       const next = { ...prev };
       const applyTeam = (stats, teamLabel) => {
         stats.forEach((s) => {
-          const key = `${s.name}|${teamLabel}`;
+          const key = playerVoteKey(s.name, teamLabel);
           const cur = next[key] || {
             name: s.name,
             team: teamLabel,
@@ -1465,7 +1466,7 @@ const soundtrackRef = useRef(null);
       const next = { ...prev };
       const applyTeam = (stats, teamLabel) => {
         stats.forEach((s) => {
-          const key = `${s.name}|${teamLabel}`;
+          const key = playerVoteKey(s.name, teamLabel);
           const cur = next[key] || {
             name: s.name,
             team: teamLabel,
@@ -1811,7 +1812,7 @@ const startSeason = async () => {
   const mergeGameIntoLeaders = (acc, res, myTeamLabel, oppTeamLabel) => {
     const applyTeam = (stats, teamLabel) => {
       (stats || []).forEach((s) => {
-        const key = `${s.name}|${teamLabel}`;
+        const key = playerVoteKey(s.name, teamLabel);
         const cur = acc[key] || {
           name: s.name,
           team: teamLabel,
@@ -2296,10 +2297,10 @@ if(phase==="teamSetup") return(
             <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
               <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>Load save</div>
               <p style={{fontSize:11,color:"#64748b",marginBottom:12}}>Pick a slot to continue that franchise. Your current progress will be replaced.</p>
-              {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships }) => (
+              {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships, difficultyLabel }) => (
                 <div key={slot} style={{display:"flex",gap:6,marginBottom:8,alignItems:"stretch"}}>
                   <button type="button" onClick={()=>loadFromSlot(slot)} style={{flex:1,textAlign:"left",background:empty?"#1e293b":"#111827",border:"1px solid #334155",borderRadius:8,padding:12,color:empty?"#64748b":"#e2e8f0",fontSize:12,cursor:"pointer"}}>
-                    {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Season complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""}`}
+                    {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Season complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""} ${difficultyLabel?"· "+difficultyLabel:""}`}
                   </button>
                   {!empty && <button type="button" onClick={(e)=>{ e.stopPropagation(); deleteSave(slot); }} style={{background:"#7f1d1d",color:"#fca5a5",border:"1px solid #991b1b",borderRadius:8,padding:"12px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}} title="Delete save">🗑</button>}
                 </div>
@@ -2419,10 +2420,10 @@ if(phase==="teamSetup") return(
             <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowLoadModal(false)}>
               <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
                 <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>📂 Load save</div>
-                {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships }) => (
+                {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships, difficultyLabel }) => (
                   <div key={slot} style={{display:"flex",gap:6,marginBottom:8,alignItems:"stretch"}}>
                     <button type="button" onClick={()=>loadFromSlot(slot)} style={{flex:1,textAlign:"left",background:empty?"#1e293b":"#111827",border:"1px solid #334155",borderRadius:8,padding:12,color:empty?"#64748b":"#e2e8f0",fontSize:12,cursor:"pointer"}}>
-                      {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""}`}
+                      {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""} ${difficultyLabel?"· "+difficultyLabel:""}`}
                     </button>
                     {!empty && <button type="button" onClick={(e)=>{ e.stopPropagation(); deleteSave(slot); }} style={{background:"#7f1d1d",color:"#fca5a5",border:"1px solid #991b1b",borderRadius:8,padding:"12px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}} title="Delete save">🗑</button>}
                   </div>
@@ -2473,7 +2474,7 @@ if(phase==="teamSetup") return(
                     <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>🏅 YOUR TEAM'S AWARDS</div>
                     <div style={{display:"flex",flexDirection:"column",gap:10}}>
                       {myTeamAwards.map(({ displayName, list }) => {
-                        const grouped = groupAwardsByType(list);
+                        const grouped = groupAwardsByType(list || []); // include TMVP (Team MVP) in playoffs
                         return (
                           <div key={displayName} style={{fontSize:11}}>
                             <div style={{fontWeight:700,color:"#e2e8f0",marginBottom:4}}>{displayName}</div>
@@ -2590,13 +2591,41 @@ if(phase==="teamSetup") return(
           {(() => {
             const mvpName = getSeasonAwardWinner(playerAwards, roster, "MVP", seasonNumber);
             const dpoyName = getSeasonAwardWinner(playerAwards, roster, "DPOY", seasonNumber);
-            if (!mvpName && !dpoyName) return null;
+            const tmvpName = getSeasonAwardWinner(playerAwards, roster, "TMVP", seasonNumber);
+            if (!mvpName && !dpoyName && !tmvpName) return null;
             return (
               <div style={{marginTop:12,marginBottom:12,background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #475569"}}>
                 <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:6}}>🏅 SEASON AWARDS (S{seasonNumber})</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"center"}}>
                   {mvpName && <span style={{fontSize:11,color:"#e2e8f0"}}><span style={{color:"#fbbf24",fontWeight:700}}>MVP:</span> {mvpName}</span>}
                   {dpoyName && <span style={{fontSize:11,color:"#e2e8f0"}}><span style={{color:"#22c55e",fontWeight:700}}>DPOY:</span> {dpoyName}</span>}
+                  {tmvpName && <span style={{fontSize:11,color:"#e2e8f0"}}><span style={{color:"#eab308",fontWeight:700}}>Team MVP:</span> {tmvpName}</span>}
+                </div>
+              </div>
+            );
+          })()}
+          {(() => {
+            const myTeamAwards = getMyTeamAwardsByPlayer(roster, playerAwards);
+            if (myTeamAwards.length === 0) return null;
+            return (
+              <div style={{marginTop:12,marginBottom:12,background:"#0f172a",borderRadius:10,padding:10,border:"1px solid #475569"}}>
+                <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>🏅 YOUR TEAM'S AWARDS</div>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {myTeamAwards.map(({ displayName, list }) => {
+                    const grouped = groupAwardsByType(list || []);
+                    return (
+                      <div key={displayName} style={{fontSize:11}}>
+                        <div style={{fontWeight:700,color:"#e2e8f0",marginBottom:4}}>{displayName}</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
+                          {grouped.map(({ label, seasons }) => (
+                            <span key={label} style={{background:"#1e293b",color:"#94a3b8",borderRadius:6,padding:"3px 8px",fontSize:10,border:"1px solid #334155"}}>
+                              {label} ({seasons.map((s) => `S${s}`).join(", ")})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -2794,10 +2823,10 @@ if(phase==="teamSetup") return(
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowLoadModal(false)}>
             <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
               <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>📂 Load save</div>
-              {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships }) => (
+              {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships, difficultyLabel }) => (
                 <div key={slot} style={{display:"flex",gap:6,marginBottom:8,alignItems:"stretch"}}>
                   <button type="button" onClick={()=>loadFromSlot(slot)} style={{flex:1,textAlign:"left",background:empty?"#1e293b":"#111827",border:"1px solid #334155",borderRadius:8,padding:12,color:empty?"#64748b":"#e2e8f0",fontSize:12,cursor:"pointer"}}>
-                    {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""}`}
+                    {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""} ${difficultyLabel?"· "+difficultyLabel:""}`}
                   </button>
                   {!empty && <button type="button" onClick={(e)=>{ e.stopPropagation(); deleteSave(slot); }} style={{background:"#7f1d1d",color:"#fca5a5",border:"1px solid #991b1b",borderRadius:8,padding:"12px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}} title="Delete save">🗑</button>}
                 </div>
@@ -3109,10 +3138,10 @@ if(phase==="teamSetup") return(
               <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
                 <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>📂 Load save</div>
                 <p style={{fontSize:11,color:"#64748b",marginBottom:12}}>Pick a slot. Current progress will be replaced.</p>
-                {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships }) => (
+                {getSlotSummaries().map(({ slot, empty, seasonNumber: sn, gameNum: gn, phase: p, teamName: tn, record, championships, difficultyLabel }) => (
                   <div key={slot} style={{display:"flex",gap:6,marginBottom:8,alignItems:"stretch"}}>
                     <button type="button" onClick={()=>loadFromSlot(slot)} style={{flex:1,textAlign:"left",background:empty?"#1e293b":"#111827",border:"1px solid #334155",borderRadius:8,padding:12,color:empty?"#64748b":"#e2e8f0",fontSize:12,cursor:"pointer"}}>
-                      {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""}`}
+                      {empty ? `Slot ${slot} — Empty` : `Slot ${slot}: Season ${sn} · ${p==="game"?"Game "+gn:p==="seasonEnd"?"Complete":p==="playoffs"?"Playoffs":"Draft"} · ${tn} ${record!=="—"?"· "+record:""} ${championships>0?"· "+championships+" 🏆":""} ${difficultyLabel?"· "+difficultyLabel:""}`}
                     </button>
                     {!empty && <button type="button" onClick={(e)=>{ e.stopPropagation(); deleteSave(slot); }} style={{background:"#7f1d1d",color:"#fca5a5",border:"1px solid #991b1b",borderRadius:8,padding:"12px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}} title="Delete save">🗑</button>}
                   </div>
@@ -3294,7 +3323,7 @@ if(phase==="teamSetup") return(
             conferenceTeams[userMeta.conference].push(myTeamName);
             (aiTeams || []).forEach((t) => { if (t.conference && conferenceTeams[t.conference]) conferenceTeams[t.conference].push(t.name); });
             buildAllStarSelections(leaderEntries, gamePogs.slice(0, gp), teamWinPct, conferenceTeams, allStarVotes);
-            const getVotes = (p) => (p._allStarVotes ?? allStarVotes[`${p.name}|${p.team}`]) ?? 0;
+            const getVotes = (p) => (p._allStarVotes ?? allStarVotes[playerVoteKey(p.name, p.team)]) ?? 0;
             const top12ByVotes = (confKey) => leaderEntries
               .filter((r) => (conferenceTeams[confKey] || []).includes(r.team))
               .sort((a, b) => (b._allStarVotes ?? 0) - (a._allStarVotes ?? 0))
@@ -3324,8 +3353,8 @@ if(phase==="teamSetup") return(
             const leaderEntries = Object.values(leagueLeaders || {}).filter((r) => r && (r.gp || 0) > 0);
             if (leaderEntries.length === 0) return <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Play games to see MVP/DPOY race.</div>;
             const gp = result ? gameNum : gameNum - 1;
-            const getMvpV = (p) => (mvpVotes || {})[`${p.name}|${p.team}`] ?? 0;
-            const getDpoyV = (p) => (dpoyVotes || {})[`${p.name}|${p.team}`] ?? 0;
+            const getMvpV = (p) => (mvpVotes || {})[playerVoteKey(p.name, p.team)] ?? 0;
+            const getDpoyV = (p) => (dpoyVotes || {})[playerVoteKey(p.name, p.team)] ?? 0;
             const topMvp = [...leaderEntries].sort((a, b) => getMvpV(b) - getMvpV(a)).slice(0, 5);
             const topDpoy = [...leaderEntries].sort((a, b) => getDpoyV(b) - getDpoyV(a)).slice(0, 5);
             const isMyPlayer = (p) => p?.team === myTeamName;

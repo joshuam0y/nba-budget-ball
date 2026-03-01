@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { playerVoteKey } from "./utils/awardConstants";
 
 const fmt1 = (v) => (v ?? 0).toFixed(1);
 const fmt0 = (v) => Math.round(v ?? 0);
@@ -78,16 +79,16 @@ export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
     ...pickFirst("forward", 2),
     ...pickFirst("center", 1),
   ];
-  const firstSet = new Set(first.map((p) => `${p.name}|${p.team}`));
+  const firstSet = new Set(first.map((p) => playerVoteKey(p.name, p.team)));
   const restOf = (key, excludeSet, n) => {
-    return byPos[key].filter((r) => !excludeSet.has(`${r.name}|${r.team}`)).slice(0, n);
+    return byPos[key].filter((r) => !excludeSet.has(playerVoteKey(r.name, r.team))).slice(0, n);
   };
   const second = [
     ...restOf("guard", firstSet, 2),
     ...restOf("forward", firstSet, 2),
     ...restOf("center", firstSet, 1),
   ];
-  const secondSet = new Set([...firstSet, ...second.map((p) => `${p.name}|${p.team}`)]);
+  const secondSet = new Set([...firstSet, ...second.map((p) => playerVoteKey(p.name, p.team))]);
   const third = [
     ...restOf("guard", secondSet, 2),
     ...restOf("forward", secondSet, 2),
@@ -113,7 +114,7 @@ export function buildAllDefensiveTeams(players, teamWinPct, dpoyVotes = null) {
     else forwards.push(p);
   });
 
-  const getVotes = (r) => (dpoyVotes && Number(dpoyVotes[`${r.name}|${r.team}`])) || 0;
+  const getVotes = (r) => (dpoyVotes && Number(dpoyVotes[playerVoteKey(r.name, r.team)])) || 0;
   const useVotes = dpoyVotes && Object.keys(dpoyVotes).length > 0;
 
   if (useVotes) {

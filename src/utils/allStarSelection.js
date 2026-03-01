@@ -1,12 +1,15 @@
+import { playerVoteKey, ALL_STAR, MVP, DPOY } from "./awardConstants";
+
+export { playerVoteKey };
+
 /**
  * All-Star selection: East vs West, position-based (2G, 2F, 1C starters + 2G, 2F, 1C + 2 wildcards reserves).
- * Order is by accumulated VOTES (per-game: pts + 0.5·reb + 0.5·ast, +5 POG, +2 win). When votesMap is provided we use it; otherwise fallback to legacy score.
+ * Order is by accumulated VOTES (see awardConstants.ALL_STAR). When votesMap is provided we use it; otherwise fallback to legacy score.
  */
 
 /**
  * Per-game "votes" for All-Star (accumulated wherever this is called).
- * Formula: base = pts + 0.5*reb + 0.5*ast, +5 if POG, +2 if team won.
- * Keys are "name|team" — must match leagueLeaders so votes line up with leader rows.
+ * Formula from awardConstants.ALL_STAR. Keys from playerVoteKey(name, team).
  */
 export function computeAllStarVotesForGame(res, myTeamLabel, oppLabel, pog, userWon) {
   const out = {};
@@ -14,11 +17,11 @@ export function computeAllStarVotesForGame(res, myTeamLabel, oppLabel, pog, user
   const add = (stats, teamLabel, won) => {
     (stats || []).forEach((s) => {
       if (!s || s.name == null) return;
-      const key = `${s.name}|${teamLabel}`;
-      const base = (Number(s.pts) || 0) + (Number(s.reb) || 0) * 0.5 + (Number(s.ast) || 0) * 0.5;
+      const key = playerVoteKey(s.name, teamLabel);
+      const base = (Number(s.pts) || 0) + (Number(s.reb) || 0) * ALL_STAR.reb + (Number(s.ast) || 0) * ALL_STAR.ast;
       let v = base;
-      if (pog && pog.name === s.name && pog.team === teamLabel) v += 5;
-      if (won) v += 2;
+      if (pog && pog.name === s.name && pog.team === teamLabel) v += ALL_STAR.pogBonus;
+      if (won) v += ALL_STAR.winBonus;
       if (!Number.isFinite(v)) return;
       out[key] = (out[key] || 0) + v;
     });
@@ -29,8 +32,7 @@ export function computeAllStarVotesForGame(res, myTeamLabel, oppLabel, pog, user
 }
 
 /**
- * Per-game "votes" for MVP (accumulated all season). Keys "name|team".
- * Standings-driven: wins matter a lot. Formula: small stat component + 35 per team win; +6 POG.
+ * Per-game "votes" for MVP (accumulated all season). Formula from awardConstants.MVP.
  */
 export function computeMvpVotesForGame(res, myTeamLabel, oppLabel, pog, userWon) {
   const out = {};
@@ -38,11 +40,11 @@ export function computeMvpVotesForGame(res, myTeamLabel, oppLabel, pog, userWon)
   const add = (stats, teamLabel, won) => {
     (stats || []).forEach((s) => {
       if (!s || s.name == null) return;
-      const key = `${s.name}|${teamLabel}`;
-      const base = (Number(s.pts) || 0) * 0.5 + (Number(s.reb) || 0) * 0.2 + (Number(s.ast) || 0) * 0.2;
+      const key = playerVoteKey(s.name, teamLabel);
+      const base = (Number(s.pts) || 0) * MVP.pts + (Number(s.reb) || 0) * MVP.reb + (Number(s.ast) || 0) * MVP.ast;
       let v = base;
-      if (pog && pog.name === s.name && pog.team === teamLabel) v += 6;
-      if (won) v += 35;
+      if (pog && pog.name === s.name && pog.team === teamLabel) v += MVP.pogBonus;
+      if (won) v += MVP.winBonus;
       if (!Number.isFinite(v)) return;
       out[key] = (out[key] || 0) + v;
     });
@@ -53,9 +55,7 @@ export function computeMvpVotesForGame(res, myTeamLabel, oppLabel, pog, userWon)
 }
 
 /**
- * Per-game "votes" for DPOY (accumulated all season). Keys "name|team".
- * Emphasizes steals + blocks (true defensive plays); rebounds and POG (offense-heavy) matter less.
- * Formula: stl×2.5 + blk×2.5 + 0.15×reb, +1 POG, +6 per win.
+ * Per-game "votes" for DPOY (accumulated all season). Formula from awardConstants.DPOY.
  */
 export function computeDpoyVotesForGame(res, myTeamLabel, oppLabel, pog, userWon) {
   const out = {};
@@ -63,11 +63,11 @@ export function computeDpoyVotesForGame(res, myTeamLabel, oppLabel, pog, userWon
   const add = (stats, teamLabel, won) => {
     (stats || []).forEach((s) => {
       if (!s || s.name == null) return;
-      const key = `${s.name}|${teamLabel}`;
-      const base = (Number(s.stl) || 0) * 2.5 + (Number(s.blk) || 0) * 2.5 + (Number(s.reb) || 0) * 0.15;
+      const key = playerVoteKey(s.name, teamLabel);
+      const base = (Number(s.stl) || 0) * DPOY.stl + (Number(s.blk) || 0) * DPOY.blk + (Number(s.reb) || 0) * DPOY.reb;
       let v = base;
-      if (pog && pog.name === s.name && pog.team === teamLabel) v += 1;
-      if (won) v += 6;
+      if (pog && pog.name === s.name && pog.team === teamLabel) v += DPOY.pogBonus;
+      if (won) v += DPOY.winBonus;
       if (!Number.isFinite(v)) return;
       out[key] = (out[key] || 0) + v;
     });
@@ -126,12 +126,12 @@ function groupByPosition(players) {
  * @returns { east: { starters: [], reserves: [] }, west: { starters: [], reserves: [] } } with player rows + "Starter" | "Reserve"
  */
 export function buildAllStarSelections(leagueLeaderEntries, gamePogs, teamWinPct, conferenceTeams, votesMap = {}) {
-  const getVotes = (row) => (votesMap && votesMap[`${row.name}|${row.team}`]) || 0;
+  const getVotes = (row) => (votesMap && votesMap[playerVoteKey(row.name, row.team)]) || 0;
 
   const pogCount = {};
   (gamePogs || []).forEach((p) => {
     if (p && p.name) {
-      const key = `${p.name}|${p.team}`;
+      const key = playerVoteKey(p.name, p.team);
       pogCount[key] = (pogCount[key] || 0) + 1;
     }
   });
@@ -150,7 +150,7 @@ export function buildAllStarSelections(leagueLeaderEntries, gamePogs, teamWinPct
   const maxTpg = Math.max(1, ...leagueLeaderEntries.map((r) => (r.tov || 0) / (r.gp || 1)));
 
   const score = (row) =>
-    allStarScore(row, teamWinPct, pogCount[`${row.name}|${row.team}`] || 0, maxPpg, maxRpg, maxApg, maxFg, max3p, maxTpg);
+    allStarScore(row, teamWinPct, pogCount[playerVoteKey(row.name, row.team)] || 0, maxPpg, maxRpg, maxApg, maxFg, max3p, maxTpg);
 
   const result = { east: { starters: [], reserves: [] }, west: { starters: [], reserves: [] } };
 
@@ -178,7 +178,7 @@ export function buildAllStarSelections(leagueLeaderEntries, gamePogs, teamWinPct
       const out = [];
       for (const p of list) {
         if (out.length >= n) break;
-        const key = `${p.name}|${p.team}`;
+        const key = playerVoteKey(p.name, p.team);
         if (starterUsed.has(key)) continue;
         if ((teamStarterCount[p.team] || 0) >= 2) continue;
         out.push(p);
@@ -196,12 +196,12 @@ export function buildAllStarSelections(leagueLeaderEntries, gamePogs, teamWinPct
     // Cap total All-Stars per team (starters + reserves) at 4 so one team can't take all 5+ spots.
     const teamTotalCount = {};
     starters.forEach((p) => { teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1; });
-    const used = new Set(starters.map((p) => `${p.name}|${p.team}`));
+    const used = new Set(starters.map((p) => playerVoteKey(p.name, p.team)));
     const pickReserveWithCap = (list, n, cap = 4) => {
       const out = [];
       for (const p of list) {
         if (out.length >= n) break;
-        const key = `${p.name}|${p.team}`;
+        const key = playerVoteKey(p.name, p.team);
         if (used.has(key)) continue;
         if ((teamTotalCount[p.team] || 0) >= cap) continue;
         out.push(p);
@@ -210,24 +210,25 @@ export function buildAllStarSelections(leagueLeaderEntries, gamePogs, teamWinPct
       }
       return out;
     };
-    let reserveG = pickReserveWithCap(guard.filter((p) => !used.has(`${p.name}|${p.team}`)), 2);
-    let reserveF = pickReserveWithCap(forward.filter((p) => !used.has(`${p.name}|${p.team}`)), 2);
-    let reserveC = pickReserveWithCap(center.filter((p) => !used.has(`${p.name}|${p.team}`)), 1);
-    let remaining = [...guard, ...forward, ...center].filter((p) => !used.has(`${p.name}|${p.team}`)).sort(sortFn);
+    const usedKey = (p) => used.has(playerVoteKey(p.name, p.team));
+    let reserveG = pickReserveWithCap(guard.filter((p) => !usedKey(p)), 2);
+    let reserveF = pickReserveWithCap(forward.filter((p) => !usedKey(p)), 2);
+    let reserveC = pickReserveWithCap(center.filter((p) => !usedKey(p)), 1);
+    let remaining = [...guard, ...forward, ...center].filter((p) => !usedKey(p)).sort(sortFn);
     let wildcards = pickReserveWithCap(remaining, 2);
     // If cap left slots empty, fill without cap so we always have 7 reserves
     const needG = 2 - reserveG.length, needF = 2 - reserveF.length, needC = 1 - reserveC.length, needW = 2 - wildcards.length;
     if (needG > 0 || needF > 0 || needC > 0 || needW > 0) {
-      const extraG = guard.filter((p) => !used.has(`${p.name}|${p.team}`)).slice(0, needG);
-      const extraF = forward.filter((p) => !used.has(`${p.name}|${p.team}`)).slice(0, needF);
-      const extraC = center.filter((p) => !used.has(`${p.name}|${p.team}`)).slice(0, needC);
-      extraG.forEach((p) => { used.add(`${p.name}|${p.team}`); teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1; });
-      extraF.forEach((p) => { used.add(`${p.name}|${p.team}`); teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1; });
-      extraC.forEach((p) => { used.add(`${p.name}|${p.team}`); teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1; });
+      const extraG = guard.filter((p) => !usedKey(p)).slice(0, needG);
+      const extraF = forward.filter((p) => !usedKey(p)).slice(0, needF);
+      const extraC = center.filter((p) => !usedKey(p)).slice(0, needC);
+      extraG.forEach((p) => { used.add(playerVoteKey(p.name, p.team)); teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1; });
+      extraF.forEach((p) => { used.add(playerVoteKey(p.name, p.team)); teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1; });
+      extraC.forEach((p) => { used.add(playerVoteKey(p.name, p.team)); teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1; });
       reserveG = reserveG.concat(extraG);
       reserveF = reserveF.concat(extraF);
       reserveC = reserveC.concat(extraC);
-      remaining = [...guard, ...forward, ...center].filter((p) => !used.has(`${p.name}|${p.team}`)).sort(sortFn);
+      remaining = [...guard, ...forward, ...center].filter((p) => !usedKey(p)).sort(sortFn);
       const extraW = remaining.slice(0, needW);
       wildcards = wildcards.concat(extraW);
     }
