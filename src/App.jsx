@@ -45,6 +45,11 @@ import { buildAllNBATeams, buildAllDefensiveTeams } from "./AllNBAAllDefensive";
 const BracketDisplayLazy = lazy(() =>
   import("./components/bracket").then((m) => ({ default: m.BracketDisplay }))
 );
+import { ACHIEVEMENTS } from "./utils/achievements";
+
+const TUTORIAL_SEEN_KEY = "nba_budget_ball_tutorial_seen";
+const HINT_KEYS = { simBreak: "nba_budget_ball_hint_sim", chemistry: "nba_budget_ball_hint_chem", archetypes: "nba_budget_ball_hint_arch", difficulty: "nba_budget_ball_hint_diff" };
+const GAME_HISTORY_MAX = 5;
 
 // Basketball Reference–style award labels (full names)
 const AWARD_LABELS = {
@@ -351,6 +356,33 @@ export default function App(){
   const simThroughBreakRequestedRef = useRef(false);
   const allStarPendingSimCountRef = useRef(null);
   const allStarResumeTimeoutRef = useRef(null);
+  const [leagueName, setLeagueName] = useState("NBA");
+  const [gameHistory, setGameHistory] = useState([]);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showTrophyCase, setShowTrophyCase] = useState(false);
+  const [seasonGameResults, setSeasonGameResults] = useState([]); // [{ won }] for streak calc
+  const [unlockedAchievements, setUnlockedAchievements] = useState([]); // per-save; persisted with slot
+  const [newlyUnlockedAchievements, setNewlyUnlockedAchievements] = useState([]);
+  const [hintsDismissed, setHintsDismissed] = useState(() => {
+    if (typeof window === "undefined") return {};
+    const o = {};
+    Object.keys(HINT_KEYS).forEach((k) => { o[k] = !!window.localStorage.getItem(HINT_KEYS[k]); });
+    return o;
+  });
+  const dismissHint = useCallback((id) => {
+    try {
+      if (typeof window !== "undefined" && HINT_KEYS[id]) {
+        window.localStorage.setItem(HINT_KEYS[id], "1");
+        setHintsDismissed((prev) => ({ ...prev, [id]: true }));
+      }
+    } catch (_) {}
+  }, []);
+
+  const unlockAchievementForSave = useCallback((id) => {
+    const already = unlockedAchievements.includes(id);
+    if (!already) setUnlockedAchievements((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    return !already; // true when newly unlocked (for toast)
+  }, [unlockedAchievements]);
 
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
@@ -400,6 +432,7 @@ export default function App(){
         const saved = JSON.parse(raw);
         if (saved.currentSaveSlot != null) setCurrentSaveSlot(saved.currentSaveSlot);
         if (saved.teamName) setMyTeamName(saved.teamName);
+        if (saved.leagueName) setLeagueName(saved.leagueName);
         if (saved.difficulty) setDifficulty(saved.difficulty);
         if (typeof saved.seasonNumber === "number") setSeasonNumber(saved.seasonNumber);
         if (saved.careerStats) setCareerStats(saved.careerStats);
@@ -455,6 +488,7 @@ export default function App(){
           setAllStarSelections(saved.allStarSelections);
           if (saved.phase === "allStarBreak") allStarComputedRef.current = true;
         }
+        if (Array.isArray(saved.achievementsUnlocked)) setUnlockedAchievements(saved.achievementsUnlocked);
 
         restored =
           !!saved.inSeason ||
@@ -501,6 +535,7 @@ export default function App(){
       });
       const payload = {
         teamName: myTeamName,
+        leagueName: leagueName || "NBA",
         roster: rosterIds,
         difficulty,
         phase,
@@ -536,6 +571,7 @@ export default function App(){
         allStarSelections,
         mvpVotes,
         dpoyVotes,
+        achievementsUnlocked: unlockedAchievements,
       };
       const saveKey = currentSaveSlot ? `nba_budget_ball_save_${currentSaveSlot}` : "nba-budget-ball-state";
       window.localStorage.setItem(saveKey, JSON.stringify(payload));
@@ -543,7 +579,7 @@ export default function App(){
     } catch {
       // ignore localStorage issues
     }
-  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot, gamePogs, allStarVotes, allStarSelections, mvpVotes, dpoyVotes]);
+  }, [roster, myTeamName, leagueName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot, gamePogs, allStarVotes, allStarSelections, mvpVotes, dpoyVotes, unlockedAchievements]);
 
   const rememberTeamName = useCallback((name) => {
     const trimmed = (name || "").trim();
@@ -561,9 +597,12 @@ export default function App(){
     });
   }, []);
 
-  // How to Play shows when user is on draft (e.g. after Let's Build), not on initial load
-
   const dismissTutorial = useCallback(() => {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.setItem(TUTORIAL_SEEN_KEY, "1");
+      }
+    } catch (_) {}
     setShowTutorial(false);
   }, []);
 
@@ -640,6 +679,7 @@ export default function App(){
       const saved = JSON.parse(raw);
       if (saved.currentSaveSlot != null) setCurrentSaveSlot(saved.currentSaveSlot);
       if (saved.teamName) setMyTeamName(saved.teamName);
+      if (saved.leagueName) setLeagueName(saved.leagueName);
       if (saved.difficulty) setDifficulty(saved.difficulty);
       if (typeof saved.seasonNumber === "number") setSeasonNumber(saved.seasonNumber);
       if (saved.careerStats) setCareerStats(saved.careerStats);
@@ -685,6 +725,8 @@ export default function App(){
         setAllStarSelections(saved.allStarSelections);
         if (saved.phase === "allStarBreak") allStarComputedRef.current = true;
       }
+      if (Array.isArray(saved.achievementsUnlocked)) setUnlockedAchievements(saved.achievementsUnlocked);
+      else setUnlockedAchievements([]);
       seasonEndRecordedRef.current = !!saved.season?.gp && saved.phase === "seasonEnd";
       playoffRecordedRef.current = !!saved.bracket?.champion;
       seasonAwardsRecordedRef.current = !!saved.season?.gp && saved.phase === "seasonEnd";
@@ -732,6 +774,7 @@ export default function App(){
     setDpoyVotes({});
     setAllStarSelections(null);
     setAllStarRetry(0);
+    setUnlockedAchievements([]);
     setTeamPlayoffHighs({});
     setPlayoffLeaders({});
     setPlayoffHighs({});
@@ -763,18 +806,19 @@ export default function App(){
       const rosterIds = {};
       POSITIONS.forEach((pos) => { rosterIds[pos] = roster[pos]?.id ?? null; });
       const payload = {
-        teamName: myTeamName, roster: rosterIds, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason,
+        teamName: myTeamName, leagueName: leagueName || "NBA", roster: rosterIds, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason,
         bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs,
         playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode,
         teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, currentSaveSlot: slot,
         gamePogs, allStarSelections,
+        achievementsUnlocked: unlockedAchievements,
       };
       window.localStorage.setItem(getSaveKey(slot), JSON.stringify(payload));
       window.localStorage.setItem("nba_budget_ball_last_key", getSaveKey(slot));
     } catch {
       window.alert("Could not save.");
     }
-  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, gamePogs, allStarSelections, getSaveKey]);
+  }, [roster, myTeamName, difficulty, phase, season, schedule, aiTeams, gameNum, inSeason, bracket, playoffResult, activeMatchId, elimInPlayoffs, showStandings, showLeaders, leagueLeaders, seasonHighs, playoffLeaders, playoffHighs, finalsLeaders, showPlayoffLeaders, playoffLeadersView, teamStatsPerMode, teamSeasonHighs, teamPlayoffHighs, seasonNumber, careerStats, playerAwards, careerTeamHighs, careerLeagueHighs, gamePogs, allStarSelections, unlockedAchievements, getSaveKey]);
 
   const [shareImageStatus, setShareImageStatus] = useState(null);
   const handleShareLineup = useCallback(async () => {
@@ -947,6 +991,56 @@ const soundtrackRef = useRef(null);
     });
   }, [phase, season, aiTeams, myTeamName, leagueLeaders, seasonNumber, mvpVotes, dpoyVotes]);
 
+  // Achievements: check at season end and set newly unlocked for toast
+  const maxWinStreak = useMemo(() => {
+    let max = 0, cur = 0;
+    (seasonGameResults || []).forEach(({ won }) => {
+      if (won) { cur++; max = Math.max(max, cur); } else cur = 0;
+    });
+    return max;
+  }, [seasonGameResults]);
+
+  useEffect(() => {
+    if (phase !== "seasonEnd" || !season?.gp) return;
+    const userW = season.w ?? 0, userL = season.l ?? 0;
+    const myTeamAllStars = allStarSelections ? (() => {
+      const east = [...(allStarSelections.east?.starters || []), ...(allStarSelections.east?.reserves || [])];
+      const west = [...(allStarSelections.west?.starters || []), ...(allStarSelections.west?.reserves || [])];
+      return east.concat(west).filter((p) => p?.team === myTeamName).length;
+    })() : 0;
+    const rosterNames = new Set(POSITIONS.map((p) => roster[p]).filter(Boolean).map((p) => p.name));
+    const mvpName = (() => {
+      if (mvpVotes && Object.keys(mvpVotes).length > 0) {
+        const ent = Object.entries(mvpVotes).reduce((b, [k, v]) => (!b || (Number(v) || 0) > (Number(b[1]) || 0) ? [k, v] : b), null);
+        return ent ? ent[0].split("|")[0] : null;
+      }
+      return null;
+    })();
+    const dpoyName = (() => {
+      if (dpoyVotes && Object.keys(dpoyVotes).length > 0) {
+        const ent = Object.entries(dpoyVotes).reduce((b, [k, v]) => (!b || (Number(v) || 0) > (Number(b[1]) || 0) ? [k, v] : b), null);
+        return ent ? ent[0].split("|")[0] : null;
+      }
+      return null;
+    })();
+    const unlocked = [];
+    if (userW + userL >= 82 && userW === 82 && unlockAchievementForSave("perfect_82")) unlocked.push("perfect_82");
+    if (myTeamAllStars >= 5 && unlockAchievementForSave("all_five_all_star")) unlocked.push("all_five_all_star");
+    if (maxWinStreak >= 10 && unlockAchievementForSave("win_streak_10")) unlocked.push("win_streak_10");
+    if (mvpName && rosterNames.has(mvpName) && unlockAchievementForSave("mvp_winner")) unlocked.push("mvp_winner");
+    if (dpoyName && rosterNames.has(dpoyName) && unlockAchievementForSave("dpoy_winner")) unlocked.push("dpoy_winner");
+    const confRank = (() => {
+      const all = [{ name: myTeamName, w: userW, l: userL, isPlayer: true }, ...(aiTeams || []).map((t) => ({ name: t.name, w: t.w, l: t.l, isPlayer: false }))];
+      const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
+      const conf = all.filter((t) => t.name === myTeamName || (aiTeams || []).find((a) => a.name === t.name)?.conference === userMeta.conference);
+      conf.sort((a, b) => (b.w - b.l) - (a.w - a.l));
+      const idx = conf.findIndex((t) => t.name === myTeamName);
+      return idx >= 0 ? idx + 1 : 15;
+    })();
+    if (confRank <= 10 && unlockAchievementForSave("first_playoff")) unlocked.push("first_playoff");
+    if (unlocked.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...unlocked]);
+  }, [phase, season, allStarSelections, myTeamName, mvpVotes, dpoyVotes, roster, aiTeams, maxWinStreak, unlockAchievementForSave]);
+
   const allStarComputedRef = useRef(false);
   useEffect(() => {
     if (phase !== "allStarBreak" || gameNum !== ALL_STAR_GAME_AT) return;
@@ -1064,7 +1158,12 @@ const soundtrackRef = useRef(null);
       });
       return next;
     });
-  }, [phase, bracket, finalsLeaders, seasonNumber]);
+    const ach = [];
+    if (wonChip && unlockAchievementForSave("first_championship")) ach.push("first_championship");
+    if (wonChip && (careerStats?.championships ?? 0) + 1 >= 3 && unlockAchievementForSave("three_peat")) ach.push("three_peat");
+    if (wonChip && finalsMVPName && champPlayerNames.has(finalsMVPName) && unlockAchievementForSave("finals_mvp")) ach.push("finals_mvp");
+    if (ach.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...ach]);
+  }, [phase, bracket, finalsLeaders, seasonNumber, careerStats, unlockAchievementForSave]);
 
   const pickNextTrack = useCallback((excludeIndex) => {
     const others = [0, 1, 2, 3].filter((i) => i !== excludeIndex);
@@ -1698,6 +1797,8 @@ const startSeason = async () => {
     seasonEndRecordedRef.current = false;
   playoffRecordedRef.current = false;
   seasonAwardsRecordedRef.current = false;
+  setSeasonGameResults([]);
+  setGameHistory([]);
   await Promise.all(myLineup.map(({player})=>incrementPick(player.name)));
   getTopPicks().then(setTopPicks);
 };
@@ -1742,6 +1843,8 @@ const startSeason = async () => {
     setMvpVotes({});
     setDpoyVotes({});
     setAllStarSelections(null);
+    setSeasonGameResults([]);
+    setGameHistory([]);
     setAllStarRetry(0);
     allStarComputedRef.current = false;
     allStarPendingSimCountRef.current = null;
@@ -1793,6 +1896,11 @@ const startSeason = async () => {
       Object.entries(dpoyD).forEach(([key, v]) => { next[key] = (next[key] || 0) + (Number(v) || 0); });
       return next;
     });
+    setGameHistory((prev) => {
+      const entry = { gameNum, oppName: opp?.name || "Opponent", myScore: res.myScore, oppScore: res.oppScore, won, myStats: res.myStats, oppStats: res.oppStats };
+      return [entry, ...prev].slice(0, GAME_HISTORY_MAX);
+    });
+    setSeasonGameResults((prev) => [...prev, { won }]);
     setResult(res);
   };
 
@@ -1875,6 +1983,8 @@ const startSeason = async () => {
     let localW = season?.w ?? 0;
     let localL = season?.l ?? 0;
     let localGp = season?.gp ?? 0;
+    const accSimResults = [];
+    const accSimHistory = [];
     try {
       for (let k = 0; k < toPlay; k++) {
         const g = gameNum + k;
@@ -1884,6 +1994,7 @@ const startSeason = async () => {
         if (!opp?.lineup) continue;
         const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty });
         const won = res.myScore > res.oppScore;
+        accSimHistory.push({ gameNum: g, oppName: opp?.name || "Opponent", myScore: res.myScore, oppScore: res.oppScore, won, myStats: res.myStats, oppStats: res.oppStats });
         const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
         const dayIndex = g - 1;
         setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
@@ -1903,6 +2014,7 @@ const startSeason = async () => {
         mergeGameIntoLeaders(accLeaders, res, myTeamName, opp?.name || "Opponent");
         localGp++;
         if (won) localW++; else localL++;
+        accSimResults.push({ won });
         const allStats = [
           ...(res.myStats || []).map((s) => ({ ...s, team: myTeamName })),
           ...(res.oppStats || []).map((s) => ({ ...s, team: opp?.name || "Opponent" })),
@@ -1926,6 +2038,11 @@ const startSeason = async () => {
         });
         setMvpVotes(() => ({ ...accMvpVotes }));
         setDpoyVotes(() => ({ ...accDpoyVotes }));
+      }
+      if (accSimResults.length > 0) setSeasonGameResults((prev) => [...prev, ...accSimResults]);
+      if (accSimHistory.length > 0) {
+        const recent = accSimHistory.slice(-GAME_HISTORY_MAX).reverse();
+        setGameHistory((prev) => [...recent, ...prev].slice(0, GAME_HISTORY_MAX));
       }
       const nextGameNum = Math.min(gameNum + toPlay, SEASON_LENGTH);
       const crossedAllStarBreak = gameNum <= ALL_STAR_GAME_AT && nextGameNum > ALL_STAR_GAME_AT;
@@ -2253,7 +2370,8 @@ if(phase==="teamSetup") return(
           onKeyDown={e=>{
             if(e.key==="Enter"&&myTeamName.trim()){
               rememberTeamName(myTeamName);
-              setShowTutorial(true);
+              setUnlockedAchievements([]);
+              if (typeof window !== "undefined" && !window.localStorage.getItem(TUTORIAL_SEEN_KEY)) setShowTutorial(true);
               setPhase("draft");
             }
           }}
@@ -2282,7 +2400,8 @@ if(phase==="teamSetup") return(
           onClick={()=>{
             if(!myTeamName.trim()) return;
             rememberTeamName(myTeamName);
-            setShowTutorial(true);
+            setUnlockedAchievements([]);
+            if (typeof window !== "undefined" && !window.localStorage.getItem(TUTORIAL_SEEN_KEY)) setShowTutorial(true);
             setPhase("draft");
           }}
           disabled={!myTeamName.trim()}
@@ -2316,6 +2435,11 @@ if(phase==="teamSetup") return(
 
   if(phase==="import") return(
     <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex",alignItems:"center",justifyContent:"center",padding:24,position:"relative"}}>
+      <div style={{position:"fixed",top:12,right:12,zIndex:50}}>
+        <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#fbbf24",cursor:"pointer"}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
+      </div>
+      {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Trophy case</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
+      {newlyUnlockedAchievements.length>0&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:12,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{newlyUnlockedAchievements.map((id)=>ACHIEVEMENTS.find((a)=>a.id===id)?.label).filter(Boolean).join(", ")}</span><button onClick={()=>setNewlyUnlockedAchievements([])} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>)}
       <div style={{position:"fixed",bottom:16,left:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
         <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
         <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
@@ -2404,9 +2528,24 @@ if(phase==="teamSetup") return(
               <button onClick={()=>setShowSaveModal(true)} style={{...btnBase,background:"#1e293b",color:"#a78bfa",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>💾 Save</button>
               <button onClick={()=>setShowLoadModal(true)} style={{...btnBase,background:"#1e293b",color:"#94a3b8",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11}}>📂 Load</button>
               {(elimInPlayoffs || champion) && <button onClick={runItBack} style={{...btnBase,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:800}} title="Same roster, new AI opponents">🔄 Run it back</button>}
+              <button onClick={()=>setShowTrophyCase(true)} style={{...btnBase,background:"#1e293b",color:"#fbbf24",padding: isMobile ? "10px 14px" : "6px 14px",fontSize: isMobile ? 12 : 11,fontWeight:700}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
               <button onClick={()=>setShowHelp(h=>!h)} style={{...btnBase,width: isMobile ? 40 : 32,height: isMobile ? 40 : 32,borderRadius:10,background:"#1e293b",color:"#60a5fa",fontSize:14,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>?</button>
             </div>
           </div>
+          {showTrophyCase&&(
+            <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}>
+              <div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                  <div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Trophy case</div>
+                  <button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}
+                </div>
+              </div>
+            </div>
+          )}
+          {newlyUnlockedAchievements.length>0&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:12,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{newlyUnlockedAchievements.map((id)=>ACHIEVEMENTS.find((a)=>a.id===id)?.label).filter(Boolean).join(", ")}</span><button onClick={()=>setNewlyUnlockedAchievements([])} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>)}
           {showSaveModal && (
             <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowSaveModal(false)}>
               <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:320,width:"100%"}} onClick={e=>e.stopPropagation()}>
@@ -2803,6 +2942,7 @@ if(phase==="teamSetup") return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
         <div style={{position:"fixed",top:12,right:12,zIndex:50,display:"flex",alignItems:"center",gap:8}}>
           <span style={{fontSize:9,fontWeight:700,color:"#64748b",padding:"3px 8px",borderRadius:999,background:"#1e293b",border:"1px solid #334155",textTransform:"uppercase",letterSpacing:0.5}}>{difficulty === "casual" ? "Casual" : difficulty === "hardcore" ? "Hardcore" : "Standard"}</span>
+          <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
           <button onClick={goToMainMenu} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🏠 Main menu</button>
           <button onClick={()=>setShowHelp(h=>!h)} style={{width:28,height:28,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>?</button>
           <button onClick={()=>setShowSaveModal(true)} style={{background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>💾 Save</button>
@@ -2810,6 +2950,8 @@ if(phase==="teamSetup") return(
           {!playoff && <button onClick={runItBack} style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:800,cursor:"pointer"}} title="Same roster, new AI opponents">🔄 Run it back</button>}
           {playoff && <span style={{fontSize:10,color:"#f59e0b",fontWeight:700}}>Play through playoffs first</span>}
         </div>
+        {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Trophy case</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
+        {newlyUnlockedAchievements.length>0&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:12,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{newlyUnlockedAchievements.map((id)=>ACHIEVEMENTS.find((a)=>a.id===id)?.label).filter(Boolean).join(", ")}</span><button onClick={()=>setNewlyUnlockedAchievements([])} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>)}
         {showSaveModal && (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowSaveModal(false)}>
             <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:320,width:"100%"}} onClick={e=>e.stopPropagation()}>
@@ -2864,6 +3006,25 @@ if(phase==="teamSetup") return(
               </div>
             )}
           </div>
+          {(() => {
+            const allStarCount = allStarSelections ? (() => {
+              const east = [...(allStarSelections.east?.starters || []), ...(allStarSelections.east?.reserves || [])];
+              const west = [...(allStarSelections.west?.starters || []), ...(allStarSelections.west?.reserves || [])];
+              return east.concat(west).filter((p) => p?.team === myTeamName).length;
+            })() : 0;
+            const bestStreak = (() => { let max = 0, cur = 0; (seasonGameResults || []).forEach(({ won }) => { if (won) { cur++; max = Math.max(max, cur); } else cur = 0; }); return max; })();
+            return (
+              <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #475569"}}>
+                <div style={{fontSize:10,color:"#eab308",fontWeight:800,letterSpacing:2,marginBottom:8}}>📊 SEASON SUMMARY — {leagueName || "NBA"}</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:12,fontSize:11,color:"#94a3b8"}}>
+                  <span>Record: {userW}–{userL}</span>
+                  <span>PPG: {ppg} · OPP: {papg}</span>
+                  {bestStreak > 0 && <span>Best win streak: {bestStreak}</span>}
+                  {allStarCount > 0 && <span>All-Stars: {allStarCount}</span>}
+                </div>
+              </div>
+            );
+          })()}
           {mvp && (
             <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #fbbf24",textAlign:"center"}}>
               <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:2,marginBottom:4}}>🏅 TEAM MVP — {myTeamName}</div>
@@ -3013,6 +3174,11 @@ if(phase==="teamSetup") return(
     const simThroughActive = simThroughBreakRequestedRef.current;
     return (
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",padding:16}}>
+        <div style={{position:"fixed",top:12,right:12,zIndex:50,display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#fbbf24",cursor:"pointer"}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
+        </div>
+        {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Trophy case</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
+        {newlyUnlockedAchievements.length>0&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:12,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{newlyUnlockedAchievements.map((id)=>ACHIEVEMENTS.find((a)=>a.id===id)?.label).filter(Boolean).join(", ")}</span><button onClick={()=>setNewlyUnlockedAchievements([])} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>)}
         <div style={{maxWidth:900,margin:"0 auto"}}>
           <div style={{textAlign:"center",marginBottom:20}}>
             <div style={{fontSize:28,fontWeight:900,color:"#fbbf24",letterSpacing:2}}>⭐ ALL-STAR BREAK (Game {ALL_STAR_GAME_AT})</div>
@@ -3113,7 +3279,15 @@ if(phase==="teamSetup") return(
   const emoji=last?"🔥":"❄️";
   return <div style={{fontSize:10,fontWeight:800,color:last?"#f59e0b":"#60a5fa"}}>{emoji}{streak}</div>;
 })()}
-            <div style={{fontSize:9,fontWeight:700,color:"#64748b",padding:"3px 8px",borderRadius:999,background:"#1e293b",border:"1px solid #334155",textTransform:"uppercase",letterSpacing:0.5}} title="Difficulty: Casual = you're favored · Standard = even · Hardcore = CPU favored">{difficulty === "casual" ? "Casual" : difficulty === "hardcore" ? "Hardcore" : "Standard"}</div>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <div style={{fontSize:9,fontWeight:700,color:"#64748b",padding:"3px 8px",borderRadius:999,background:"#1e293b",border:"1px solid #334155",textTransform:"uppercase",letterSpacing:0.5}} title="Difficulty: Casual = you're favored · Standard = even · Hardcore = CPU favored">{difficulty === "casual" ? "Casual" : difficulty === "hardcore" ? "Hardcore" : "Standard"}</div>
+              {!hintsDismissed.difficulty && (
+                <span style={{fontSize:9,color:"#94a3b8",display:"inline-flex",alignItems:"center",gap:4}}>
+                  Tip: Casual = you favored · Hardcore = CPU favored
+                  <button type="button" onClick={()=>dismissHint("difficulty")} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:4,padding:"2px 6px",fontSize:8,fontWeight:700,cursor:"pointer"}}>Got it</button>
+                </span>
+              )}
+            </div>
             <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
             <button onClick={()=>setShowLeaders(s=>!s)} style={{background:"#1e293b",color:"#f97316",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showLeaders?"Hide":"Show"} Leaders</button>
             {gameNum <= ALL_STAR_GAME_AT && <button onClick={()=>setShowAllStarTab(a=>!a)} style={{background:showAllStarTab?"#78350f":"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showAllStarTab?"Hide":"Show"} All-Star</button>}
@@ -3121,8 +3295,37 @@ if(phase==="teamSetup") return(
             <button onClick={goToMainMenu} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🏠 Main menu</button>
             <button onClick={()=>setShowSaveModal(true)} style={{background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Save to a slot">💾 Save</button>
             <button onClick={()=>setShowLoadModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>📂 Load</button>
+            <button onClick={()=>setShowHistoryModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Last games">📋 Last {gameHistory.length || 0}</button>
+            <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Trophy case">🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}</button>
             <button onClick={()=>setShowHelp(h=>!h)} style={{width:26,height:26,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155",color:"#60a5fa",fontSize:12,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
           </div>
+          {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Trophy case</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}</div>);})}</div></div></div>)}
+          {newlyUnlockedAchievements.length>0&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:12,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{newlyUnlockedAchievements.map((id)=>ACHIEVEMENTS.find((a)=>a.id===id)?.label).filter(Boolean).join(", ")}</span><button onClick={()=>setNewlyUnlockedAchievements([])} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>)}
+          {showHistoryModal && (
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowHistoryModal(false)}>
+              <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:16,maxWidth:440,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+                <div style={{fontSize:14,fontWeight:800,marginBottom:12,color:"#e2e8f0"}}>📋 Last games</div>
+                {gameHistory.length === 0 ? (
+                  <p style={{fontSize:11,color:"#64748b"}}>Play games to see results here.</p>
+                ) : (
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {gameHistory.map((g,i)=>(
+                      <div key={i} style={{background:"#1e293b",borderRadius:8,padding:10,border:"1px solid #334155"}}>
+                        <div style={{fontSize:11,fontWeight:700,color:"#94a3b8"}}>Game {g.gameNum} · vs {g.oppName}</div>
+                        <div style={{fontSize:14,fontWeight:800,marginTop:4,color:g.won?"#22c55e":"#f87171"}}>{myTeamName} {g.myScore} – {g.oppScore} {g.oppName} {g.won?"W":"L"}</div>
+                        {g.myStats && g.myStats.length > 0 && (
+                          <div style={{marginTop:6,fontSize:9,color:"#64748b"}}>
+                            {g.myStats.slice(0,5).map((s,j)=>(<div key={j}>{s.name}: {s.pts} PTS, {s.reb} REB, {s.ast} AST</div>))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button type="button" onClick={()=>setShowHistoryModal(false)} style={{marginTop:12,width:"100%",background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:8,fontSize:12,cursor:"pointer"}}>Close</button>
+              </div>
+            </div>
+          )}
           {showSaveModal && (
             <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowSaveModal(false)}>
               <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:320,width:"100%"}} onClick={e=>e.stopPropagation()}>
@@ -3212,6 +3415,12 @@ if(phase==="teamSetup") return(
     </div>
   </div>
 )}
+              {!hintsDismissed.simBreak && gameNum <= ALL_STAR_GAME_AT && (
+                <div style={{fontSize:9,color:"#64748b",marginBottom:6,display:"flex",alignItems:"center",gap:6,justifyContent:"center",flexWrap:"wrap"}}>
+                  Tip: Sim to All-Star runs to game 50 and shows All-Star picks.
+                  <button type="button" onClick={()=>dismissHint("simBreak")} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:4,padding:"2px 8px",fontSize:9,fontWeight:700,cursor:"pointer"}}>Got it</button>
+                </div>
+              )}
               <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center"}}>
                 <button
                   onClick={playGame}
@@ -3492,12 +3701,46 @@ if(phase==="teamSetup") return(
             <div style={{ fontSize: 28, fontWeight: 900, marginBottom: 12, color: "#f59e0b" }}>How to play</div>
             <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6, marginBottom: 20 }}>
               <div style={{ marginBottom: 8 }}>1. <strong style={{ color: "#e2e8f0" }}>Draft 5 players</strong> (one per position) within your <strong style={{ color: "#fbbf24" }}>${BUDGET}</strong> budget and build your lineup.</div>
-              <div style={{ marginBottom: 8 }}>2. Battle through a <strong style={{ color: "#e2e8f0" }}>full {SEASON_LENGTH}-game season</strong> in a 30-team league with 2 conferences and 6 divisions — every win moves you up the standings.</div>
-              <div style={{ marginBottom: 8 }}>3. Track the league with <strong style={{ color: "#e2e8f0" }}>League Leaders, Season Highs, and Playoff Highs</strong> — your players are highlighted in green anywhere they show up.</div>
-              <div>4. <strong style={{ color: "#e2e8f0" }}>Playoffs</strong>: top 6 in each conference go straight in; seeds 7–10 fight through the play-in. Win the bracket to become champion!</div>
+              <div style={{ marginBottom: 8 }}>2. <strong style={{ color: "#e2e8f0" }}>Season</strong>: play each game, or use <strong style={{ color: "#e2e8f0" }}>Sim to break</strong> / <strong style={{ color: "#e2e8f0" }}>Sim to end</strong> to advance. 30-team league, 2 conferences, 6 divisions.</div>
+              <div style={{ marginBottom: 8 }}>3. Track <strong style={{ color: "#e2e8f0" }}>League Leaders, Season Highs, All-Star & MVP/DPOY races</strong> — your players are highlighted in green.</div>
+              <div style={{ marginBottom: 8 }}>4. <strong style={{ color: "#e2e8f0" }}>Playoffs</strong>: top 6 in each conference go straight in; seeds 7–10 play-in. Win the bracket to become champion!</div>
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 8 }}>Tap <strong style={{ color: "#94a3b8" }}>?</strong> in-game for more tips (standings, chemistry, difficulty).</div>
             </div>
             <button onClick={dismissTutorial} style={{ width: "100%", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Got it</button>
           </div>
+        </div>
+      )}
+
+      {showTrophyCase && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowTrophyCase(false)}>
+          <div style={{ background: "#0f172a", borderRadius: 16, border: "2px solid #334155", maxWidth: 420, width: "100%", maxHeight: "85vh", overflow: "auto", padding: 20 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 20, fontWeight: 900, color: "#fbbf24" }}>🏆 Trophy case</div>
+              <button onClick={() => setShowTrophyCase(false)} style={{ background: "#334155", color: "#e2e8f0", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>Close</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {ACHIEVEMENTS.map((a) => {
+                const unlocked = unlockedAchievements.includes(a.id);
+                return (
+                  <div key={a.id} style={{ background: unlocked ? "#1e293b" : "#0f172a", border: "1px solid #334155", borderRadius: 10, padding: 12, opacity: unlocked ? 1 : 0.65 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: unlocked ? "#e2e8f0" : "#64748b" }}>{a.icon} {a.label}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{a.desc}</div>
+                    {unlocked && <div style={{ fontSize: 9, color: "#22c55e", marginTop: 6, fontWeight: 700 }}>✓ Unlocked</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {newlyUnlockedAchievements.length > 0 && (
+        <div style={{ position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 9997, background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "#fff", padding: "10px 16px", borderRadius: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", gap: 12, maxWidth: "95vw" }}>
+          <span style={{ fontWeight: 800, fontSize: 12 }}>🏆 Achievement unlocked!</span>
+          <span style={{ fontSize: 11 }}>
+            {newlyUnlockedAchievements.map((id) => ACHIEVEMENTS.find((a) => a.id === id)?.label).filter(Boolean).join(", ")}
+          </span>
+          <button onClick={() => setNewlyUnlockedAchievements([])} style={{ background: "rgba(255,255,255,0.3)", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#fff" }}>Dismiss</button>
         </div>
       )}
 
@@ -3553,6 +3796,19 @@ if(phase==="teamSetup") return(
               {playerPool.length} players · Budget ${BUDGET} · {SEASON_LENGTH}
               -game season · Play-in + Playoffs
             </div>
+            {phase !== "teamSetup" && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 9, color: "#64748b", fontWeight: 700 }}>League:</span>
+                <input
+                  type="text"
+                  value={leagueName || "NBA"}
+                  onChange={(e) => setLeagueName((e.target.value || "NBA").trim() || "NBA")}
+                  placeholder="NBA"
+                  maxLength={24}
+                  style={{ width: 90, background: "#0f172a", border: "1px solid #334155", borderRadius: 6, padding: "4px 8px", fontSize: 10, color: "#e2e8f0" }}
+                />
+              </div>
+            )}
           </div>
 
           <div
@@ -3565,6 +3821,13 @@ if(phase==="teamSetup") return(
               flex: 1,
             }}
           >
+            <button
+              onClick={() => setShowTrophyCase(true)}
+              style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: "#fbbf24", cursor: "pointer" }}
+              title="Trophy case"
+            >
+              🏆 {unlockedAchievements.length}/{ACHIEVEMENTS.length}
+            </button>
             {/* Difficulty */}
             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
               <span
@@ -3679,6 +3942,22 @@ if(phase==="teamSetup") return(
               >
                 📥 Load Code
               </button>
+              <button
+                onClick={() => setShowTutorial(true)}
+                style={{
+                  background: "#0f172a",
+                  color: "#f59e0b",
+                  border: "1px solid #1e293b",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+                title="How to play"
+              >
+                ? How to play
+              </button>
             </div>
           </div>
         </div>
@@ -3741,6 +4020,12 @@ if(phase==="teamSetup") return(
               </div>
             </div>
           ))}
+          {(!hintsDismissed.chemistry || !hintsDismissed.archetypes) && (
+            <div style={{ width: "100%", fontSize: 9, color: "#64748b", marginTop: 6, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+              {!hintsDismissed.chemistry && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>Tip: CHEM = teammates from same real team+season <button type="button" onClick={() => dismissHint("chemistry")} style={{ background: "#334155", color: "#e2e8f0", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 8, fontWeight: 700, cursor: "pointer" }}>Got it</button></span>}
+              {!hintsDismissed.archetypes && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>Tip: ARCH = roster balance bonus <button type="button" onClick={() => dismissHint("archetypes")} style={{ background: "#334155", color: "#e2e8f0", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 8, fontWeight: 700, cursor: "pointer" }}>Got it</button></span>}
+            </div>
+          )}
           <div
             style={{
               background: "#0f172a",

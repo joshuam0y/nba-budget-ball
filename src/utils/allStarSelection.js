@@ -171,67 +171,24 @@ export function buildAllStarSelections(leagueLeaderEntries, gamePogs, teamWinPct
     forward.sort(sortFn);
     center.sort(sortFn);
 
-    // Pick 2G, 2F, 1C with max 2 starters per team so one team can't fill all 5.
-    const teamStarterCount = {};
-    const starterUsed = new Set();
-    const pickWithCap = (list, n) => {
-      const out = [];
-      for (const p of list) {
-        if (out.length >= n) break;
-        const key = playerVoteKey(p.name, p.team);
-        if (starterUsed.has(key)) continue;
-        if ((teamStarterCount[p.team] || 0) >= 2) continue;
-        out.push(p);
-        starterUsed.add(key);
-        teamStarterCount[p.team] = (teamStarterCount[p.team] || 0) + 1;
-      }
-      return out;
-    };
-    const starterG = pickWithCap(guard, 2);
-    const starterF = pickWithCap(forward, 2);
-    const starterC = pickWithCap(center, 1);
+    // Starters: top 2G, 2F, 1C by votes/score (no per-team cap).
+    const starterG = guard.slice(0, 2);
+    const starterF = forward.slice(0, 2);
+    const starterC = center.slice(0, 1);
     const starters = [...starterG, ...starterF, ...starterC].map((p) => ({ ...p, allStarRole: "Starter" }));
     result[conf.toLowerCase()].starters = starters;
 
-    // Cap total All-Stars per team (starters + reserves) at 4 so one team can't take all 5+ spots.
-    const teamTotalCount = {};
-    starters.forEach((p) => { teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1; });
+    // Reserves: next 2G, 2F, 1C + 2 wildcards by votes/score, excluding starters (no per-team cap).
     const used = new Set(starters.map((p) => playerVoteKey(p.name, p.team)));
-    const pickReserveWithCap = (list, n, cap = 4) => {
-      const out = [];
-      for (const p of list) {
-        if (out.length >= n) break;
-        const key = playerVoteKey(p.name, p.team);
-        if (used.has(key)) continue;
-        if ((teamTotalCount[p.team] || 0) >= cap) continue;
-        out.push(p);
-        used.add(key);
-        teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1;
-      }
-      return out;
-    };
     const usedKey = (p) => used.has(playerVoteKey(p.name, p.team));
-    let reserveG = pickReserveWithCap(guard.filter((p) => !usedKey(p)), 2);
-    let reserveF = pickReserveWithCap(forward.filter((p) => !usedKey(p)), 2);
-    let reserveC = pickReserveWithCap(center.filter((p) => !usedKey(p)), 1);
-    let remaining = [...guard, ...forward, ...center].filter((p) => !usedKey(p)).sort(sortFn);
-    let wildcards = pickReserveWithCap(remaining, 2);
-    // If cap left slots empty, fill without cap so we always have 7 reserves
-    const needG = 2 - reserveG.length, needF = 2 - reserveF.length, needC = 1 - reserveC.length, needW = 2 - wildcards.length;
-    if (needG > 0 || needF > 0 || needC > 0 || needW > 0) {
-      const extraG = guard.filter((p) => !usedKey(p)).slice(0, needG);
-      const extraF = forward.filter((p) => !usedKey(p)).slice(0, needF);
-      const extraC = center.filter((p) => !usedKey(p)).slice(0, needC);
-      extraG.forEach((p) => { used.add(playerVoteKey(p.name, p.team)); teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1; });
-      extraF.forEach((p) => { used.add(playerVoteKey(p.name, p.team)); teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1; });
-      extraC.forEach((p) => { used.add(playerVoteKey(p.name, p.team)); teamTotalCount[p.team] = (teamTotalCount[p.team] || 0) + 1; });
-      reserveG = reserveG.concat(extraG);
-      reserveF = reserveF.concat(extraF);
-      reserveC = reserveC.concat(extraC);
-      remaining = [...guard, ...forward, ...center].filter((p) => !usedKey(p)).sort(sortFn);
-      const extraW = remaining.slice(0, needW);
-      wildcards = wildcards.concat(extraW);
-    }
+    const reserveG = guard.filter((p) => !usedKey(p)).slice(0, 2);
+    const reserveF = forward.filter((p) => !usedKey(p)).slice(0, 2);
+    const reserveC = center.filter((p) => !usedKey(p)).slice(0, 1);
+    reserveG.forEach((p) => used.add(playerVoteKey(p.name, p.team)));
+    reserveF.forEach((p) => used.add(playerVoteKey(p.name, p.team)));
+    reserveC.forEach((p) => used.add(playerVoteKey(p.name, p.team)));
+    const remaining = [...guard, ...forward, ...center].filter((p) => !usedKey(p)).sort(sortFn);
+    const wildcards = remaining.slice(0, 2);
     const reserves = [...reserveG, ...reserveF, ...reserveC, ...wildcards].map((p) => ({
       ...p,
       allStarRole: "Reserve",
