@@ -1934,7 +1934,12 @@ const startSeason = async () => {
       const entry = { gameNum, oppName: opp?.name || "Opponent", myScore: res.myScore, oppScore: res.oppScore, won, myStats: res.myStats, oppStats: res.oppStats };
       return [entry, ...prev].slice(0, GAME_HISTORY_MAX);
     });
-    const pogEntry = pog ? { name: pog.name, team: pog.team } : null;
+    const pogEntry = pog ? {
+      name: pog.name,
+      team: pog.team,
+      pts: pog.pts, reb: pog.reb, ast: pog.ast, stl: pog.stl, blk: pog.blk,
+      tpm: pog.tpm, tpa: pog.tpa,
+    } : null;
     setSeasonGameResults((prev) => {
       const next = [...prev];
       next[dayIndex] = { oppName: opp?.name || "Opponent", home: isHome, myScore: res.myScore, oppScore: res.oppScore, won, pog: pogEntry };
@@ -2042,7 +2047,12 @@ const startSeason = async () => {
         ];
         const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.5 + (s.ast || 0) * 0.5;
         const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
-        const pogEntry = pog ? { name: pog.name, team: pog.team } : null;
+        const pogEntry = pog ? {
+          name: pog.name,
+          team: pog.team,
+          pts: pog.pts, reb: pog.reb, ast: pog.ast, stl: pog.stl, blk: pog.blk,
+          tpm: pog.tpm, tpa: pog.tpa,
+        } : null;
         accSimHistory.push({ gameNum: g, oppName: opp?.name || "Opponent", myScore: res.myScore, oppScore: res.oppScore, won, myStats: res.myStats, oppStats: res.oppStats });
         accSimResults.push({ oppName: opp?.name || "Opponent", home: isHome, myScore: res.myScore, oppScore: res.oppScore, won, pog: pogEntry });
         setSeason((s) => addToSeason(s, uniqueStats, won, res.myScore, res.oppScore));
@@ -2698,14 +2708,17 @@ if(phase==="teamSetup") return(
             if(!matchup)return null;
             const wT=matchup.games.filter(g=>g.winnerIdx===0).length,wB=matchup.games.filter(g=>g.winnerIdx===1).length;
             const done=!!matchup.winner,pInv=matchup.top?.isPlayer||matchup.bot?.isPlayer;
+            const opponentName = pInv ? (matchup.top?.isPlayer ? matchup.bot?.name : matchup.top?.name) ?? "TBD" : null;
             return(
               <div style={{marginTop: isMobile ? 16 : 20}}>
                 <div style={{background:"linear-gradient(180deg,#1e293b 0%,#0f172a 100%)",borderRadius:14,padding: isMobile ? 14 : 16,border:"2px solid #334155",marginBottom:12,boxShadow:"0 4px 16px rgba(0,0,0,0.2)"}}>
+                  {pInv && (
+                    <div style={{fontSize:12,color:"#fbbf24",fontWeight:800,marginBottom:10,padding:"8px 10px",background:"rgba(251,191,36,0.15)",borderRadius:8,border:"1px solid #f59e0b"}}>
+                      🏀 Your opponent: {opponentName}
+                    </div>
+                  )}
                   <div style={{fontSize:10,color:"#64748b",letterSpacing:1,marginBottom:6,textTransform:"uppercase",fontWeight:700}}>Selected matchup</div>
                   <div style={{fontWeight:800,fontSize: isMobile ? 15 : 14,color:"#e2e8f0",marginBottom:8,lineHeight:1.3}}>{matchup.label}</div>
-                  {pInv && (matchup.top?.isPlayer ? matchup.bot?.name : matchup.bot?.isPlayer ? matchup.top?.name : null) && (
-                    <div style={{fontSize:11,color:"#f59e0b",fontWeight:700,marginBottom:8}}>Your opponent: {matchup.top?.isPlayer ? matchup.bot?.name : matchup.top?.name}</div>
-                  )}
                   <div style={{display:"flex",alignItems:"center",gap: isMobile ? 8 : 12,flexWrap:"wrap",marginBottom:12}}>
                     <span style={{fontSize: isMobile ? 13 : 12,color:"#94a3b8",flex: isMobile ? "1 1 100%" : undefined}}>{matchup.top?.name ?? "TBD"}</span>
                     <span style={{fontSize: isMobile ? 16 : 14,fontWeight:900,color:"#64748b",flexShrink:0}}>{wT} – {wB}</span>
@@ -2759,6 +2772,7 @@ if(phase==="teamSetup") return(
             const matchup = parsed?.matchup;
             if (!matchup || matchup.winner || !matchup.top || !matchup.bot) return null;
             const pInv = matchup.top?.isPlayer || matchup.bot?.isPlayer;
+            const oppName = pInv ? (matchup.top?.isPlayer ? matchup.bot?.name : matchup.top?.name) ?? null : null;
             const btnLabel = pInv ? `▶ Play Game ${matchup.games.length + 1}` : `⚡ Sim Game ${matchup.games.length + 1}`;
             return (
               <div style={{ position:"fixed", left:12, right:12, bottom:12, background:"linear-gradient(180deg,#0f172a 0%,#0b1220 100%)", border:"1px solid #334155", borderRadius:14, padding:12, boxShadow:"0 10px 30px rgba(0,0,0,0.45)", zIndex:50 }}>
@@ -2766,6 +2780,7 @@ if(phase==="teamSetup") return(
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:10, color:"#64748b", fontWeight:900, letterSpacing:1, textTransform:"uppercase" }}>Selected</div>
                     <div style={{ fontSize:12, color:"#e2e8f0", fontWeight:900, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{matchup.label}</div>
+                    {oppName && <div style={{ fontSize:11, color:"#fbbf24", fontWeight:700, marginTop:2 }}>vs {oppName}</div>}
                   </div>
                   <button onClick={()=>playPlayoffGame(activeMatchId)} style={{ background: pInv ? "linear-gradient(135deg,#22c55e,#16a34a)" : "linear-gradient(135deg,#475569,#64748b)", color:"white", border:"none", borderRadius:12, padding:"12px 14px", fontSize:13, fontWeight:900, minHeight:44, cursor:"pointer", flexShrink:0 }}>
                     {btnLabel}
@@ -3089,7 +3104,32 @@ if(phase==="teamSetup") return(
                   {leaderReb && <div>{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG)</div>}
                   {leaderAst && <div>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG)</div>}
                   {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name}>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</div> : null; })}
-                  {bestWin && <div>Best win: {bestWin.myScore}–{bestWin.oppScore} over the {bestWin.oppName || "Opponent"}{bestWin.oppName ? (String(bestWin.oppName).endsWith("s") ? "'" : "'s") : ""} — {bestWin.pog?.name || "—"} won Player of the Game</div>}
+                  {bestWin && (() => {
+              const oppLabel = (bestWin.oppName || "Opponent") + (bestWin.oppName ? (String(bestWin.oppName).endsWith("s") ? "'" : "'s") : "");
+              const p = bestWin.pog;
+              if (!p?.name) return <div>Best win: {bestWin.myScore}–{bestWin.oppScore} over the {oppLabel}.</div>;
+              const pts = p.pts != null ? Number(p.pts) : null;
+              const reb = p.reb != null ? Number(p.reb) : null;
+              const ast = p.ast != null ? Number(p.ast) : null;
+              const stl = p.stl != null ? Number(p.stl) : null;
+              const blk = p.blk != null ? Number(p.blk) : null;
+              const tpm = p.tpm != null ? Number(p.tpm) : null;
+              const tpa = p.tpa != null ? Number(p.tpa) : null;
+              const parts = [];
+              if (pts != null) parts.push(`${pts} point${pts === 1 ? "" : "s"}`);
+              if (reb != null) parts.push(`${reb} rebound${reb === 1 ? "" : "s"}`);
+              if (ast != null) parts.push(`${ast} assist${ast === 1 ? "" : "s"}`);
+              if (stl != null && stl > 0) parts.push(`${stl} steal${stl === 1 ? "" : "s"}`);
+              if (blk != null && blk > 0) parts.push(`${blk} block${blk === 1 ? "" : "s"}`);
+              const statLine = parts.length > 0 ? parts.join(", ") : null;
+              const threeLine = (tpa != null && tpa > 0 && tpm != null) ? ` and went ${tpm}-for-${tpa} from three` : (tpm != null && tpm > 0 ? ` and hit ${tpm} three${tpm === 1 ? "" : "s"}` : "");
+              return (
+                <div>
+                  Best win: {bestWin.myScore}–{bestWin.oppScore} over the {oppLabel} — {p.name} won Player of the Game
+                  {statLine ? <> with {statLine}{threeLine}.</> : threeLine ? <> and performed well from three.</> : "."}
+                </div>
+              );
+            })()}
                 </div>
               </div>
             );
