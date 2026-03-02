@@ -98,25 +98,27 @@ export function processCSV(text) {
     const blk = num(row, "blk");
 
     // Turnovers: many older seasons don't track TOV. When the CSV column is
-    // missing or empty for a pre-1978 season, estimate a reasonable value
-    // instead of treating it as 0 (which would unfairly help those players).
+    // missing or effectively unknown for a pre-1978 season, estimate a
+    // reasonable value instead of treating it as 0 (which would unfairly help
+    // those players).
     let tov = 0;
     const tovCol = idx("tov");
     const rawTov = tovCol >= 0 ? get(row, "tov") : "";
-    const hasTovStat = tovCol >= 0 && rawTov !== "";
-    if (hasTovStat) {
-      tov = parseFloat(rawTov) || 0;
+    const seasonStartYear = parseInt(String(season).slice(0, 4), 10);
+    const needsEstimate = Number.isFinite(seasonStartYear) && seasonStartYear < 1978;
+    const parsedTov = rawTov === "" ? NaN : parseFloat(rawTov);
+    const hasRecordedTov = tovCol >= 0 && rawTov !== "" && !Number.isNaN(parsedTov);
+    const treatAsMissing = needsEstimate && (!hasRecordedTov || parsedTov === 0);
+
+    if (treatAsMissing) {
+      // Simple usage-based estimate: higher scoring / assisting players
+      // commit more turnovers; low-usage bigs commit fewer.
+      const usageProxy = (ppg || pts) + (apg || ast) * 1.5;
+      tov = Math.max(0.8, usageProxy * 0.07);
+    } else if (hasRecordedTov) {
+      tov = parsedTov || 0;
     } else {
-      const seasonStartYear = parseInt(String(season).slice(0, 4), 10);
-      const needsEstimate = Number.isFinite(seasonStartYear) && seasonStartYear < 1978;
-      if (needsEstimate) {
-        // Simple usage-based estimate: higher scoring / assisting players
-        // commit more turnovers; low-usage bigs commit fewer.
-        const usageProxy = (ppg || pts) + (apg || ast) * 1.5;
-        tov = Math.max(0.8, usageProxy * 0.07);
-      } else {
-        tov = 0;
-      }
+      tov = 0;
     }
     const fg = num(row, "fg");
     const ts = num(row, "ts");
