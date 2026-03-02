@@ -40,8 +40,8 @@ export const MVP = {
 /** DPOY: per-game votes. Base = stl*S + blk*B + reb*R, +pogBonus POG, +winBonus win. */
 export const DPOY = {
   stl: 3.0,
-  blk: 2.5,
-  reb: 0.03,
+  blk: 2.0,
+  reb: 0.05,
   pogBonus: 1,
   winBonus: 12,
 };
