@@ -49,7 +49,9 @@ export function TeamStatsPanel({ teamName, playerSeasonRows, playerPlayoffRows, 
               const pg = (k) => (r[k] ?? 0) / gp;
               const val = (k) => rf(pg(k) * mult, 1);
               const fgPct = r.fga > 0 ? rf((r.fgm / r.fga) * 100, 1) : null;
-              const tpPct = r.tpa > 0 ? rf((r.tpm / r.tpa) * 100, 1) : null;
+              const tpPctRaw = r.tpa > 0 ? rf((r.tpm / r.tpa) * 100, 1) : null;
+              const qualifiesFor3Pct = r.tpa >= gp * 3;
+              const tpPct = qualifiesFor3Pct ? tpPctRaw : null;
               const ftPct = r.fta > 0 ? rf((r.ftm / r.fta) * 100, 1) : null;
               return (
                 <details key={`${label}-${r.name}`} style={{ background: "#020617", border: "1px solid #1e293b", borderRadius: 12, padding: 12 }}>
@@ -121,7 +123,8 @@ export function TeamStatsPanel({ teamName, playerSeasonRows, playerPlayoffRows, 
                 const pg = (k) => (r[k] ?? 0) / gp;
                 const val = (k) => fmt1(pg(k) * mult);
                 const fgPct = r.fga > 0 ? rf((r.fgm / r.fga) * 100, 1) : "—";
-                const tpPct = r.tpa > 0 ? rf((r.tpm / r.tpa) * 100, 1) : "—";
+                const qualifiesFor3Pct = r.tpa >= gp * 3;
+                const tpPct = qualifiesFor3Pct && r.tpa > 0 ? rf((r.tpm / r.tpa) * 100, 1) : "—";
                 const ftPct = r.fta > 0 ? rf((r.ftm / r.fta) * 100, 1) : "—";
                 return (
                   <tr key={r.name} style={{ borderBottom: "1px solid #0d1626" }}>

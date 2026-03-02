@@ -1432,6 +1432,7 @@ const soundtrackRef = useRef(null);
     const leaderEntries = Object.values(leagueLeaders);
     const leagueRows = leaderEntries.map((p) => {
       const gp = p.gp || 1;
+      const qualifiesFor3Pct = p.tpa >= gp * 3;
       return {
         ...p,
         name: p.name,
@@ -1445,7 +1446,7 @@ const soundtrackRef = useRef(null);
         bpg: p.blk / gp,
         tpg: p.tov / gp,
         fgPct: p.fga > 0 ? (p.fgm / p.fga) * 100 : 0,
-        tpPct: p.tpa > 0 ? (p.tpm / p.tpa) * 100 : 0,
+        tpPct: qualifiesFor3Pct && p.tpa > 0 ? (p.tpm / p.tpa) * 100 : 0,
         teamPct: teamWinPct[p.team] ?? 0.4,
       };
     });
@@ -4030,7 +4031,8 @@ if(phase==="teamSetup") return(
         const bpg = p.blk / gp;
         const tpg = p.tov / gp;
         const fgPct = p.fga > 0 ? (p.fgm / p.fga) * 100 : 0;
-        const tpPct = p.tpa > 0 ? (p.tpm / p.tpa) * 100 : 0;
+        const qualifiesFor3Pct = p.tpa >= gp * 3;
+        const tpPct = qualifiesFor3Pct && p.tpa > 0 ? (p.tpm / p.tpa) * 100 : 0;
         const teamPct = teamWinPct[p.team] ?? 0.4;
         return { ...p, gp, ppg, rpg, apg, spg, bpg, tpg, fgPct, tpPct, teamPct };
       });

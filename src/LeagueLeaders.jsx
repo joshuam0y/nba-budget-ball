@@ -62,20 +62,15 @@ export function LeagueLeaders({ leaders, myTeamName }) {
         ftPct,
       };
     });
-    // Qualification filters so low-volume guys don't top % leaderboards.
+    // Qualification helpers so low-volume guys don't top % leaderboards.
+    const qualifiesFor3Pct = (p) => p.tpa >= p.gp * 3;      // at least 3 3PA per game
+    const qualifiesForFgPct = (p) => p.fga >= p.gp * 8;     // at least 8 FGA per game
+    const qualifiesForFtPct = (p) => p.fta >= p.gp * 2;     // at least 2 FTA per game
+
     const qualified = enriched.filter((p) => {
-      if (stat === "tpPct") {
-        // Require at least 3 three-point attempts per game on average.
-        return p.tpa >= p.gp * 3;
-      }
-      if (stat === "fgPct") {
-        // Require at least 8 FGA per game.
-        return p.fga >= p.gp * 8;
-      }
-      if (stat === "ftPct") {
-        // Require at least 2 FTA per game.
-        return p.fta >= p.gp * 2;
-      }
+      if (stat === "tpPct") return qualifiesFor3Pct(p);
+      if (stat === "fgPct") return qualifiesForFgPct(p);
+      if (stat === "ftPct") return qualifiesForFtPct(p);
       return true;
     });
     // Map stat key to actual sort field (totals like fgm/fga/tpm/tpa/ftm/fta have per-game names: fgmg, fgag, etc.; per36 uses *36 suffix)
@@ -319,7 +314,7 @@ export function LeagueLeaders({ leaders, myTeamName }) {
                   <td style={{ padding: "5px 8px", textAlign: "center" }}>{fmt0(p.fta || 0)}</td>
                   <td style={{ padding: "5px 8px", textAlign: "center" }}>{fmt1(p.fgPct)}%</td>
                   <td style={{ padding: "5px 8px", textAlign: "center" }}>
-                    {p.tpa === 0 ? "N/A" : `${fmt1(p.tpPct)}%`}
+                    {qualifiesFor3Pct(p) ? `${fmt1(p.tpPct)}%` : "N/A"}
                   </td>
                   <td style={{ padding: "5px 8px", textAlign: "center" }}>{fmt1(p.ftPct)}%</td>
                 </tr>
