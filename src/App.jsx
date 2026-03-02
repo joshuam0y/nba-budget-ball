@@ -693,10 +693,10 @@ export default function App(){
   const [bracket,setBracket]=useState(null);
   const [playoffResult,setPlayoffResult]=useState(null);
   const [activeMatchId,setActiveMatchId]=useState(null);
-  const [showStandings,setShowStandings]=useState(false);
+  const [showStandings,setShowStandings]=useState(true);
   const [elimInPlayoffs,setElimInPlayoffs]=useState(false);
   const [showHelp,setShowHelp]=useState(false);
-  const [showLeaders,setShowLeaders]=useState(false);
+  const [showLeaders,setShowLeaders]=useState(true);
   const [leagueLeaders,setLeagueLeaders]=useState({});
   const [seasonHighs,setSeasonHighs]=useState({});
   const [playoffLeaders,setPlayoffLeaders]=useState({});
@@ -726,8 +726,8 @@ export default function App(){
   const [dpoyVotes, setDpoyVotes] = useState({});
   const [allStarSelections, setAllStarSelections] = useState(null);
   const [showAllStarSimThroughConfirm, setShowAllStarSimThroughConfirm] = useState(false);
-  const [showAllStarTab, setShowAllStarTab] = useState(false);
-  const [showMvpDpoyTab, setShowMvpDpoyTab] = useState(false);
+  const [showAllStarTab, setShowAllStarTab] = useState(true);
+  const [showMvpDpoyTab, setShowMvpDpoyTab] = useState(true);
   const [allStarRetry, setAllStarRetry] = useState(0);
   const simThroughBreakRequestedRef = useRef(false);
   const allStarPendingSimCountRef = useRef(null);
