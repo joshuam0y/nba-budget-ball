@@ -116,7 +116,9 @@ const ACHIEVEMENT_META = {
   second_round: { category: "Playoff runs", difficulty: 2 },
   elimination_win: { category: "Playoff runs", difficulty: 3 },
   beat_every_team: { category: "Season milestones", difficulty: 4 },
-  all_league_leaders: { category: "Player awards", difficulty: 6 },
+  all_league_leaders: { category: "Player awards", difficulty: 5 },
+  make_finals: { category: "Playoff runs", difficulty: 2 },
+  three_point_leader: { category: "Player awards", difficulty: 3 },
 
   // Career / longevity
   seasons_10: { category: "Career grind", difficulty: 2 },
@@ -1519,9 +1521,15 @@ const soundtrackRef = useRef(null);
       if (astLeader && rosterNames.has(astLeader.name) && unlockAchievementForSave("assists_leader")) unlocked.push("assists_leader");
       if (stlLeader && rosterNames.has(stlLeader.name) && unlockAchievementForSave("steals_leader")) unlocked.push("steals_leader");
       if (blkLeader && rosterNames.has(blkLeader.name) && unlockAchievementForSave("blocks_leader")) unlocked.push("blocks_leader");
-      if (ptsLeader && rebLeader && astLeader && stlLeader && blkLeader &&
-          rosterNames.has(ptsLeader.name) && rosterNames.has(rebLeader.name) && rosterNames.has(astLeader.name) && rosterNames.has(stlLeader.name) && rosterNames.has(blkLeader.name) &&
-          unlockAchievementForSave("all_league_leaders")) unlocked.push("all_league_leaders");
+      const tpmLeader = leaderEntries.length > 0 ? withPerGame.reduce((best, r) => (!best || (r.tpm || 0) > (best.tpm || 0) ? r : best), null) : null;
+      if (tpmLeader && rosterNames.has(tpmLeader.name) && unlockAchievementForSave("three_point_leader")) unlocked.push("three_point_leader");
+      const teamEntries = leaderEntries.filter((r) => rosterNames.has(r.name));
+      if (teamEntries.length > 0) {
+        const teamWithPG = teamEntries.map((p) => { const gp = p.gp || 1; return { ...p, ppg: (p.pts || 0) / gp, rpg: (p.reb || 0) / gp, apg: (p.ast || 0) / gp, spg: (p.stl || 0) / gp, bpg: (p.blk || 0) / gp }; });
+        const teamBest = (key) => teamWithPG.reduce((b, r) => (!b || (r[key] || 0) > (b[key] || 0) ? r : b), null);
+        const tp = teamBest("ppg"), tr = teamBest("rpg"), ta = teamBest("apg"), tst = teamBest("spg"), tb = teamBest("bpg");
+        if (tp && tr && ta && tst && tb && tp.name === tr.name && tr.name === ta.name && ta.name === tst.name && tst.name === tb.name && unlockAchievementForSave("all_league_leaders")) unlocked.push("all_league_leaders");
+      }
     }
     const opponentsBeaten = new Set((seasonGameResults || []).filter((r) => r?.won && r?.oppName).map((r) => r.oppName));
     if (opponentsBeaten.size >= 29 && unlockAchievementForSave("beat_every_team")) unlocked.push("beat_every_team");
@@ -1723,6 +1731,7 @@ const soundtrackRef = useRef(null);
       setLastEliminatorTeamName(null);
     }
     if (madeFinals && unlockAchievementForSave("first_finals")) ach.push("first_finals");
+    if (madeFinals && unlockAchievementForSave("make_finals")) ach.push("make_finals");
     if (wonChip && careerStats?.lastSeasonMadePlayoffs === false && unlockAchievementForSave("bounce_back")) ach.push("bounce_back");
     if (wonChip && teamsDefeatedInPlayoffs?.length > 0 && seasonGameResults?.length > 0) {
       const regWinsVs = {};
@@ -4039,19 +4048,22 @@ if(phase==="teamSetup") return(
             const leaderAst = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.apg || 0) > (best.apg || 0) ? p : best), null) : null;
             const leaderStl = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.spg || 0) > (best.spg || 0) ? p : best), null) : null;
             const leaderBlk = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.bpg || 0) > (best.bpg || 0) ? p : best), null) : null;
+            const leaderTpm = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.tpm || 0) > (best.tpm || 0) ? p : best), null) : null;
             const leagueChampSuffix = (() => {
               const MIN_GP = 41;
               const entries = Object.values(leagueLeaders || {}).filter((r) => r && (r.gp || 0) >= MIN_GP);
-              if (!entries.length) return { pts: "", reb: "", ast: "", stl: "", blk: "" };
+              if (!entries.length) return { pts: "", reb: "", ast: "", stl: "", blk: "", tpm: "" };
               const withPG = entries.map((p) => ({ ...p, gp: p.gp || 1, ppg: (p.pts || 0) / (p.gp || 1), rpg: (p.reb || 0) / (p.gp || 1), apg: (p.ast || 0) / (p.gp || 1), spg: (p.stl || 0) / (p.gp || 1), bpg: (p.blk || 0) / (p.gp || 1) }));
               const best = (key) => withPG.reduce((b, r) => (!b || (r[key] || 0) > (b[key] || 0) ? r : b), null);
               const ptsL = best("ppg"), rebL = best("rpg"), astL = best("apg"), stlL = best("spg"), blkL = best("bpg");
+              const tpmL = entries.reduce((b, r) => (!b || (r.tpm || 0) > (b.tpm || 0) ? r : b), null);
               return {
                 pts: leaderPts && ptsL && leaderPts.name === ptsL.name ? " (scoring champion)" : "",
                 reb: leaderReb && rebL && leaderReb.name === rebL.name ? " (rebounding champion)" : "",
                 ast: leaderAst && astL && leaderAst.name === astL.name ? " (assists leader)" : "",
                 stl: leaderStl && stlL && leaderStl.name === stlL.name ? " (steals leader)" : "",
                 blk: leaderBlk && blkL && leaderBlk.name === blkL.name ? " (blocks leader)" : "",
+                tpm: leaderTpm && tpmL && leaderTpm.name === tpmL.name ? " (3-point leader)" : "",
               };
             })();
             const careerAllStarCount = (name) => (playerAwards[name] || []).filter((e) => e.award && String(e.award).startsWith("AS-")).length;
@@ -4141,6 +4153,7 @@ if(phase==="teamSetup") return(
                   {leaderAst && <div key="ast" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #38bdf8"}}><span style={{color:"#38bdf8",fontSize:14}}>🎯</span><span>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG){leagueChampSuffix.ast}</span></div>}
                   {leaderStl && <div key="stl" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #a78bfa"}}><span style={{color:"#a78bfa",fontSize:14}}>✋</span><span>{leaderStl.name} led the team in steals ({rf(leaderStl.spg, 1)} SPG){leagueChampSuffix.stl}</span></div>}
                   {leaderBlk && <div key="blk" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #64748b"}}><span style={{color:"#64748b",fontSize:14}}>🚫</span><span>{leaderBlk.name} led the team in blocks ({rf(leaderBlk.bpg, 1)} BPG){leagueChampSuffix.blk}</span></div>}
+                  {leaderTpm && <div key="tpm" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #eab308"}}><span style={{color:"#eab308",fontSize:14}}>🎯</span><span>{leaderTpm.name} led the team in 3PM ({leaderTpm.tpm ?? 0} 3PM){leagueChampSuffix.tpm}</span></div>}
                   {bestStreak > 0 && <div key="streak" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #fbbf24"}}><span style={{color:"#fbbf24",fontSize:14}}>🔥</span><span>Best win streak: {bestStreak} games</span></div>}
                   {allStarCount > 0 && <div key="allstar" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f59e0b"}}><span style={{color:"#f59e0b",fontSize:14}}>⭐</span><span>All-Stars: {allStarCount}</span></div>}
                   {bestWin && (() => {

@@ -67,7 +67,9 @@ export const ACHIEVEMENTS = [
   { id: "elimination_win", label: "Elimination win", desc: "Win a playoff game when facing elimination", icon: "💪" },
   { id: "second_round", label: "Second round", desc: "Reach the second round of the playoffs", icon: "📈" },
   { id: "double_double", label: "Double-double", desc: "A player has 10+ in two of points, rebounds, and assists in a game", icon: "📊" },
-  { id: "all_league_leaders", label: "All league leaders", desc: "Your team has the league leader in all five stats (pts, reb, ast, stl, blk) in one season", icon: "👑" },
+  { id: "all_league_leaders", label: "Led team in all 5", desc: "One player leads your team in points, rebounds, assists, steals, and blocks in a season", icon: "👑" },
+  { id: "make_finals", label: "Make the Finals", desc: "Reach the NBA Finals", icon: "🏆" },
+  { id: "three_point_leader", label: "3-point leader", desc: "Your player leads the league in 3PM (three-pointers made)", icon: "🎯" },
 ];
 
 const STORAGE_KEY = "nba_budget_ball_achievements";
