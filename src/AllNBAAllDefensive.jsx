@@ -98,7 +98,7 @@ export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
 }
 
 /**
- * All-Defensive: reflects DPOY race when dpoyVotes provided (2 G, 2 F, 1 C per team).
+ * All-Defensive: reflects DPOY race when dpoyVotes provided (2 G, 3 F/C per team).
  * With dpoyVotes: sort by vote total per position — DPOY winner = 1st team at his position, 2nd = 2nd team, etc.
  * Without dpoyVotes: fallback to defensive stat score (2 G, 3 F/C).
  */
@@ -119,18 +119,10 @@ export function buildAllDefensiveTeams(players, teamWinPct, dpoyVotes = null) {
 
   if (useVotes) {
     guards.sort((a, b) => getVotes(b) - getVotes(a));
-    forwards.sort((a, b) => getVotes(b) - getVotes(a));
-    centers.sort((a, b) => getVotes(b) - getVotes(a));
-    const first = [
-      ...guards.slice(0, 2),
-      ...forwards.slice(0, 2),
-      ...centers.slice(0, 1),
-    ];
-    const second = [
-      ...guards.slice(2, 4),
-      ...forwards.slice(2, 4),
-      ...centers.slice(1, 2),
-    ];
+    const frontcourt = [...forwards, ...centers];
+    frontcourt.sort((a, b) => getVotes(b) - getVotes(a));
+    const first = [...guards.slice(0, 2), ...frontcourt.slice(0, 3)];
+    const second = [...guards.slice(2, 4), ...frontcourt.slice(3, 6)];
     return { first, second };
   }
 
@@ -259,7 +251,7 @@ export function AllNBAAllDefensive({ leaders, teamRecords, myTeamName, dpoyVotes
         🏅 ALL-NBA & ALL-DEFENSIVE
       </div>
       <div style={{ fontSize: 9, color: "#64748b", marginBottom: 10 }}>
-        All-NBA: 1 C, 2 F, 2 G per team · PPG/RPG/APG/efficiency + small record bump. All-Defensive: 2 G, 2 F, 1 C · follows DPOY race. Green = your team.
+        All-NBA: 1 C, 2 F, 2 G per team · PPG/RPG/APG/efficiency + small record bump. All-Defensive: 2 G, 3 F/C · follows DPOY race. Green = your team.
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

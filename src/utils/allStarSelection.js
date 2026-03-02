@@ -3,7 +3,7 @@ import { playerVoteKey, ALL_STAR, MVP, DPOY } from "./awardConstants";
 export { playerVoteKey };
 
 /**
- * All-Star selection: East vs West, position-based (2G, 2F, 1C starters + 2G, 2F, 1C + 2 wildcards reserves).
+ * All-Star selection: East vs West, position-based (2G, 3 F/C starters + 2G, 3 F/C + 2 wildcards reserves).
  * Order is by accumulated VOTES (see awardConstants.ALL_STAR). When votesMap is provided we use it; otherwise fallback to legacy score.
  */
 
@@ -168,28 +168,25 @@ export function buildAllStarSelections(leagueLeaderEntries, gamePogs, teamWinPct
 
     const { guard, forward, center } = groupByPosition(players);
     guard.sort(sortFn);
-    forward.sort(sortFn);
-    center.sort(sortFn);
+    const frontcourt = [...forward, ...center];
+    frontcourt.sort(sortFn);
 
-    // Starters: top 2G, 2F, 1C by votes/score (no per-team cap).
+    // Starters: top 2G, 3 F/C by votes/score (no per-team cap).
     const starterG = guard.slice(0, 2);
-    const starterF = forward.slice(0, 2);
-    const starterC = center.slice(0, 1);
-    const starters = [...starterG, ...starterF, ...starterC].map((p) => ({ ...p, allStarRole: "Starter" }));
+    const starterFC = frontcourt.slice(0, 3);
+    const starters = [...starterG, ...starterFC].map((p) => ({ ...p, allStarRole: "Starter" }));
     result[conf.toLowerCase()].starters = starters;
 
-    // Reserves: next 2G, 2F, 1C + 2 wildcards by votes/score, excluding starters (no per-team cap).
+    // Reserves: next 2G, 3 F/C + 2 wildcards by votes/score, excluding starters (no per-team cap).
     const used = new Set(starters.map((p) => playerVoteKey(p.name, p.team)));
     const usedKey = (p) => used.has(playerVoteKey(p.name, p.team));
     const reserveG = guard.filter((p) => !usedKey(p)).slice(0, 2);
-    const reserveF = forward.filter((p) => !usedKey(p)).slice(0, 2);
-    const reserveC = center.filter((p) => !usedKey(p)).slice(0, 1);
+    const reserveFC = frontcourt.filter((p) => !usedKey(p)).slice(0, 3);
     reserveG.forEach((p) => used.add(playerVoteKey(p.name, p.team)));
-    reserveF.forEach((p) => used.add(playerVoteKey(p.name, p.team)));
-    reserveC.forEach((p) => used.add(playerVoteKey(p.name, p.team)));
-    const remaining = [...guard, ...forward, ...center].filter((p) => !usedKey(p)).sort(sortFn);
+    reserveFC.forEach((p) => used.add(playerVoteKey(p.name, p.team)));
+    const remaining = [...guard, ...frontcourt].filter((p) => !usedKey(p)).sort(sortFn);
     const wildcards = remaining.slice(0, 2);
-    const reserves = [...reserveG, ...reserveF, ...reserveC, ...wildcards].map((p) => ({
+    const reserves = [...reserveG, ...reserveFC, ...wildcards].map((p) => ({
       ...p,
       allStarRole: "Reserve",
     }));

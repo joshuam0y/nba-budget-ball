@@ -4857,26 +4857,42 @@ if(phase==="teamSetup") return(
             (aiTeams || []).forEach((t) => { if (t.conference && conferenceTeams[t.conference]) conferenceTeams[t.conference].push(t.name); });
             buildAllStarSelections(leaderEntries, gamePogs.slice(0, gp), teamWinPct, conferenceTeams, allStarVotes);
             const getVotes = (p) => (p._allStarVotes ?? allStarVotes[playerVoteKey(p.name, p.team)]) ?? 0;
-            const top12ByVotes = (confKey) => leaderEntries
-              .filter((r) => (conferenceTeams[confKey] || []).includes(r.team))
-              .sort((a, b) => (b._allStarVotes ?? 0) - (a._allStarVotes ?? 0))
-              .slice(0, 12);
-            const topEast = top12ByVotes("East");
-            const topWest = top12ByVotes("West");
+            const isGuard = (pos) => { const p = (pos || "").toUpperCase(); return p === "PG" || p === "SG" || p === "G"; };
+            const isFC = (pos) => !isGuard(pos);
+            const topByConf = (confKey) => {
+              const conf = leaderEntries.filter((r) => (conferenceTeams[confKey] || []).includes(r.team));
+              const guards = conf.filter((r) => isGuard(r.pos)).sort((a, b) => (b._allStarVotes ?? 0) - (a._allStarVotes ?? 0)).slice(0, 10);
+              const fc = conf.filter((r) => isFC(r.pos)).sort((a, b) => (b._allStarVotes ?? 0) - (a._allStarVotes ?? 0)).slice(0, 10);
+              return { guards, fc };
+            };
+            const eastRace = topByConf("East");
+            const westRace = topByConf("West");
             const isMyPlayer = (p) => p?.team === myTeamName;
             const raceRowStyle = (p) => ({ color: isMyPlayer(p) ? "#22c55e" : "#e2e8f0", fontWeight: isMyPlayer(p) ? 700 : 400, background: isMyPlayer(p) ? "rgba(34,197,94,0.2)" : "transparent", padding: isMyPlayer(p) ? "2px 4px" : 0, borderRadius: 4 });
+            const ConfColumns = ({ confLabel, color, guards, fc }) => (
+              <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,fontSize:10}}>
+                <div>
+                  <div style={{color,fontWeight:700,marginBottom:4}}>{confLabel} Guards</div>
+                  {guards.map((p,i)=>(<div key={`g-${i}`} style={raceRowStyle(p)}>{i+1}. {p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} <span style={{color:"#94a3b8",fontWeight:500}}>({Math.round(getVotes(p))})</span></div>))}
+                </div>
+                <div>
+                  <div style={{color,fontWeight:700,marginBottom:4}}>{confLabel} F/C</div>
+                  {fc.map((p,i)=>(<div key={`fc-${i}`} style={raceRowStyle(p)}>{i+1}. {p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} <span style={{color:"#94a3b8",fontWeight:500}}>({Math.round(getVotes(p))})</span></div>))}
+                </div>
+              </div>
+            );
             return (
               <div style={{marginBottom:10,background:"#0f172a",borderRadius:10,padding:12,border:"1px solid #334155"}}>
                 <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:4}}>⭐ ALL-STAR RACE (through Game {gp})</div>
-                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>Order = votes. Votes = per game: pts + 0.5·reb + 0.5·ast, +5 POG, +2 win.</div>
-                <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,fontSize:10}}>
-                  <div>
-                    <div style={{color:"#60a5fa",fontWeight:700,marginBottom:4}}>East</div>
-                    {topEast.map((p,i)=>(<div key={i} style={raceRowStyle(p)}>{i+1}. {p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos || "—"})</span> · {p.team} <span style={{color:"#94a3b8",fontWeight:500}}>({Math.round(getVotes(p))} votes)</span></div>))}
+                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>Top 10 Guards · Top 10 F/C by votes. Votes = pts + 0.5·reb + 0.5·ast, +5 POG, +4 win.</div>
+                <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:16}}>
+                  <div style={{background:"#1e293b",borderRadius:8,padding:10,border:"1px solid #3b82f6"}}>
+                    <div style={{color:"#60a5fa",fontWeight:700,marginBottom:4}}>EAST</div>
+                    <ConfColumns confLabel="East" color="#60a5fa" guards={eastRace.guards} fc={eastRace.fc} />
                   </div>
-                  <div>
-                    <div style={{color:"#f87171",fontWeight:700,marginBottom:4}}>West</div>
-                    {topWest.map((p,i)=>(<div key={i} style={raceRowStyle(p)}>{i+1}. {p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos || "—"})</span> · {p.team} <span style={{color:"#94a3b8",fontWeight:500}}>({Math.round(getVotes(p))} votes)</span></div>))}
+                  <div style={{background:"#1e293b",borderRadius:8,padding:10,border:"1px solid #ef4444"}}>
+                    <div style={{color:"#f87171",fontWeight:700,marginBottom:4}}>WEST</div>
+                    <ConfColumns confLabel="West" color="#f87171" guards={westRace.guards} fc={westRace.fc} />
                   </div>
                 </div>
               </div>
