@@ -4510,12 +4510,13 @@ if(phase==="teamSetup") return(
             if (!withPG.length) return null;
             const topN = (key, n = 3) =>
               [...withPG].sort((a, b) => (b[key] || 0) - (a[key] || 0)).slice(0, n);
+            const fmtRate1 = (v) => (Number.isFinite(Number(v)) ? Number(v).toFixed(1) : "0.0");
             const categories = [
-              { key: "ppg", label: "Scoring leader", fmt: (p) => `${rf(p.ppg, 1)} PPG` },
-              { key: "rpg", label: "Rebounding leader", fmt: (p) => `${rf(p.rpg, 1)} RPG` },
-              { key: "apg", label: "Assist leader", fmt: (p) => `${rf(p.apg, 1)} APG` },
-              { key: "spg", label: "Steals leader", fmt: (p) => `${rf(p.spg, 1)} SPG` },
-              { key: "bpg", label: "Blocks leader", fmt: (p) => `${rf(p.bpg, 1)} BPG` },
+              { key: "ppg", label: "Scoring leader", fmt: (p) => `${fmtRate1(p.ppg)} PPG` },
+              { key: "rpg", label: "Rebounding leader", fmt: (p) => `${fmtRate1(p.rpg)} RPG` },
+              { key: "apg", label: "Assist leader", fmt: (p) => `${fmtRate1(p.apg)} APG` },
+              { key: "spg", label: "Steals leader", fmt: (p) => `${fmtRate1(p.spg)} SPG` },
+              { key: "bpg", label: "Blocks leader", fmt: (p) => `${fmtRate1(p.bpg)} BPG` },
               { key: "tpm", label: "3-point leader", fmt: (p) => `${p.tpm ?? 0} 3PM` },
             ];
             const isMyPlayer = (p) => p?.team === myTeamName;
