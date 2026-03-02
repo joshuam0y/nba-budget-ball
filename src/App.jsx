@@ -3572,9 +3572,6 @@ if(phase==="teamSetup") return(
         {isMobile && sidebarHidden && (
           <button onClick={()=>setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
         )}
-        {isMobile && sidebarHidden && (
-          <button onClick={()=>setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
-        )}
         <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:isMobile&&sidebarHidden?"none":"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
           {isMobile && (
             <button onClick={()=>setSidebarHidden(true)} style={{alignSelf:"flex-end",marginBottom:6,background:"transparent",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}} title="Hide menu">⯈</button>
@@ -4093,9 +4090,6 @@ if(phase==="teamSetup") return(
     }
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex"}}>
-        {isMobile && sidebarHidden && (
-          <button onClick={()=>setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
-        )}
         {isMobile && sidebarHidden && (
           <button onClick={()=>setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
         )}
@@ -5532,6 +5526,9 @@ if(phase==="teamSetup") return(
       <SpeedInsights />
 
       <div style={{ display: "flex", minHeight: "100vh" }}>
+        {isMobile && sidebarHidden && (
+          <button onClick={() => setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
+        )}
         {/* Left sidebar - menu off to the side */}
         <aside
           style={{
@@ -5542,7 +5539,7 @@ if(phase==="teamSetup") return(
             width: 120,
             background: "#0f172a",
             borderRight: "1px solid #1e293b",
-            display: "flex",
+            display: isMobile && sidebarHidden ? "none" : "flex",
             flexDirection: "column",
             alignItems: "stretch",
             paddingTop: 12,
@@ -5553,6 +5550,9 @@ if(phase==="teamSetup") return(
             overflow: "hidden",
           }}
         >
+          {isMobile && (
+            <button onClick={() => setSidebarHidden(true)} style={{alignSelf:"flex-end",marginBottom:6,background:"transparent",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}} title="Hide menu">⯈</button>
+          )}
           {phase !== "teamSetup" && (
             <button
               onClick={goToMainMenu}
@@ -5681,7 +5681,7 @@ if(phase==="teamSetup") return(
           </button>
         </aside>
 
-        <div style={{ marginLeft: 120, flex: 1, maxWidth: 1200, marginRight: "auto", paddingLeft: 16, paddingRight: 16, paddingBottom: 80 }}>
+        <div style={{ marginLeft: isMobile && sidebarHidden ? 0 : 120, flex: 1, maxWidth: 1200, marginRight: "auto", paddingLeft: 16, paddingRight: 16, paddingBottom: 80 }}>
         {/* Compact top bar */}
         <div
           style={{
