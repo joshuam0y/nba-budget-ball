@@ -33,6 +33,7 @@ import {
   addToSeason,
 } from "./sim";
 import { buildAllStarSelections, computeAllStarVotesForGame, computeMvpVotesForGame, computeDpoyVotesForGame, playerVoteKey } from "./utils/allStarSelection";
+import { gameScore } from "./utils/awardConstants";
 
 // Lazy-loaded heavy components for better initial bundle size
 const LeagueLeadersLazy = lazy(() =>
@@ -2366,7 +2367,6 @@ const soundtrackRef = useRef(null);
         ...(res.myStats || []).map((s) => ({ ...s, team: teamA.name })),
         ...(res.oppStats || []).map((s) => ({ ...s, team: teamB.name })),
       ];
-      const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.4 + (s.ast || 0) * 0.8;
       const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
       const voteDeltas = computeAllStarVotesForGame(res, teamA.name, teamB.name, pog, aWon);
       Object.entries(voteDeltas || {}).forEach(([key, v]) => { aiVoteDeltas[key] = (aiVoteDeltas[key] || 0) + (Number(v) || 0); });
@@ -2594,7 +2594,6 @@ const startSeason = async () => {
       ...(res.myStats || []).map((s) => ({ ...s, team: myTeamName })),
       ...(res.oppStats || []).map((s) => ({ ...s, team: opp?.name || "Opponent" })),
     ];
-    const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.4 + (s.ast || 0) * 0.8;
     const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
     if (pog) setGamePogs((prev) => { const n = [...prev]; n[dayIndex] = { name: pog.name, team: pog.team }; return n; });
     const voteDeltas = computeAllStarVotesForGame(res, myTeamName, opp?.name || "Opponent", pog, won);
@@ -2800,7 +2799,6 @@ const startSeason = async () => {
           ...(res.myStats || []).map((s) => ({ ...s, team: myTeamName })),
           ...(res.oppStats || []).map((s) => ({ ...s, team: opp?.name || "Opponent" })),
         ];
-        const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.4 + (s.ast || 0) * 0.8;
         const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
         const pogEntry = pog ? {
           name: pog.name,
@@ -4822,7 +4820,6 @@ if(phase==="teamSetup") return(
                 )}
                 {(() => {
                   const allStats = [...(result.myStats || []).map(s => ({ ...s, team: myTeamName })), ...(result.oppStats || []).map(s => ({ ...s, team: opp?.name || "Opponent" }))];
-                  const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.4 + (s.ast || 0) * 0.8;
                   const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
                   if (!pog) return null;
                   return (
@@ -4916,7 +4913,7 @@ if(phase==="teamSetup") return(
             return (
               <div style={{marginBottom:10,background:"#0f172a",borderRadius:10,padding:12,border:"1px solid #334155"}}>
                 <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:4}}>⭐ ALL-STAR RACE (through Game {gp})</div>
-                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>Top 10 Guards · Top 10 F/C by votes. Votes = pts + 0.4·reb + 0.8·ast, +5 POG, +4 win.</div>
+                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>Top 10 Guards · Top 10 F/C by votes. Votes = pts + 0.4·reb + 0.8·ast + 1.5·stl + 1·blk − 1·tov, +5 POG, +4 win.</div>
                 <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:16}}>
                   <div style={{background:"#1e293b",borderRadius:8,padding:10,border:"1px solid #3b82f6"}}>
                     <div style={{color:"#60a5fa",fontWeight:700,marginBottom:4}}>EAST</div>

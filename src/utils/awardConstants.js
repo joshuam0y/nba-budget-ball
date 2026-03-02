@@ -8,13 +8,22 @@ export function playerVoteKey(name, team) {
   return `${name}|${team}`;
 }
 
-/** All-Star: per-game votes. Base = pts + reb*R + ast*A, +pogBonus POG, +winBonus win. */
+/** All-Star: per-game votes. Base = pts + reb*R + ast*A + stl*S + blk*B - tov*T, +pogBonus POG, +winBonus win. */
 export const ALL_STAR = {
   reb: 0.4,
   ast: 0.8,
+  stl: 1.5,
+  blk: 1,
+  tov: 1, // subtracted
   pogBonus: 5,
   winBonus: 4, // Winning helps but doesn't overpower — stars on losing teams can still make it
 };
+
+/** Game score (POG + All-Star base). Same formula so one place to tune. */
+export function gameScore(s) {
+  if (!s) return 0;
+  return (Number(s.pts) || 0) + (Number(s.reb) || 0) * ALL_STAR.reb + (Number(s.ast) || 0) * ALL_STAR.ast + (Number(s.stl) || 0) * ALL_STAR.stl + (Number(s.blk) || 0) * ALL_STAR.blk - (Number(s.tov) || 0) * ALL_STAR.tov;
+}
 
 /** MVP: per-game votes. Base = pts*P + reb*R + ast*A, +pogBonus POG, +winBonus win. */
 export const MVP = {

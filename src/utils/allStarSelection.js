@@ -1,4 +1,4 @@
-import { playerVoteKey, ALL_STAR, MVP, DPOY } from "./awardConstants";
+import { playerVoteKey, ALL_STAR, MVP, DPOY, gameScore } from "./awardConstants";
 
 export { playerVoteKey };
 
@@ -18,7 +18,7 @@ export function computeAllStarVotesForGame(res, myTeamLabel, oppLabel, pog, user
     (stats || []).forEach((s) => {
       if (!s || s.name == null) return;
       const key = playerVoteKey(s.name, teamLabel);
-      const base = (Number(s.pts) || 0) + (Number(s.reb) || 0) * ALL_STAR.reb + (Number(s.ast) || 0) * ALL_STAR.ast;
+      const base = gameScore(s);
       let v = base;
       if (pog && pog.name === s.name && pog.team === teamLabel) v += ALL_STAR.pogBonus;
       if (won) v += ALL_STAR.winBonus;
