@@ -1426,7 +1426,7 @@ const soundtrackRef = useRef(null);
     const maxFG = maxOf("fgPct"), max3P = maxOf("tpPct");
     leagueRows.forEach((r) => {
       r.mvpScore = (r.ppg / maxPPG) * 3 + (r.apg / maxAPG) * 2 + (r.rpg / maxRPG) * 1.2 + (r.fgPct / maxFG) * 1.5 + (r.tpPct / max3P) * 0.8 + r.teamPct * 3 - (r.tpg / maxTPG) * 1;
-      r.dpoyScore = (r.spg / maxSPG) * 2.5 + (r.bpg / maxBPG) * 2.5 + (r.rpg / maxRPG) * 1;
+      r.dpoyScore = (r.spg / maxSPG) * 3 + (r.bpg / maxBPG) * 2 + (r.rpg / maxRPG) * 1;
     });
     const voteLeader = (votesMap) => {
       if (!votesMap || Object.keys(votesMap).length === 0) return null;
@@ -2366,7 +2366,7 @@ const soundtrackRef = useRef(null);
         ...(res.myStats || []).map((s) => ({ ...s, team: teamA.name })),
         ...(res.oppStats || []).map((s) => ({ ...s, team: teamB.name })),
       ];
-      const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.5 + (s.ast || 0) * 0.5;
+      const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.4 + (s.ast || 0) * 0.8;
       const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
       const voteDeltas = computeAllStarVotesForGame(res, teamA.name, teamB.name, pog, aWon);
       Object.entries(voteDeltas || {}).forEach(([key, v]) => { aiVoteDeltas[key] = (aiVoteDeltas[key] || 0) + (Number(v) || 0); });
@@ -2594,7 +2594,7 @@ const startSeason = async () => {
       ...(res.myStats || []).map((s) => ({ ...s, team: myTeamName })),
       ...(res.oppStats || []).map((s) => ({ ...s, team: opp?.name || "Opponent" })),
     ];
-    const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.5 + (s.ast || 0) * 0.5;
+    const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.4 + (s.ast || 0) * 0.8;
     const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
     if (pog) setGamePogs((prev) => { const n = [...prev]; n[dayIndex] = { name: pog.name, team: pog.team }; return n; });
     const voteDeltas = computeAllStarVotesForGame(res, myTeamName, opp?.name || "Opponent", pog, won);
@@ -2800,7 +2800,7 @@ const startSeason = async () => {
           ...(res.myStats || []).map((s) => ({ ...s, team: myTeamName })),
           ...(res.oppStats || []).map((s) => ({ ...s, team: opp?.name || "Opponent" })),
         ];
-        const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.5 + (s.ast || 0) * 0.5;
+        const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.4 + (s.ast || 0) * 0.8;
         const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
         const pogEntry = pog ? {
           name: pog.name,
@@ -4012,8 +4012,8 @@ if(phase==="teamSetup") return(
         r.mvpScore = offScore + effScore + teamScore - turnoverPenalty;
 
         const defScore =
-          (r.spg / maxSPG) * 2.5 +
-          (r.bpg / maxBPG) * 2.5 +
+          (r.spg / maxSPG) * 3 +
+          (r.bpg / maxBPG) * 2 +
           (r.rpg / maxRPG) * 1.0;
         const teamDefBonus = (1 - r.teamPct) * 0.0; // skip team defense for now
         r.dpoyScore = defScore + teamDefBonus;
@@ -4822,7 +4822,7 @@ if(phase==="teamSetup") return(
                 )}
                 {(() => {
                   const allStats = [...(result.myStats || []).map(s => ({ ...s, team: myTeamName })), ...(result.oppStats || []).map(s => ({ ...s, team: opp?.name || "Opponent" }))];
-                  const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.5 + (s.ast || 0) * 0.5;
+                  const gameScore = (s) => (s.pts || 0) + (s.reb || 0) * 0.4 + (s.ast || 0) * 0.8;
                   const pog = allStats.length ? allStats.reduce((best, s) => (!best || gameScore(s) > gameScore(best) ? s : best), null) : null;
                   if (!pog) return null;
                   return (
@@ -4916,7 +4916,7 @@ if(phase==="teamSetup") return(
             return (
               <div style={{marginBottom:10,background:"#0f172a",borderRadius:10,padding:12,border:"1px solid #334155"}}>
                 <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:4}}>⭐ ALL-STAR RACE (through Game {gp})</div>
-                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>Top 10 Guards · Top 10 F/C by votes. Votes = pts + 0.5·reb + 0.5·ast, +5 POG, +4 win.</div>
+                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>Top 10 Guards · Top 10 F/C by votes. Votes = pts + 0.4·reb + 0.8·ast, +5 POG, +4 win.</div>
                 <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:16}}>
                   <div style={{background:"#1e293b",borderRadius:8,padding:10,border:"1px solid #3b82f6"}}>
                     <div style={{color:"#60a5fa",fontWeight:700,marginBottom:4}}>EAST</div>
@@ -4943,7 +4943,7 @@ if(phase==="teamSetup") return(
             return (
               <div style={{marginBottom:10,background:"#0f172a",borderRadius:10,padding:12,border:"1px solid #334155"}}>
                 <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:6}}>🏅 MVP & DPOY RACE (through Game {gp})</div>
-                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>MVP: standings-driven (stats + 35 per win, +6 POG). DPOY: steals + blocks (stl×2.5 + blk×2.5 + 0.15·reb, +1 POG, +6 per win).</div>
+                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>MVP: standings-driven (stats + 35 per win, +6 POG). DPOY: steals + blocks (stl×3 + blk×2 + 0.15·reb, +1 POG, +6 per win).</div>
                 <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,fontSize:10}}>
                   <div>
                     <div style={{color:"#fbbf24",fontWeight:700,marginBottom:4}}>MVP</div>

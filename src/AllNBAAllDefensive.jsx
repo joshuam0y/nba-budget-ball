@@ -41,7 +41,7 @@ export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
     const fgN = ((r.fgPct || 0) / maxFg) * 0.5;
     const tpN = ((r.tpPct || 0) / max3p) * 0.3;
     const tovPen = (r.tpg || 0) / maxTpg * 0.5;
-    return teamPct * 1 + ppgN * 3 + rpgN * 1.2 + apgN * 2 + fgN + tpN - tovPen;
+    return teamPct * 1 + ppgN * 3 + rpgN * 1.2 + apgN * 2.2 + fgN + tpN - tovPen;
   };
 
   ["guard", "forward", "center"].forEach((key) => {
@@ -135,7 +135,7 @@ export function buildAllDefensiveTeams(players, teamWinPct, dpoyVotes = null) {
     const spgN = (r.spg || 0) / maxSpg;
     const bpgN = (r.bpg || 0) / maxBpg;
     const rpgN = (r.rpg || 0) / maxRpg;
-    return teamPct * 1 + spgN * 2.5 + bpgN * 2.5 + rpgN * 1;
+    return teamPct * 1 + spgN * 3 + bpgN * 2 + rpgN * 1;
   };
   guards.forEach((r) => { r.allDefScore = score(r); });
   guards.sort((a, b) => (b.allDefScore || 0) - (a.allDefScore || 0));
