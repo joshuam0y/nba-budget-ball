@@ -3130,6 +3130,7 @@ const startSeason = async () => {
         }
         const slot = matchId === "finals" ? "finals" : (matchId.split("-")[1] || "");
         if ((slot === "sf1" || slot === "sf2") && unlockAchievementForSave("conference_finals")) ach.push("conference_finals");
+        if (slot === "f" && unlockAchievementForSave("make_finals")) ach.push("make_finals");
         if ((slot === "fr1" || slot === "fr2" || slot === "fr3" || slot === "fr4") && unlockAchievementForSave("second_round")) ach.push("second_round");
         if (ach.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...ach]);
         if (lastEliminatorTeamName && beaten === lastEliminatorTeamName && unlockAchievementForSave("revenge")) {
@@ -3215,6 +3216,7 @@ const startSeason = async () => {
         }
         const seriesSlot = matchId === "finals" ? "finals" : (matchId.split("-")[1] || "");
         if ((seriesSlot === "sf1" || seriesSlot === "sf2") && unlockAchievementForSave("conference_finals")) ach.push("conference_finals");
+        if (seriesSlot === "f" && unlockAchievementForSave("make_finals")) ach.push("make_finals");
         if ((seriesSlot === "fr1" || seriesSlot === "fr2" || seriesSlot === "fr3" || seriesSlot === "fr4") && unlockAchievementForSave("second_round")) ach.push("second_round");
         if (ach.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...ach]);
       }
