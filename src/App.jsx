@@ -173,6 +173,12 @@ const AWARD_LABELS = {
   DEF2: "All-Defensive 2nd Team",
   CHAMP: "Champion",
   FINALSMVP: "Finals MVP",
+  PTS: "Scoring leader",
+  REB: "Rebounding leader",
+  AST: "Assist leader",
+  STL: "Steals leader",
+  BLK: "Blocks leader",
+  TPM: "3-point leader",
 };
 
 /** Groups a player's award list by award type and returns [ { award, label, seasons } ] for BR-style display */
@@ -183,7 +189,28 @@ function groupAwardsByType(list) {
     if (!byAward[award]) byAward[award] = [];
     byAward[award].push(season);
   });
-  const order = ["MVP", "DPOY", "FINALSMVP", "CHAMP", "NBA1", "NBA2", "NBA3", "DEF1", "DEF2", "AS-E-S", "AS-E-R", "AS-W-S", "AS-W-R", "TMVP"];
+  const order = [
+    "MVP",
+    "DPOY",
+    "FINALSMVP",
+    "CHAMP",
+    "NBA1",
+    "NBA2",
+    "NBA3",
+    "DEF1",
+    "DEF2",
+    "AS-E-S",
+    "AS-E-R",
+    "AS-W-S",
+    "AS-W-R",
+    "PTS",
+    "REB",
+    "AST",
+    "STL",
+    "BLK",
+    "TPM",
+    "TMVP",
+  ];
   return order.filter((a) => byAward[a]).map((award) => ({
     award,
     label: AWARD_LABELS[award] || award,
@@ -728,6 +755,7 @@ export default function App(){
   const [showAllStarSimThroughConfirm, setShowAllStarSimThroughConfirm] = useState(false);
   const [showAllStarTab, setShowAllStarTab] = useState(true);
   const [showMvpDpoyTab, setShowMvpDpoyTab] = useState(true);
+  const [showStatChampTab, setShowStatChampTab] = useState(true);
   const [allStarRetry, setAllStarRetry] = useState(0);
   const simThroughBreakRequestedRef = useRef(false);
   const allStarPendingSimCountRef = useRef(null);
@@ -1448,6 +1476,25 @@ const soundtrackRef = useRef(null);
     if (dpoyNameByVotes) toAdd.push([dpoyNameByVotes, "DPOY"]);
     else if (leagueDPOY?.name) toAdd.push([leagueDPOY.name, "DPOY"]);
     if (teamMVP?.name) toAdd.push([teamMVP.name, "TMVP"]);
+
+    // League stat leaders (per-game, season-long): scoring, rebounding, assists, steals, blocks, 3PM.
+    const bestBy = (key) =>
+      leagueRows.reduce((best, r) => (!best || (r[key] || 0) > (best[key] || 0) ? r : best), null);
+    const ptsChamp = bestBy("ppg");
+    const rebChamp = bestBy("rpg");
+    const astChamp = bestBy("apg");
+    const stlChamp = bestBy("spg");
+    const blkChamp = bestBy("bpg");
+    const tpmChamp = leaderEntries.reduce(
+      (best, r) => (!best || (r.tpm || 0) > (best.tpm || 0) ? r : best),
+      null
+    );
+    if (ptsChamp?.name) toAdd.push([ptsChamp.name, "PTS"]);
+    if (rebChamp?.name) toAdd.push([rebChamp.name, "REB"]);
+    if (astChamp?.name) toAdd.push([astChamp.name, "AST"]);
+    if (stlChamp?.name) toAdd.push([stlChamp.name, "STL"]);
+    if (blkChamp?.name) toAdd.push([blkChamp.name, "BLK"]);
+    if (tpmChamp?.name) toAdd.push([tpmChamp.name, "TPM"]);
     allNBA.first.forEach((p) => toAdd.push([p.name, "NBA1"]));
     allNBA.second.forEach((p) => toAdd.push([p.name, "NBA2"]));
     allNBA.third.forEach((p) => toAdd.push([p.name, "NBA3"]));
@@ -4574,8 +4621,9 @@ if(phase==="teamSetup") return(
             </div>
             <button onClick={()=>setShowStandings(s=>!s)} style={{background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showStandings?"Hide":"Show"} Standings</button>
             <button onClick={()=>setShowLeaders(s=>!s)} style={{background:"#1e293b",color:"#f97316",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showLeaders?"Hide":"Show"} Leaders</button>
-            {gameNum <= ALL_STAR_GAME_AT && <button onClick={()=>setShowAllStarTab(a=>!a)} style={{background:showAllStarTab?"#78350f":"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showAllStarTab?"Hide":"Show"} All-Star</button>}
             <button onClick={()=>setShowMvpDpoyTab(a=>!a)} style={{background:showMvpDpoyTab?"#431407":"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showMvpDpoyTab?"Hide":"Show"} MVP/DPOY</button>
+            {gameNum <= ALL_STAR_GAME_AT && <button onClick={()=>setShowAllStarTab(a=>!a)} style={{background:showAllStarTab?"#78350f":"#1e293b",color:"#fbbf24",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showAllStarTab?"Hide":"Show"} All-Star</button>}
+            <button onClick={()=>setShowStatChampTab(a=>!a)} style={{background:showStatChampTab?"#0f172a":"#1e293b",color:"#eab308",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{showStatChampTab?"Hide":"Show"} Stat champs</button>
             <button onClick={()=>setShowHistoryModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Last games">📋 Last {gameHistory.length || 0}</button>
             <button onClick={()=>setShowScheduleModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Full schedule">📅 Schedule</button>
           </div>
@@ -4951,6 +4999,108 @@ if(phase==="teamSetup") return(
                     <div style={{color:"#22c55e",fontWeight:700,marginBottom:4}}>DPOY</div>
                     {topDpoy.map((p,i)=>(<div key={`dpoy-${i}`} style={rowStyle(p)}>{i+1}. {p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos || "—"})</span> · {p.team} <span style={{color:"#94a3b8",fontWeight:500}}>({Math.round(getDpoyV(p))} votes)</span></div>))}
                   </div>
+                </div>
+              </div>
+            );
+          })()}
+          {showStatChampTab && inSeason && (() => {
+            const leaderEntries = Object.values(leagueLeaders || {}).filter((r) => r && (r.gp || 0) > 0);
+            if (leaderEntries.length === 0) return <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10 }}>Play games to see stat leaders.</div>;
+            const MIN_GP = 41;
+            const withPG = leaderEntries
+              .filter((p) => (p.gp || 0) >= MIN_GP)
+              .map((p) => {
+                const gp = p.gp || 1;
+                return {
+                  ...p,
+                  gp,
+                  ppg: (p.pts || 0) / gp,
+                  rpg: (p.reb || 0) / gp,
+                  apg: (p.ast || 0) / gp,
+                  spg: (p.stl || 0) / gp,
+                  bpg: (p.blk || 0) / gp,
+                  tpm: p.tpm || 0,
+                };
+              });
+            if (!withPG.length) return null;
+            const topN = (key, n = 3) =>
+              [...withPG].sort((a, b) => (b[key] || 0) - (a[key] || 0)).slice(0, n);
+            const categories = [
+              {
+                key: "ppg",
+                label: "Scoring",
+                unit: "PPG",
+                rows: topN("ppg"),
+                fmt: (p) => `${rf(p.ppg, 1)} PPG`,
+              },
+              {
+                key: "rpg",
+                label: "Rebounds",
+                unit: "RPG",
+                rows: topN("rpg"),
+                fmt: (p) => `${rf(p.rpg, 1)} RPG`,
+              },
+              {
+                key: "apg",
+                label: "Assists",
+                unit: "APG",
+                rows: topN("apg"),
+                fmt: (p) => `${rf(p.apg, 1)} APG`,
+              },
+              {
+                key: "spg",
+                label: "Steals",
+                unit: "SPG",
+                rows: topN("spg"),
+                fmt: (p) => `${rf(p.spg, 1)} SPG`,
+              },
+              {
+                key: "bpg",
+                label: "Blocks",
+                unit: "BPG",
+                rows: topN("bpg"),
+                fmt: (p) => `${rf(p.bpg, 1)} BPG`,
+              },
+              {
+                key: "tpm",
+                label: "3-pointers made",
+                unit: "3PM",
+                rows: topN("tpm"),
+                fmt: (p) => `${p.tpm ?? 0} 3PM`,
+              },
+            ];
+            const isMyPlayer = (p) => p?.team === myTeamName;
+            const rowStyle = (p) => ({
+              color: isMyPlayer(p) ? "#22c55e" : "#e2e8f0",
+              fontWeight: isMyPlayer(p) ? 700 : 400,
+              background: isMyPlayer(p) ? "rgba(34,197,94,0.2)" : "transparent",
+              padding: isMyPlayer(p) ? "2px 4px" : 0,
+              borderRadius: 4,
+            });
+            const gp = result ? gameNum : gameNum - 1;
+            return (
+              <div style={{ marginBottom: 10, background: "#0f172a", borderRadius: 10, padding: 12, border: "1px solid #334155" }}>
+                <div style={{ fontSize: 10, color: "#fbbf24", fontWeight: 800, letterSpacing: 1, marginBottom: 6 }}>
+                  🎯 STAT LEADERS (through Game {gp})
+                </div>
+                <div style={{ fontSize: 9, color: "#64748b", marginBottom: 8 }}>
+                  Top 3 league leaders in points, rebounds, assists, steals, blocks, and 3PM.
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12, fontSize: 10 }}>
+                  {categories.map((cat, idx) => (
+                    <div key={cat.key} style={{ marginBottom: 4 }}>
+                      <div style={{ color: "#eab308", fontWeight: 700, marginBottom: 3 }}>{cat.label}</div>
+                      {cat.rows.map((p, i) => (
+                        <div key={`${cat.key}-${i}-${p.name}|${p.team}`} style={rowStyle(p)}>
+                          {i + 1}. {p.name}{" "}
+                          <span style={{ color: "#64748b", fontSize: 9 }}>
+                            ({p.pos || "—"}) · {p.team}
+                          </span>{" "}
+                          <span style={{ color: "#94a3b8", fontWeight: 500 }}>{cat.fmt(p)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
