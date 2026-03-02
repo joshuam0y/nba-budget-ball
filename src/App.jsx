@@ -1456,7 +1456,7 @@ const soundtrackRef = useRef(null);
     const maxFG = maxOf("fgPct"), max3P = maxOf("tpPct");
     leagueRows.forEach((r) => {
       r.mvpScore = (r.ppg / maxPPG) * 3 + (r.apg / maxAPG) * 2 + (r.rpg / maxRPG) * 1.2 + (r.fgPct / maxFG) * 1.5 + (r.tpPct / max3P) * 0.8 + r.teamPct * 3 - (r.tpg / maxTPG) * 1;
-      r.dpoyScore = (r.spg / maxSPG) * 3 + (r.bpg / maxBPG) * 2 + (r.rpg / maxRPG) * 1;
+      r.dpoyScore = (r.spg / maxSPG) * 3 + (r.bpg / maxBPG) * 2 + (r.rpg / maxRPG) * 1 + r.teamPct * 2.0;
     });
     const voteLeader = (votesMap) => {
       if (!votesMap || Object.keys(votesMap).length === 0) return null;
@@ -4063,7 +4063,7 @@ if(phase==="teamSetup") return(
           (r.spg / maxSPG) * 3 +
           (r.bpg / maxBPG) * 2 +
           (r.rpg / maxRPG) * 1.0;
-        const teamDefBonus = (1 - r.teamPct) * 0.0; // skip team defense for now
+        const teamDefBonus = r.teamPct * 2.0;
         r.dpoyScore = defScore + teamDefBonus;
       });
 
