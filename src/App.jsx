@@ -4940,7 +4940,7 @@ if(phase==="teamSetup") return(
             return (
               <div style={{marginBottom:10,background:"#0f172a",borderRadius:10,padding:12,border:"1px solid #334155"}}>
                 <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:6}}>🏅 MVP & DPOY RACE (through Game {gp})</div>
-                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>MVP: standings-driven (stats + 35 per win, +6 POG). DPOY: steals + blocks (stl×3 + blk×2 + 0.15·reb, +1 POG, +6 per win).</div>
+                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>MVP: 0.5·pts + 0.2·reb + 0.25·ast, +6 POG, +35 per win. DPOY: 3·stl + 2·blk + 0.15·reb, +1 POG, +6 per win.</div>
                 <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,fontSize:10}}>
                   <div>
                     <div style={{color:"#fbbf24",fontWeight:700,marginBottom:4}}>MVP</div>
