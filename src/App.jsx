@@ -4183,11 +4183,28 @@ if(phase==="teamSetup") return(
             )}
           </div>
           {(() => {
-            const allStarCount = allStarSelections ? (() => {
-              const east = [...(allStarSelections.east?.starters || []), ...(allStarSelections.east?.reserves || [])];
-              const west = [...(allStarSelections.west?.starters || []), ...(allStarSelections.west?.reserves || [])];
-              return east.concat(west).filter((p) => p?.team === myTeamName).length;
-            })() : 0;
+            const myAllStarsThisSeason = (() => {
+              if (allStarSelections) {
+                const east = [...(allStarSelections.east?.starters || []), ...(allStarSelections.east?.reserves || [])];
+                const west = [...(allStarSelections.west?.starters || []), ...(allStarSelections.west?.reserves || [])];
+                return east.concat(west).filter((p) => p?.team === myTeamName);
+              }
+              // Fallback: older/crashed saves may not have `allStarSelections` persisted; rebuild "my All-Stars"
+              // from recorded awards for this season.
+              const list = [];
+              POSITIONS.forEach((pos) => {
+                const p = roster[pos];
+                if (!p?.name) return;
+                const fromName = (playerAwards[p.name] || []);
+                const fromFull = (p.fullName && p.fullName !== p.name ? (playerAwards[p.fullName] || []) : []);
+                const awards = [...fromName, ...fromFull];
+                if (awards.some((e) => e && e.season === seasonNumber && e.award && String(e.award).startsWith("AS-"))) {
+                  list.push({ name: p.name, fullName: p.fullName, team: myTeamName });
+                }
+              });
+              return list;
+            })();
+            const allStarCount = myAllStarsThisSeason.length;
             const bestStreak = (() => { let max = 0, cur = 0; (seasonGameResults || []).forEach((r) => { const won = r && r.won; if (won) { cur++; max = Math.max(max, cur); } else cur = 0; }); return max; })();
             const leaderPts = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.ppg || 0) > (best.ppg || 0) ? p : best), null) : null;
             const leaderReb = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.rpg || 0) > (best.rpg || 0) ? p : best), null) : null;
@@ -4212,12 +4229,13 @@ if(phase==="teamSetup") return(
                 tpm: leaderTpm && tpmL && leaderTpm.name === tpmL.name ? " (3-point leader)" : "",
               };
             })();
-            const careerAllStarCount = (name) => (playerAwards[name] || []).filter((e) => e.award && String(e.award).startsWith("AS-")).length;
-            const myAllStarsThisSeason = allStarSelections ? (() => {
-              const east = [...(allStarSelections.east?.starters || []), ...(allStarSelections.east?.reserves || [])];
-              const west = [...(allStarSelections.west?.starters || []), ...(allStarSelections.west?.reserves || [])];
-              return east.concat(west).filter((p) => p?.team === myTeamName);
-            })() : [];
+            const careerAllStarCount = (name, fullName) => {
+              const fromName = (playerAwards[name] || []).filter((e) => e && e.award && String(e.award).startsWith("AS-"));
+              const fromFull = (fullName && fullName !== name ? (playerAwards[fullName] || []) : []).filter((e) => e && e.award && String(e.award).startsWith("AS-"));
+              const seen = new Set();
+              [...fromName, ...fromFull].forEach((e) => { if (e.season != null) seen.add(e.season); });
+              return seen.size;
+            };
             const careerDefCount = (name, award) => (playerAwards[name] || []).filter((e) => e.award === award).length;
             const careerNBACount = (name, award) => (playerAwards[name] || []).filter((e) => e.award === award).length;
             const myMVPThisSeason = (() => {
@@ -4293,7 +4311,7 @@ if(phase==="teamSetup") return(
                   {myDPOYThisSeason && (() => { const n = careerAwardCount(myDPOYThisSeason, "DPOY"); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key="dpoy" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #60a5fa"}}><span style={{color:"#60a5fa",fontSize:14}}>🛡️</span><span>{myDPOYThisSeason.name} won DPOY for the {ord} time</span></div>; })()}
                   {myAllNBAThisSeason.map(({ name, award }) => { const n = careerNBACount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #a78bfa"}}><span style={{color:"#a78bfa",fontSize:14}}>📋</span><span>{name} made {AWARD_LABELS[award] || award} for the {ord} time</span></div>; })}
                   {myAllDefensiveThisSeason.map(({ name, award }) => { const n = careerDefCount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #4ade80"}}><span style={{color:"#4ade80",fontSize:14}}>🔒</span><span>{name} made {AWARD_LABELS[award] || award} for the {ord} time</span></div>; })}
-                  {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f59e0b"}}><span style={{color:"#f59e0b",fontSize:14}}>⭐</span><span>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</span></div> : null; })}
+                  {myAllStarsThisSeason.map((p) => { const n = Math.max(1, careerAllStarCount(p.name, p.fullName)); return <div key={p.name} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f59e0b"}}><span style={{color:"#f59e0b",fontSize:14}}>⭐</span><span>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</span></div>; })}
                   {leaderPts && <div key="pts" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f87171"}}><span style={{color:"#f87171",fontSize:14}}>🔥</span><span>{leaderPts.name} led the team in points ({rf(leaderPts.ppg, 1)} PPG){leagueChampSuffix.pts}</span></div>}
                   {leaderReb && <div key="reb" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #22c55e"}}><span style={{color:"#22c55e",fontSize:14}}>📦</span><span>{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG){leagueChampSuffix.reb}</span></div>}
                   {leaderAst && <div key="ast" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #38bdf8"}}><span style={{color:"#38bdf8",fontSize:14}}>🎯</span><span>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG){leagueChampSuffix.ast}</span></div>}
