@@ -113,6 +113,19 @@ ts_pct = np.where(ts_denom > 0, (pts / ts_denom * 100).round(1), 50.0)
 # 3P attempt rate (tendency — used by sim for shot selection)
 tr = np.where(fga > 0, (x3pa / fga).round(2), 0.0)
 
+# ── ESTIMATE MISSING / ERA-GAP TOV ─────────────────────────
+# Many pre-1978 seasons have no real TOV data; they show up as 0s from the
+# per-36/per-100 source. To avoid giving those eras a free pass on turnovers,
+# estimate a reasonable value when season < 1978 and tov is 0.
+season_year = pd.to_numeric(df["season"], errors="coerce")
+pre_tov_era = season_year < 1978
+missing_tov = tov <= 0
+
+if pre_tov_era.any() and missing_tov.any():
+    usage_proxy = pts + ast * 1.5
+    tov_est = np.maximum(0.8, usage_proxy * 0.07)
+    tov = np.where(pre_tov_era & missing_tov, tov_est, tov)
+
 # Player label
 def make_label(row):
     name = str(row["player"]).strip()

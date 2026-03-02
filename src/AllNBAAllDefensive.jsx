@@ -12,7 +12,7 @@ const isFrontcourt = (pos) => pos === "SF" || pos === "PF" || pos === "C";
 
 /**
  * All-NBA formula: record + counting stats + defense, position-based (1 C, 2 F, 2 G per team).
- * Score = teamWinPct + (ppg/max)*3 + (rpg/max)*1.2 + (apg/max)*2.2 + fg% + 3p% - tov + (spg/max)*1 + (bpg/max)*0.6 (steals weighted more than blocks).
+ * Score = teamWinPct + (ppg/max)*3 + (rpg/max)*1.2 + (apg/max)*1.6 + fg% + 3p% - tov + (spg/max)*1 + (bpg/max)*0.6 (steals weighted more than blocks).
  * When mvpVotes provided, MVP is guaranteed the 1st team slot at their position; rest filled by score.
  */
 export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
@@ -45,7 +45,7 @@ export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
     const tovPen = (r.tpg || 0) / maxTpg * 0.5;
     const spgN = ((r.spg ?? (r.stl != null ? r.stl / (r.gp || 1) : 0)) || 0) / maxSpg;
     const bpgN = ((r.bpg ?? (r.blk != null ? r.blk / (r.gp || 1) : 0)) || 0) / maxBpg;
-    return teamPct * 3 + ppgN * 3 + rpgN * 1.2 + apgN * 2.2 + fgN + tpN - tovPen + spgN * 1 + bpgN * 0.6;
+    return teamPct * 3 + ppgN * 3 + rpgN * 1.2 + apgN * 1.6 + fgN + tpN - tovPen + spgN * 1 + bpgN * 0.6;
   };
 
   ["guard", "forward", "center"].forEach((key) => {
