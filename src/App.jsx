@@ -1,5 +1,5 @@
 import "./index.css";
-import React, { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
+import React, { Fragment, useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { supabase } from "./supabase";
@@ -182,7 +182,7 @@ function groupAwardsByType(list) {
     if (!byAward[award]) byAward[award] = [];
     byAward[award].push(season);
   });
-  const order = ["MVP", "DPOY", "FINALSMVP", "CHAMP", "AS-E-S", "AS-E-R", "AS-W-S", "AS-W-R", "NBA1", "NBA2", "NBA3", "DEF1", "DEF2", "TMVP"];
+  const order = ["MVP", "DPOY", "FINALSMVP", "CHAMP", "NBA1", "NBA2", "NBA3", "DEF1", "DEF2", "AS-E-S", "AS-E-R", "AS-W-S", "AS-W-R", "TMVP"];
   return order.filter((a) => byAward[a]).map((award) => ({
     award,
     label: AWARD_LABELS[award] || award,
@@ -3574,7 +3574,7 @@ if(phase==="teamSetup") return(
                   <button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {(()=>{const _groups=[];let _cur=null;sortAchievementsForDisplay(ACHIEVEMENTS).forEach(a=>{const cat=(ACHIEVEMENT_META[a.id]||{}).category||"Other";if(cat!==_cur){_groups.push({cat,items:[]});_cur=cat;}_groups[_groups.length-1].items.push(a);});return _groups.map(({cat,items})=>(<React.Fragment key={cat}><div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:1,marginTop:12,marginBottom:6,paddingBottom:4,borderBottom:"1px solid #1e293b"}}>{cat}</div>{items.map(a=>{const unlocked=(unlockedAchievements||[]).includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}{unlocked&&<button onClick={(e)=>{e.stopPropagation();handleShareAchievement(a);}} style={{marginTop:8,background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>📤 Share</button>}</div>);})}</React.Fragment>));})()}
+                  {(()=>{const _groups=[];let _cur=null;sortAchievementsForDisplay(ACHIEVEMENTS).forEach(a=>{const cat=(ACHIEVEMENT_META[a.id]||{}).category||"Other";if(cat!==_cur){_groups.push({cat,items:[]});_cur=cat;}_groups[_groups.length-1].items.push(a);});return _groups.map(({cat,items})=>(<Fragment key={cat}><div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:1,marginTop:12,marginBottom:6,paddingBottom:4,borderBottom:"1px solid #1e293b"}}>{cat}</div>{items.map(a=>{const unlocked=(unlockedAchievements||[]).includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}{unlocked&&<button onClick={(e)=>{e.stopPropagation();handleShareAchievement(a);}} style={{marginTop:8,background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>📤 Share</button>}</div>);})}</Fragment>));})()}
                 </div>
               </div>
             </div>
@@ -4243,9 +4243,9 @@ if(phase==="teamSetup") return(
                   <div style={{display:"flex",flexDirection:"column",gap:2,fontSize:12,color:"#f1f5f9",lineHeight:1.5}}>
                   {myMVPThisSeason && (() => { const n = careerAwardCount(myMVPThisSeason, "MVP"); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key="mvp" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #fbbf24"}}><span style={{color:"#fbbf24",fontSize:14}}>🏆</span><span>{myMVPThisSeason.name} won MVP for the {ord} time</span></div>; })()}
                   {myDPOYThisSeason && (() => { const n = careerAwardCount(myDPOYThisSeason, "DPOY"); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key="dpoy" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #60a5fa"}}><span style={{color:"#60a5fa",fontSize:14}}>🛡️</span><span>{myDPOYThisSeason.name} won DPOY for the {ord} time</span></div>; })()}
-                  {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f59e0b"}}><span style={{color:"#f59e0b",fontSize:14}}>⭐</span><span>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</span></div> : null; })}
                   {myAllNBAThisSeason.map(({ name, award }) => { const n = careerNBACount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #a78bfa"}}><span style={{color:"#a78bfa",fontSize:14}}>📋</span><span>{name} made {AWARD_LABELS[award] || award} for the {ord} time</span></div>; })}
                   {myAllDefensiveThisSeason.map(({ name, award }) => { const n = careerDefCount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #4ade80"}}><span style={{color:"#4ade80",fontSize:14}}>🔒</span><span>{name} made {AWARD_LABELS[award] || award} for the {ord} time</span></div>; })}
+                  {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f59e0b"}}><span style={{color:"#f59e0b",fontSize:14}}>⭐</span><span>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</span></div> : null; })}
                   {leaderPts && <div key="pts" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f87171"}}><span style={{color:"#f87171",fontSize:14}}>🔥</span><span>{leaderPts.name} led the team in points ({rf(leaderPts.ppg, 1)} PPG){leagueChampSuffix.pts}</span></div>}
                   {leaderReb && <div key="reb" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #22c55e"}}><span style={{color:"#22c55e",fontSize:14}}>📦</span><span>{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG){leagueChampSuffix.reb}</span></div>}
                   {leaderAst && <div key="ast" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #38bdf8"}}><span style={{color:"#38bdf8",fontSize:14}}>🎯</span><span>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG){leagueChampSuffix.ast}</span></div>}
@@ -5122,7 +5122,7 @@ if(phase==="teamSetup") return(
                   groups[groups.length - 1].items.push(a);
                 });
                 return groups.map(({ cat, items }) => (
-                  <React.Fragment key={cat}>
+                  <Fragment key={cat}>
                     <div style={{ fontSize: 10, fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginTop: 12, marginBottom: 4, paddingBottom: 4, borderBottom: "1px solid #1e293b" }}>{cat}</div>
                     {items.map(a => {
                       const unlocked = (unlockedAchievements || []).includes(a.id);
@@ -5135,7 +5135,7 @@ if(phase==="teamSetup") return(
                         </div>
                       );
                     })}
-                  </React.Fragment>
+                  </Fragment>
                 ));
               })()}
             </div>
