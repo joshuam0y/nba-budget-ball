@@ -5036,7 +5036,7 @@ if(phase==="teamSetup") return(
               </div>
             );
           })()}
-          {showStatChampTab && inSeason && (() => {
+          {showStatChampTab && (inSeason || phase === "seasonEnd") && (() => {
             const leaderEntries = Object.values(leagueLeaders || {}).filter((r) => r && (r.gp || 0) > 0);
             if (leaderEntries.length === 0) return <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10 }}>Play games to see stat leaders.</div>;
             const MIN_GP = 41;
