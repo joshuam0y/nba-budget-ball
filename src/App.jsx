@@ -4394,6 +4394,100 @@ if(phase==="teamSetup") return(
               </div>
             );
           })()}
+          {phase === "seasonEnd" && (() => {
+            const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
+            const teamConference = {};
+            (finalAi || []).forEach((t) => { if (t?.name && t?.conference) teamConference[t.name] = t.conference; });
+            teamConference[myTeamName] = userMeta.conference;
+
+            const leaderArr = Object.values(leagueLeaders || {}).filter((r) => r && r.name);
+            const leaderByName = new Map(leaderArr.map((r) => [r.name, r]));
+
+            const normalizeRow = (row, confHint, roleHint) => {
+              if (!row?.name || !row?.team) return null;
+              const conf = confHint || teamConference[row.team] || null;
+              const allStarRole = roleHint || row.allStarRole || null;
+              return { name: row.name, team: row.team, pos: row.pos, conference: conf, allStarRole };
+            };
+
+            let east = { starters: [], reserves: [] };
+            let west = { starters: [], reserves: [] };
+
+            const hasSelections =
+              (allStarSelections?.east?.starters?.length || 0) +
+              (allStarSelections?.east?.reserves?.length || 0) +
+              (allStarSelections?.west?.starters?.length || 0) +
+              (allStarSelections?.west?.reserves?.length || 0) > 0;
+
+            if (hasSelections) {
+              east = {
+                starters: (allStarSelections.east?.starters || []).map((p) => normalizeRow(p, "East", "Starter")).filter(Boolean),
+                reserves: (allStarSelections.east?.reserves || []).map((p) => normalizeRow(p, "East", "Reserve")).filter(Boolean),
+              };
+              west = {
+                starters: (allStarSelections.west?.starters || []).map((p) => normalizeRow(p, "West", "Starter")).filter(Boolean),
+                reserves: (allStarSelections.west?.reserves || []).map((p) => normalizeRow(p, "West", "Reserve")).filter(Boolean),
+              };
+            } else {
+              // Fallback: rebuild All-Star selections from recorded awards + current league leaders.
+              const seen = new Set();
+              Object.entries(playerAwards || {}).forEach(([name, list]) => {
+                (list || []).forEach((e) => {
+                  if (!e || e.season !== seasonNumber) return;
+                  const award = String(e.award || "");
+                  if (!award.startsWith("AS-")) return;
+                  const key = `${name}|${award}`;
+                  if (seen.has(key)) return;
+                  seen.add(key);
+                  const leader = leaderByName.get(name);
+                  if (!leader?.team) return;
+                  const conf = award.includes("-E-") ? "East" : award.includes("-W-") ? "West" : (teamConference[leader.team] || null);
+                  const role = award.endsWith("-S") ? "Starter" : award.endsWith("-R") ? "Reserve" : null;
+                  const row = normalizeRow({ name, team: leader.team, pos: leader.pos }, conf, role);
+                  if (!row || !row.conference) return;
+                  if (row.conference === "East") {
+                    (row.allStarRole === "Starter" ? east.starters : east.reserves).push(row);
+                  } else if (row.conference === "West") {
+                    (row.allStarRole === "Starter" ? west.starters : west.reserves).push(row);
+                  }
+                });
+              });
+              // Stable sort: starters first, then by name
+              const byName = (a, b) => (a.name || "").localeCompare(b.name || "");
+              east.starters.sort(byName); east.reserves.sort(byName);
+              west.starters.sort(byName); west.reserves.sort(byName);
+            }
+
+            const total =
+              (east.starters?.length || 0) + (east.reserves?.length || 0) + (west.starters?.length || 0) + (west.reserves?.length || 0);
+            if (!total) return null;
+
+            const isMine = (p) => p?.team === myTeamName;
+            const rowStyle = (p) => ({ fontSize: 11, color: isMine(p) ? "#22c55e" : "#e2e8f0", fontWeight: isMine(p) ? 800 : 500, background: isMine(p) ? "rgba(34,197,94,0.15)" : "transparent", padding: isMine(p) ? "2px 6px" : 0, borderRadius: 6, display: "block" });
+            const reserveStyle = (p) => ({ fontSize: 11, color: isMine(p) ? "#22c55e" : "#94a3b8", fontWeight: isMine(p) ? 800 : 500, background: isMine(p) ? "rgba(34,197,94,0.15)" : "transparent", padding: isMine(p) ? "2px 6px" : 0, borderRadius: 6, display: "block" });
+
+            return (
+              <div style={{background:"#0f172a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #334155"}}>
+                <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:10}}>⭐ ALL-STAR SELECTIONS</div>
+                <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12}}>
+                  <div style={{background:"#020617",borderRadius:12,padding:12,border:"1px solid rgba(59,130,246,0.6)"}}>
+                    <div style={{fontSize:12,fontWeight:900,color:"#60a5fa",marginBottom:8}}>EAST</div>
+                    {east.starters.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
+                    {east.starters.map((p) => (<span key={`e-s-${p.name}|${p.team}`} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos || "—"})</span> · {p.team} ★</span>))}
+                    {east.reserves.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:10,marginBottom:4}}>Reserves</div>}
+                    {east.reserves.map((p) => (<span key={`e-r-${p.name}|${p.team}`} style={reserveStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos || "—"})</span> · {p.team}</span>))}
+                  </div>
+                  <div style={{background:"#020617",borderRadius:12,padding:12,border:"1px solid rgba(239,68,68,0.6)"}}>
+                    <div style={{fontSize:12,fontWeight:900,color:"#f87171",marginBottom:8}}>WEST</div>
+                    {west.starters.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
+                    {west.starters.map((p) => (<span key={`w-s-${p.name}|${p.team}`} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos || "—"})</span> · {p.team} ★</span>))}
+                    {west.reserves.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:10,marginBottom:4}}>Reserves</div>}
+                    {west.reserves.map((p) => (<span key={`w-r-${p.name}|${p.team}`} style={reserveStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos || "—"})</span> · {p.team}</span>))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           {phase === "seasonEnd" && showStatChampTab && (() => {
             const entries = Object.values(leagueLeaders || {}).filter((r) => r && (r.gp || 0) > 0);
             if (!entries.length) return null;
