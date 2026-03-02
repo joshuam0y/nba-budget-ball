@@ -2858,6 +2858,7 @@ const startSeason = async () => {
         setNewlyUnlockedAchievements((prev) => [...prev, ...unique]);
       }
       const gamesActuallyPlayed = accSimResults.length;
+      const lastGameNum = gamesActuallyPlayed > 0 ? gameNum + gamesActuallyPlayed - 1 : gameNum - 1;
       const nextGameNum = Math.min(gameNum + gamesActuallyPlayed, SEASON_LENGTH);
       const crossedAllStarBreak = gameNum <= ALL_STAR_GAME_AT && nextGameNum > ALL_STAR_GAME_AT;
       if (crossedAllStarBreak) {
@@ -2894,7 +2895,7 @@ const startSeason = async () => {
           allStarComputedRef.current = true;
         }
         setPhase("allStarBreak");
-      } else if (nextGameNum >= SEASON_LENGTH) {
+      } else if (lastGameNum >= SEASON_LENGTH) {
         setPhase("seasonEnd");
       }
     } catch (err) {
