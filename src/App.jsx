@@ -1453,12 +1453,18 @@ const soundtrackRef = useRef(null);
       };
     });
     const maxOf = (key) => Math.max(1, ...leagueRows.map((r) => r[key] || 0));
-    const maxPPG = maxOf("ppg"), maxRPG = maxOf("rpg"), maxAPG = maxOf("apg");
-    const maxSPG = maxOf("spg"), maxBPG = maxOf("bpg"), maxTPG = maxOf("tpg");
-    const maxFG = maxOf("fgPct"), max3P = maxOf("tpPct");
+    const maxPpg = maxOf("ppg"), maxRpg = maxOf("rpg"), maxApg = maxOf("apg");
+    const maxFG = maxOf("fgPct"), max3P = maxOf("tpPct"), maxTpg = maxOf("tpg");
+    const maxSPG = Math.max(0.01, ...leagueRows.map((r) => r.spg || 0));
+    const maxBPG = Math.max(0.01, ...leagueRows.map((r) => r.bpg || 0));
     leagueRows.forEach((r) => {
-      r.mvpScore = (r.ppg / maxPPG) * 3 + (r.apg / maxAPG) * 2 + (r.rpg / maxRPG) * 1.2 + (r.fgPct / maxFG) * 1.5 + (r.tpPct / max3P) * 0.8 + r.teamPct * 3 - (r.tpg / maxTPG) * 1;
-      r.dpoyScore = (r.spg / maxSPG) * 3.0 + (r.bpg / maxBPG) * 2.5 + (r.rpg / maxRPG) * 1 + r.teamPct * 2.0;
+      // MVP/TMVP use same formula as All-NBA: record + PPG/RPG/APG + efficiency + defense − TOV
+      const ppgN = (r.ppg || 0) / maxPpg, rpgN = (r.rpg || 0) / maxRpg, apgN = (r.apg || 0) / maxApg;
+      const fgN = ((r.fgPct || 0) / maxFG) * 0.5, tpN = ((r.tpPct || 0) / max3P) * 0.3;
+      const tovPen = (r.tpg || 0) / maxTpg * 0.5;
+      const spgN = (r.spg || 0) / maxSPG, bpgN = (r.bpg || 0) / maxBPG;
+      r.mvpScore = (r.teamPct ?? 0.4) * 2 + ppgN * 4 + rpgN * 1.2 + apgN * 1.6 + fgN + tpN - tovPen + spgN * 0.9 + bpgN * 0.6;
+      r.dpoyScore = (r.spg / maxSPG) * 3.0 + (r.bpg / maxBPG) * 2.5 + (r.rpg / maxRpg) * 1 + r.teamPct * 2.0;
     });
     const voteLeader = (votesMap) => {
       if (!votesMap || Object.keys(votesMap).length === 0) return null;
@@ -4058,33 +4064,22 @@ if(phase==="teamSetup") return(
       });
 
       const maxOf = (key) => Math.max(1, ...leagueRows.map((r) => r[key] || 0));
-      const maxPPG = maxOf("ppg");
-      const maxRPG = maxOf("rpg");
-      const maxAPG = maxOf("apg");
-      const maxSPG = maxOf("spg");
-      const maxBPG = maxOf("bpg");
-      const maxTPG = maxOf("tpg");
-      const maxFG = maxOf("fgPct");
-      const max3P = maxOf("tpPct");
+      const maxPpg = maxOf("ppg"), maxRpg = maxOf("rpg"), maxApg = maxOf("apg");
+      const maxFG = maxOf("fgPct"), max3P = maxOf("tpPct"), maxTpg = maxOf("tpg");
+      const maxSPG = Math.max(0.01, ...leagueRows.map((r) => r.spg || 0));
+      const maxBPG = Math.max(0.01, ...leagueRows.map((r) => r.bpg || 0));
 
       leagueRows.forEach((r) => {
-        const offScore =
-          (r.ppg / maxPPG) * 3 +
-          (r.apg / maxAPG) * 2 +
-          (r.rpg / maxRPG) * 1.2;
-        const effScore =
-          (r.fgPct / maxFG) * 1.5 +
-          (r.tpPct / max3P) * 0.8;
-        const teamScore = r.teamPct * 3; // winning matters a lot
-        const turnoverPenalty = (r.tpg / maxTPG) * 1.0;
-        r.mvpScore = offScore + effScore + teamScore - turnoverPenalty;
+        // MVP/TMVP use same formula as All-NBA: record + PPG/RPG/APG + efficiency + defense − TOV
+        const teamPct = r.teamPct ?? 0.4;
+        const ppgN = (r.ppg || 0) / maxPpg, rpgN = (r.rpg || 0) / maxRpg, apgN = (r.apg || 0) / maxApg;
+        const fgN = ((r.fgPct || 0) / maxFG) * 0.5, tpN = ((r.tpPct || 0) / max3P) * 0.3;
+        const tovPen = (r.tpg || 0) / maxTpg * 0.5;
+        const spgN = (r.spg || 0) / maxSPG, bpgN = (r.bpg || 0) / maxBPG;
+        r.mvpScore = teamPct * 2 + ppgN * 4 + rpgN * 1.2 + apgN * 1.6 + fgN + tpN - tovPen + spgN * 0.9 + bpgN * 0.6;
 
-        const defScore =
-          (r.spg / maxSPG) * 3.0 +
-          (r.bpg / maxBPG) * 2.5 +
-          (r.rpg / maxRPG) * 1.0;
-        const teamDefBonus = r.teamPct * 2.0;
-        r.dpoyScore = defScore + teamDefBonus;
+        const defScore = (r.spg / maxSPG) * 3.0 + (r.bpg / maxBPG) * 2.5 + (r.rpg / maxRpg) * 1.0;
+        r.dpoyScore = defScore + teamPct * 2.0;
       });
 
       // Use same ranking as in-game race and award: vote totals. Fallback to score if no votes.
