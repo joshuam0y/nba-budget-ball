@@ -45,7 +45,7 @@ export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
     const tovPen = (r.tpg || 0) / maxTpg * 0.5;
     const spgN = ((r.spg ?? (r.stl != null ? r.stl / (r.gp || 1) : 0)) || 0) / maxSpg;
     const bpgN = ((r.bpg ?? (r.blk != null ? r.blk / (r.gp || 1) : 0)) || 0) / maxBpg;
-    return teamPct * 1 + ppgN * 3 + rpgN * 1.2 + apgN * 2.2 + fgN + tpN - tovPen + spgN * 1 + bpgN * 0.6;
+    return teamPct * 3 + ppgN * 3 + rpgN * 1.2 + apgN * 2.2 + fgN + tpN - tovPen + spgN * 1 + bpgN * 0.6;
   };
 
   ["guard", "forward", "center"].forEach((key) => {
