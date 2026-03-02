@@ -3570,13 +3570,25 @@ if(phase==="teamSetup") return(
         {simulatingOverlayPlayoffs}
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex"}}>
         {isMobile && sidebarHidden && (
-          <button onClick={()=>setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
+          <button
+            onClick={()=>setSidebarHidden(false)}
+            style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 10px",color:"#e5e7eb",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+            title="Show menu"
+          >
+            ☰ <span>Menu</span>
+          </button>
         )}
         <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:isMobile&&sidebarHidden?"none":"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
           {isMobile && (
-            <button onClick={()=>setSidebarHidden(true)} style={{alignSelf:"flex-end",marginBottom:6,background:"transparent",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}} title="Hide menu">⯈</button>
+            <button
+              onClick={()=>setSidebarHidden(true)}
+              style={{alignSelf:"flex-end",marginBottom:8,background:"rgba(15,23,42,0.9)",border:"1px solid #334155",color:"#e5e7eb",cursor:"pointer",fontSize:10,fontWeight:700,borderRadius:999,padding:"3px 8px"}}
+              title="Hide menu"
+            >
+              « Hide menu
+            </button>
           )}
-          <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Menu</button>
+          <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Main menu</button>
           <button onClick={()=>setShowSaveModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#a78bfa",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>💾</span> Save</button>
           <button onClick={()=>setShowLoadModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📂</span> Load</button>
           <button onClick={()=>setShowTrophyCase(true)} title={`Achievements (${(unlockedAchievements||[]).length}/${ACHIEVEMENTS.length})`} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#fbbf24",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}><span style={{fontSize:14,flexShrink:0}}>🏆</span> <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{(unlockedAchievements||[]).length}/{ACHIEVEMENTS.length}</span></button>
@@ -4091,14 +4103,26 @@ if(phase==="teamSetup") return(
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex"}}>
         {isMobile && sidebarHidden && (
-          <button onClick={()=>setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
+          <button
+            onClick={()=>setSidebarHidden(false)}
+            style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 10px",color:"#e5e7eb",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+            title="Show menu"
+          >
+            ☰ <span>Menu</span>
+          </button>
         )}
         {/* Left sidebar - same as draft screen */}
         <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:isMobile&&sidebarHidden?"none":"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
           {isMobile && (
-            <button onClick={()=>setSidebarHidden(true)} style={{alignSelf:"flex-end",marginBottom:6,background:"transparent",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}} title="Hide menu">⯈</button>
+            <button
+              onClick={()=>setSidebarHidden(true)}
+              style={{alignSelf:"flex-end",marginBottom:8,background:"rgba(15,23,42,0.9)",border:"1px solid #334155",color:"#e5e7eb",cursor:"pointer",fontSize:10,fontWeight:700,borderRadius:999,padding:"3px 8px"}}
+              title="Hide menu"
+            >
+              « Hide menu
+            </button>
           )}
-          <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Menu</button>
+          <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Main menu</button>
           <button onClick={()=>setShowSaveModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#a78bfa",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>💾</span> Save</button>
           <button onClick={()=>setShowLoadModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📂</span> Load</button>
           <button onClick={()=>setShowTrophyCase(true)} title={`Achievements (${(unlockedAchievements||[]).length}/${ACHIEVEMENTS.length})`} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#fbbf24",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}><span style={{fontSize:14,flexShrink:0}}>🏆</span> <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{(unlockedAchievements||[]).length}/{ACHIEVEMENTS.length}</span></button>
@@ -4639,9 +4663,15 @@ if(phase==="teamSetup") return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex"}}>
         <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:isMobile&&sidebarHidden?"none":"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
           {isMobile && (
-            <button onClick={()=>setSidebarHidden(true)} style={{alignSelf:"flex-end",marginBottom:6,background:"transparent",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}} title="Hide menu">⯈</button>
+            <button
+              onClick={()=>setSidebarHidden(true)}
+              style={{alignSelf:"flex-end",marginBottom:8,background:"rgba(15,23,42,0.9)",border:"1px solid #334155",color:"#e5e7eb",cursor:"pointer",fontSize:10,fontWeight:700,borderRadius:999,padding:"3px 8px"}}
+              title="Hide menu"
+            >
+              « Hide menu
+            </button>
           )}
-          <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Menu</button>
+          <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Main menu</button>
           <button onClick={()=>setShowSaveModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#a78bfa",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>💾</span> Save</button>
           <button onClick={()=>setShowLoadModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📂</span> Load</button>
           <button onClick={()=>setShowTrophyCase(true)} title={`Achievements (${(unlockedAchievements||[]).length}/${ACHIEVEMENTS.length})`} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#fbbf24",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}><span style={{fontSize:14,flexShrink:0}}>🏆</span> <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{(unlockedAchievements||[]).length}/{ACHIEVEMENTS.length}</span></button>
@@ -4740,9 +4770,15 @@ if(phase==="teamSetup") return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex"}}>
         <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:isMobile&&sidebarHidden?"none":"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
           {isMobile && (
-            <button onClick={()=>setSidebarHidden(true)} style={{alignSelf:"flex-end",marginBottom:6,background:"transparent",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}} title="Hide menu">⯈</button>
+            <button
+              onClick={()=>setSidebarHidden(true)}
+              style={{alignSelf:"flex-end",marginBottom:8,background:"rgba(15,23,42,0.9)",border:"1px solid #334155",color:"#e5e7eb",cursor:"pointer",fontSize:10,fontWeight:700,borderRadius:999,padding:"3px 8px"}}
+              title="Hide menu"
+            >
+              « Hide menu
+            </button>
           )}
-          <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Menu</button>
+          <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Main menu</button>
           <button onClick={()=>setShowSaveModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#a78bfa",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>💾</span> Save</button>
           <button onClick={()=>setShowLoadModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📂</span> Load</button>
           <button onClick={()=>setShowTrophyCase(true)} title={`Achievements (${(unlockedAchievements||[]).length}/${ACHIEVEMENTS.length})`} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#fbbf24",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}><span style={{fontSize:14,flexShrink:0}}>🏆</span> <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{(unlockedAchievements||[]).length}/{ACHIEVEMENTS.length}</span></button>
@@ -5527,7 +5563,13 @@ if(phase==="teamSetup") return(
 
       <div style={{ display: "flex", minHeight: "100vh" }}>
         {isMobile && sidebarHidden && (
-          <button onClick={() => setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
+          <button
+            onClick={() => setSidebarHidden(false)}
+            style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 10px",color:"#e5e7eb",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+            title="Show menu"
+          >
+            ☰ <span>Menu</span>
+          </button>
         )}
         {/* Left sidebar - menu off to the side */}
         <aside
@@ -5551,7 +5593,13 @@ if(phase==="teamSetup") return(
           }}
         >
           {isMobile && (
-            <button onClick={() => setSidebarHidden(true)} style={{alignSelf:"flex-end",marginBottom:6,background:"transparent",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}} title="Hide menu">⯈</button>
+            <button
+              onClick={() => setSidebarHidden(true)}
+              style={{alignSelf:"flex-end",marginBottom:8,background:"rgba(15,23,42,0.9)",border:"1px solid #334155",color:"#e5e7eb",cursor:"pointer",fontSize:10,fontWeight:700,borderRadius:999,padding:"3px 8px"}}
+              title="Hide menu"
+            >
+              « Hide menu
+            </button>
           )}
           {phase !== "teamSetup" && (
             <button
@@ -5571,7 +5619,7 @@ if(phase==="teamSetup") return(
                 padding: "8px 10px",
               }}
             >
-              <span style={{ fontSize: 14 }}>🏠</span> Menu
+              <span style={{ fontSize: 14 }}>🏠</span> Main menu
             </button>
           )}
           <button
