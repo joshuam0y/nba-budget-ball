@@ -11,8 +11,8 @@ const isCenter = (pos) => pos === "C";
 const isFrontcourt = (pos) => pos === "SF" || pos === "PF" || pos === "C";
 
 /**
- * All-NBA formula: record + counting stats, position-based (1 C, 2 F, 2 G per team).
- * Score = teamWinPct * 3 + (ppg/maxPpg)*3 + (rpg/maxRpg)*1.2 + (apg/maxApg)*2 + (fgPct/max)*1 + (tpPct/max)*0.5 - (tpg/max)*0.5.
+ * All-NBA formula: record + counting stats + defense, position-based (1 C, 2 F, 2 G per team).
+ * Score = teamWinPct + (ppg/max)*3 + (rpg/max)*1.2 + (apg/max)*2.2 + fg% + 3p% - tov + (spg/max)*1 + (bpg/max)*0.6 (steals weighted more than blocks).
  * When mvpVotes provided, MVP is guaranteed the 1st team slot at their position; rest filled by score.
  */
 export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
@@ -32,6 +32,8 @@ export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
   const maxFg = Math.max(1, ...players.map((r) => r.fgPct || 0));
   const max3p = Math.max(1, ...players.map((r) => r.tpPct || 0));
   const maxTpg = Math.max(1, ...players.map((r) => r.tpg || 0));
+  const maxSpg = Math.max(0.01, ...players.map((r) => r.spg ?? (r.stl != null ? r.stl / (r.gp || 1) : 0)));
+  const maxBpg = Math.max(0.01, ...players.map((r) => r.bpg ?? (r.blk != null ? r.blk / (r.gp || 1) : 0)));
 
   const score = (r) => {
     const teamPct = teamWinPct[r.team] ?? 0.4;
@@ -41,7 +43,9 @@ export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
     const fgN = ((r.fgPct || 0) / maxFg) * 0.5;
     const tpN = ((r.tpPct || 0) / max3p) * 0.3;
     const tovPen = (r.tpg || 0) / maxTpg * 0.5;
-    return teamPct * 1 + ppgN * 3 + rpgN * 1.2 + apgN * 2.2 + fgN + tpN - tovPen;
+    const spgN = ((r.spg ?? (r.stl != null ? r.stl / (r.gp || 1) : 0)) || 0) / maxSpg;
+    const bpgN = ((r.bpg ?? (r.blk != null ? r.blk / (r.gp || 1) : 0)) || 0) / maxBpg;
+    return teamPct * 1 + ppgN * 3 + rpgN * 1.2 + apgN * 2.2 + fgN + tpN - tovPen + spgN * 1 + bpgN * 0.6;
   };
 
   ["guard", "forward", "center"].forEach((key) => {
