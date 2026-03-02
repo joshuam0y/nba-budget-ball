@@ -10,6 +10,11 @@ export function LeagueLeaders({ leaders, myTeamName }) {
   const [perMode, setPerMode] = useState("game"); // "game" | "per36"
   const [showAll, setShowAll] = useState(false);
 
+  // Qualification helpers so low-volume guys don't top % leaderboards (and % columns don't lie).
+  const qualifiesFor3Pct = (p) => (p?.tpa ?? 0) >= (p?.gp ?? 1) * 3; // at least 3 3PA per game
+  const qualifiesForFgPct = (p) => (p?.fga ?? 0) >= (p?.gp ?? 1) * 8; // at least 8 FGA per game
+  const qualifiesForFtPct = (p) => (p?.fta ?? 0) >= (p?.gp ?? 1) * 2; // at least 2 FTA per game
+
   const leagueLeadersRows = useMemo(() => {
     const arr = Object.values(leaders || {});
     const enriched = arr.map((p) => {
@@ -62,11 +67,6 @@ export function LeagueLeaders({ leaders, myTeamName }) {
         ftPct,
       };
     });
-    // Qualification helpers so low-volume guys don't top % leaderboards.
-    const qualifiesFor3Pct = (p) => p.tpa >= p.gp * 3;      // at least 3 3PA per game
-    const qualifiesForFgPct = (p) => p.fga >= p.gp * 8;     // at least 8 FGA per game
-    const qualifiesForFtPct = (p) => p.fta >= p.gp * 2;     // at least 2 FTA per game
-
     const qualified = enriched.filter((p) => {
       if (stat === "tpPct") return qualifiesFor3Pct(p);
       if (stat === "fgPct") return qualifiesForFgPct(p);
