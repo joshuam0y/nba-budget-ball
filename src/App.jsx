@@ -739,6 +739,7 @@ export default function App(){
   const [careerTeamHighs, setCareerTeamHighs] = useState({});
   // League-wide all-time single-game highs: { pts: { val, name, team, pos, season }, ... } — same keys as seasonHighs
   const [careerLeagueHighs, setCareerLeagueHighs] = useState({});
+  const [sidebarHidden, setSidebarHidden] = useState(false);
   const [topPicks, setTopPicks] = useState([]);
   const [myTeamName, setMyTeamName] = useState("Your Team");
   const [teamNameHistory, setTeamNameHistory] = useState([]);
@@ -794,9 +795,10 @@ export default function App(){
     return !already; // true when newly unlocked (for toast)
   }, [unlockedAchievements]);
 
-  const [isMobile, setIsMobile] = useState(
+  const [isMobileScreen, setIsMobileScreen] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
   );
+  const isMobile = isMobileScreen;
 
   const [bracketDensity, setBracketDensity] = useState(
     typeof window !== "undefined" && window.innerWidth < 768 ? "compact" : "comfortable"
@@ -804,7 +806,7 @@ export default function App(){
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const handler = () => setIsMobile(window.innerWidth < 768);
+    const handler = () => setIsMobileScreen(window.innerWidth < 768);
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
@@ -812,10 +814,10 @@ export default function App(){
   // On mobile: auto-scroll selected matchup into view
   useEffect(() => {
     if (typeof document === "undefined") return;
-    if (phase !== "playoffs" || !activeMatchId || !isMobile) return;
+    if (phase !== "playoffs" || !activeMatchId || !isMobileScreen) return;
     const el = document.getElementById(`match-${activeMatchId}`);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [phase, activeMatchId, isMobile]);
+  }, [phase, activeMatchId, isMobileScreen]);
 
   // Persist sound preference
   useEffect(() => {
@@ -3567,7 +3569,16 @@ if(phase==="teamSetup") return(
       <>
         {simulatingOverlayPlayoffs}
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex"}}>
-        <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
+        {isMobile && sidebarHidden && (
+          <button onClick={()=>setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
+        )}
+        {isMobile && sidebarHidden && (
+          <button onClick={()=>setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
+        )}
+        <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:isMobile&&sidebarHidden?"none":"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
+          {isMobile && (
+            <button onClick={()=>setSidebarHidden(true)} style={{alignSelf:"flex-end",marginBottom:6,background:"transparent",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}} title="Hide menu">⯈</button>
+          )}
           <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Menu</button>
           <button onClick={()=>setShowSaveModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#a78bfa",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>💾</span> Save</button>
           <button onClick={()=>setShowLoadModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📂</span> Load</button>
@@ -3576,7 +3587,7 @@ if(phase==="teamSetup") return(
           <div style={{flex:1}} />
           <button onClick={handleLoadTeamCode} disabled={inSeason} style={{width:"100%",borderRadius:8,background:"#0f172a",border:"1px solid #1e293b",color:"#60a5fa",fontSize:11,fontWeight:700,cursor:inSeason?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📥</span> Load code</button>
         </aside>
-        <div style={{marginLeft:120,flex:1,padding: isMobile ? 12 : 16, paddingBottom: isMobile ? 96 : undefined}}>
+        <div style={{marginLeft:isMobile&&sidebarHidden?0:120,flex:1,padding: isMobile ? 12 : 16, paddingBottom: isMobile ? 96 : undefined}}>
         <div style={{maxWidth:1100,margin:"0 auto",minWidth:0,overflow:"hidden"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom: isMobile ? 14 : 16,flexWrap:"wrap",gap: isMobile ? 8 : 10}}>
             <h2 style={{margin:0,fontSize: isMobile ? 18 : 20,fontWeight:900,color:"#f59e0b",letterSpacing:1}}>Season {seasonNumber} · 🏆 PLAYOFFS</h2>
@@ -4082,8 +4093,17 @@ if(phase==="teamSetup") return(
     }
     return(
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex"}}>
+        {isMobile && sidebarHidden && (
+          <button onClick={()=>setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
+        )}
+        {isMobile && sidebarHidden && (
+          <button onClick={()=>setSidebarHidden(false)} style={{position:"fixed",left:8,top:10,zIndex:60,background:"#0f172a",border:"1px solid #334155",borderRadius:999,padding:"6px 8px",color:"#e5e7eb",fontSize:14,cursor:"pointer"}} title="Show menu">☰</button>
+        )}
         {/* Left sidebar - same as draft screen */}
-        <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
+        <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:isMobile&&sidebarHidden?"none":"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
+          {isMobile && (
+            <button onClick={()=>setSidebarHidden(true)} style={{alignSelf:"flex-end",marginBottom:6,background:"transparent",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}} title="Hide menu">⯈</button>
+          )}
           <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Menu</button>
           <button onClick={()=>setShowSaveModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#a78bfa",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>💾</span> Save</button>
           <button onClick={()=>setShowLoadModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📂</span> Load</button>
@@ -4093,7 +4113,7 @@ if(phase==="teamSetup") return(
           <button onClick={handleLoadTeamCode} disabled={inSeason} style={{width:"100%",borderRadius:8,background:"#0f172a",border:"1px solid #1e293b",color:"#60a5fa",fontSize:11,fontWeight:700,cursor:inSeason?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📥</span> Load code</button>
           {!playoff && <button onClick={runItBack} style={{width:"100%",borderRadius:8,background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🔄</span> Next Season</button>}
         </aside>
-        <div style={{marginLeft:120,flex:1,padding:16}}>
+        <div style={{marginLeft:isMobile&&sidebarHidden?0:120,flex:1,padding:16}}>
         {/* Compact top bar */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
           <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -4623,7 +4643,10 @@ if(phase==="teamSetup") return(
     const simThroughActive = simThroughBreakRequestedRef.current;
     return (
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex"}}>
-        <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
+        <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:isMobile&&sidebarHidden?"none":"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
+          {isMobile && (
+            <button onClick={()=>setSidebarHidden(true)} style={{alignSelf:"flex-end",marginBottom:6,background:"transparent",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}} title="Hide menu">⯈</button>
+          )}
           <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Menu</button>
           <button onClick={()=>setShowSaveModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#a78bfa",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>💾</span> Save</button>
           <button onClick={()=>setShowLoadModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📂</span> Load</button>
@@ -4632,7 +4655,7 @@ if(phase==="teamSetup") return(
           <div style={{flex:1}} />
           <button onClick={handleLoadTeamCode} disabled={inSeason} style={{width:"100%",borderRadius:8,background:"#0f172a",border:"1px solid #1e293b",color:"#60a5fa",fontSize:11,fontWeight:700,cursor:inSeason?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📥</span> Load code</button>
         </aside>
-        <div style={{marginLeft:120,flex:1,padding:16}}>
+        <div style={{marginLeft:isMobile&&sidebarHidden?0:120,flex:1,padding:16}}>
         <div style={{position:"fixed",top:12,right:12,zIndex:50,display:"flex",alignItems:"center",gap:8}}>
           <div style={{display:"flex",gap:4,alignItems:"center",padding:"4px 6px",background:"#0f172a",borderRadius:8,border:"1px solid #334155"}}>
             <button onClick={handleCopyTeamCode} title="Copy team code" style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#94a3b8",cursor:"pointer"}}>🔗 Copy code</button>
@@ -4721,7 +4744,10 @@ if(phase==="teamSetup") return(
       <>
         {simulatingOverlay}
       <div style={{background:"#080f1e",minHeight:"100vh",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui",display:"flex"}}>
-        <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
+        <aside style={{position:"fixed",left:0,top:0,bottom:0,width:120,background:"#0f172a",borderRight:"1px solid #1e293b",display:isMobile&&sidebarHidden?"none":"flex",flexDirection:"column",alignItems:"stretch",paddingTop:12,paddingLeft:8,paddingRight:8,gap:4,zIndex:40,overflow:"hidden"}}>
+          {isMobile && (
+            <button onClick={()=>setSidebarHidden(true)} style={{alignSelf:"flex-end",marginBottom:6,background:"transparent",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}} title="Hide menu">⯈</button>
+          )}
           <button onClick={goToMainMenu} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>🏠</span> Menu</button>
           <button onClick={()=>setShowSaveModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#a78bfa",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>💾</span> Save</button>
           <button onClick={()=>setShowLoadModal(true)} style={{width:"100%",borderRadius:8,background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📂</span> Load</button>
@@ -4730,7 +4756,7 @@ if(phase==="teamSetup") return(
           <div style={{flex:1}} />
           <button onClick={handleLoadTeamCode} disabled={inSeason} style={{width:"100%",borderRadius:8,background:"#0f172a",border:"1px solid #1e293b",color:"#60a5fa",fontSize:11,fontWeight:700,cursor:inSeason?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:6,padding:"8px 10px"}}><span style={{fontSize:14}}>📥</span> Load code</button>
         </aside>
-        <div style={{marginLeft:120,flex:1,padding:16}}>
+        <div style={{marginLeft:isMobile&&sidebarHidden?0:120,flex:1,padding:16}}>
         <div style={{maxWidth:1040,margin:"0 auto"}}>
           <div style={{background:"#0f172a",borderRadius:10,padding:"10px 14px",marginBottom:10,border:"1px solid #1e293b",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
             <div style={{fontSize:11,fontWeight:800,color:"#64748b"}}>Season {seasonNumber} · Game {gameNum} / {SEASON_LENGTH}</div>
