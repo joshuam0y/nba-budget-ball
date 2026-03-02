@@ -4397,12 +4397,12 @@ if(phase==="teamSetup") return(
             const topN = (key, n = 3) =>
               [...withPG].sort((a, b) => (b[key] || 0) - (a[key] || 0)).slice(0, n);
             const categories = [
-              { key: "ppg", label: "Scoring", fmt: (p) => `${rf(p.ppg, 1)} PPG` },
-              { key: "rpg", label: "Rebounds", fmt: (p) => `${rf(p.rpg, 1)} RPG` },
-              { key: "apg", label: "Assists", fmt: (p) => `${rf(p.apg, 1)} APG` },
-              { key: "spg", label: "Steals", fmt: (p) => `${rf(p.spg, 1)} SPG` },
-              { key: "bpg", label: "Blocks", fmt: (p) => `${rf(p.bpg, 1)} BPG` },
-              { key: "tpm", label: "3-pointers made", fmt: (p) => `${p.tpm ?? 0} 3PM` },
+              { key: "ppg", label: "Scoring leader", fmt: (p) => `${rf(p.ppg, 1)} PPG` },
+              { key: "rpg", label: "Rebounding leader", fmt: (p) => `${rf(p.rpg, 1)} RPG` },
+              { key: "apg", label: "Assist leader", fmt: (p) => `${rf(p.apg, 1)} APG` },
+              { key: "spg", label: "Steals leader", fmt: (p) => `${rf(p.spg, 1)} SPG` },
+              { key: "bpg", label: "Blocks leader", fmt: (p) => `${rf(p.bpg, 1)} BPG` },
+              { key: "tpm", label: "3-point leader", fmt: (p) => `${p.tpm ?? 0} 3PM` },
             ];
             const isMyPlayer = (p) => p?.team === myTeamName;
             const rowStyle = (p) => ({
@@ -4414,14 +4414,14 @@ if(phase==="teamSetup") return(
             });
             return (
               <div style={{marginBottom:14,background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #334155"}}>
-                <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:6}}>🎯 STAT LEADERS (full season)</div>
+                <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:6}}>🎯 STAT CHAMPIONS (full season)</div>
                 <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,fontSize:10}}>
                   {categories.map((cat) => (
                     <div key={cat.key}>
                       <div style={{color:"#eab308",fontWeight:700,marginBottom:3}}>{cat.label}</div>
-                      {topN(cat.key).map((p, i) => (
-                        <div key={`${cat.key}-${i}-${p.name}|${p.team}`} style={rowStyle(p)}>
-                          {i + 1}. {p.name}{" "}
+                      {topN(cat.key, 1).map((p) => (
+                        <div key={`${cat.key}-${p.name}|${p.team}`} style={rowStyle(p)}>
+                          {p.name}{" "}
                           <span style={{color:"#64748b",fontSize:9}}>
                             ({p.pos || "—"}) · {p.team}
                           </span>{" "}
