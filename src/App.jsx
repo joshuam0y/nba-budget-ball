@@ -4362,18 +4362,6 @@ if(phase==="teamSetup") return(
             </div>
             );
           })()}
-          {(() => {
-            const teamRecords = {};
-            finalAi.forEach((t) => { teamRecords[t.name] = { w: t.w, l: t.l }; });
-            teamRecords[myTeamName] = { w: userRecord.w, l: userRecord.l };
-            return (
-              <div style={{marginBottom:14}}>
-                <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"4px 0"}}>Loading awards…</div>}>
-                  <AllNBAAllDefensiveLazy leaders={leagueLeaders} teamRecords={teamRecords} myTeamName={myTeamName} dpoyVotes={dpoyVotes} mvpVotes={mvpVotes}/>
-                </Suspense>
-              </div>
-            );
-          })()}
           {leagueMVP && (
             <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:10,marginBottom:14}}>
               <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #fbbf24",textAlign:"center"}}>
@@ -4400,6 +4388,51 @@ if(phase==="teamSetup") return(
               )}
             </div>
           )}
+          {(() => {
+            const teamRecords = {};
+            finalAi.forEach((t) => { teamRecords[t.name] = { w: t.w, l: t.l }; });
+            teamRecords[myTeamName] = { w: userRecord.w, l: userRecord.l };
+            return (
+              <div style={{marginBottom:14}}>
+                <Suspense fallback={<div style={{fontSize:11,color:"#64748b",padding:"4px 0"}}>Loading awards…</div>}>
+                  <AllNBAAllDefensiveLazy leaders={leagueLeaders} teamRecords={teamRecords} myTeamName={myTeamName} dpoyVotes={dpoyVotes} mvpVotes={mvpVotes}/>
+                </Suspense>
+              </div>
+            );
+          })()}
+          {(() => {
+            if (!allStarSelections) return null;
+            const rowStyle = (p) => ({
+              color: p?.team === myTeamName ? "#22c55e" : "#e2e8f0",
+              fontWeight: p?.team === myTeamName ? 700 : 400,
+            });
+            const reserveRowStyle = (p) => ({
+              color: p?.team === myTeamName ? "#22c55e" : "#e2e8f0",
+              fontWeight: p?.team === myTeamName ? 700 : 400,
+              opacity: 0.9,
+            });
+            return (
+              <div style={{marginBottom:14,background:"#020617",borderRadius:14,padding:12,border:"1px solid #334155"}}>
+                <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:6}}>⭐ ALL-STAR SELECTIONS</div>
+                <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:14,fontSize:11}}>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:800,color:"#60a5fa",marginBottom:8}}>EAST</div>
+                    {allStarSelections.east?.starters?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
+                    {(allStarSelections.east?.starters || []).map((p,i)=>(<div key={i} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} {p.allStarRole==="Starter"?"★":""}</div>))}
+                    {allStarSelections.east?.reserves?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:8,marginBottom:4}}>Reserves</div>}
+                    {(allStarSelections.east?.reserves || []).map((p,i)=>(<div key={i} style={reserveRowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team}</div>))}
+                  </div>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:800,color:"#f87171",marginBottom:8}}>WEST</div>
+                    {allStarSelections.west?.starters?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
+                    {(allStarSelections.west?.starters || []).map((p,i)=>(<div key={i} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} {p.allStarRole==="Starter"?"★":""}</div>))}
+                    {allStarSelections.west?.reserves?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:8,marginBottom:4}}>Reserves</div>}
+                    {(allStarSelections.west?.reserves || []).map((p,i)=>(<div key={i} style={reserveRowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team}</div>))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           {(() => {
             const myTeamAwards = getMyTeamAwardsByPlayer(roster, playerAwards);
             if (myTeamAwards.length === 0) return null;
