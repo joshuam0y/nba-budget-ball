@@ -1467,6 +1467,59 @@ const soundtrackRef = useRef(null);
     return max;
   }, [seasonGameResults]);
 
+  // In-season achievements: pop as soon as they're earned (don't wait for season end)
+  useEffect(() => {
+    if (phase !== "game" && phase !== "allStarBreak") return;
+    const unlocked = [];
+    if (phase === "game" && season?.gp) {
+      const userW = season.w ?? 0, userL = season.l ?? 0;
+      if (userW >= 50 && unlockAchievementForSave("fifty_wins")) unlocked.push("fifty_wins");
+      if (userW >= 60 && unlockAchievementForSave("sixty_wins")) unlocked.push("sixty_wins");
+      if (maxWinStreak >= 10 && unlockAchievementForSave("win_streak_10")) unlocked.push("win_streak_10");
+      const opponentsBeaten = new Set((seasonGameResults || []).filter((r) => r?.won && r?.oppName).map((r) => r.oppName));
+      if (opponentsBeaten.size >= 29 && unlockAchievementForSave("beat_every_team")) unlocked.push("beat_every_team");
+      if (userW > 41 && unlockAchievementForSave("winning_season")) unlocked.push("winning_season");
+      if (userW + userL >= 82 && userW === 82 && unlockAchievementForSave("perfect_82")) unlocked.push("perfect_82");
+      const confRank = (() => {
+        if (!aiTeams?.length) return 15;
+        const all = [{ name: myTeamName, w: userW, l: userL, isPlayer: true }, ...(aiTeams || []).map((t) => ({ name: t.name, w: t.w, l: t.l, isPlayer: false }))];
+        const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
+        const conf = all.filter((t) => t.name === myTeamName || (aiTeams || []).find((a) => a.name === t.name)?.conference === userMeta.conference);
+        conf.sort((a, b) => (b.w - b.l) - (a.w - a.l));
+        const idx = conf.findIndex((t) => t.name === myTeamName);
+        return idx >= 0 ? idx + 1 : 15;
+      })();
+      if (confRank === 1 && unlockAchievementForSave("one_seed")) unlocked.push("one_seed");
+      const homeAway = (seasonGameResults || []).reduce((acc, r) => {
+        if (r && r.home === true) acc.homeW += r.won ? 1 : 0; else if (r && r.home === false) acc.awayW += r.won ? 1 : 0;
+        if (r && r.home === true) acc.homeL += r.won ? 0 : 1; else if (r && r.home === false) acc.awayL += r.won ? 0 : 1;
+        return acc;
+      }, { homeW: 0, homeL: 0, awayW: 0, awayL: 0 });
+      if (homeAway.homeW === 41 && homeAway.homeL === 0 && unlockAchievementForSave("home_court")) unlocked.push("home_court");
+      if (homeAway.awayW >= 25 && unlockAchievementForSave("road_warrior")) unlocked.push("road_warrior");
+    }
+    if (phase === "allStarBreak" && allStarSelections) {
+      const myTeamAllStars = (() => {
+        const east = [...(allStarSelections.east?.starters || []), ...(allStarSelections.east?.reserves || [])];
+        const west = [...(allStarSelections.west?.starters || []), ...(allStarSelections.west?.reserves || [])];
+        return east.concat(west).filter((p) => p?.team === myTeamName).length;
+      })();
+      if (myTeamAllStars >= 1 && unlockAchievementForSave("all_star_1")) unlocked.push("all_star_1");
+      if (myTeamAllStars >= 2 && unlockAchievementForSave("all_star_2")) unlocked.push("all_star_2");
+      if (myTeamAllStars >= 3 && unlockAchievementForSave("all_star_3")) unlocked.push("all_star_3");
+      if (myTeamAllStars >= 4 && unlockAchievementForSave("all_star_4")) unlocked.push("all_star_4");
+      if (myTeamAllStars >= 5 && unlockAchievementForSave("all_five_all_star")) unlocked.push("all_five_all_star");
+      const myTeamAllStarStarters = (() => {
+        const eastStarters = allStarSelections.east?.starters || [];
+        const westStarters = allStarSelections.west?.starters || [];
+        return eastStarters.concat(westStarters).filter((p) => p?.team === myTeamName).length;
+      })();
+      if (myTeamAllStarStarters >= 1 && unlockAchievementForSave("all_star_starter")) unlocked.push("all_star_starter");
+      if (myTeamAllStarStarters >= 2 && unlockAchievementForSave("all_star_starter_2")) unlocked.push("all_star_starter_2");
+    }
+    if (unlocked.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...unlocked]);
+  }, [phase, season, seasonGameResults, aiTeams, myTeamName, allStarSelections, maxWinStreak, unlockAchievementForSave]);
+
   useEffect(() => {
     if (phase !== "seasonEnd" || !season?.gp) return;
     const userW = season.w ?? 0, userL = season.l ?? 0;
