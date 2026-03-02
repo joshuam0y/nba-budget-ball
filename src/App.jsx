@@ -69,6 +69,7 @@ const ACHIEVEMENT_META = {
   dynasty: { category: "Playoff runs", difficulty: 5 },
   cinderella: { category: "Playoff runs", difficulty: 4 },
   sweep: { category: "Playoff runs", difficulty: 3 },
+  undefeated_playoffs: { category: "Playoff runs", difficulty: 5 },
   reverse_sweep: { category: "Playoff runs", difficulty: 5 },
   game_seven: { category: "Playoff runs", difficulty: 3 },
   upset: { category: "Playoff runs", difficulty: 2 },
@@ -987,18 +988,6 @@ export default function App(){
     setShowTutorial(false);
   }, []);
 
-  const handleCopyTeamCode = useCallback(() => {
-    const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
-    const code = ids.join("-");
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(code).catch(() => {
-        window.prompt("Copy your team code:", code);
-      });
-    } else {
-      window.prompt("Copy your team code:", code);
-    }
-  }, [roster]);
-
   const handleLoadTeamCode = useCallback(() => {
     if (inSeason) return;
     const input =
@@ -1229,6 +1218,20 @@ export default function App(){
     if (shareStatusTimerRef.current) clearTimeout(shareStatusTimerRef.current);
     shareStatusTimerRef.current = setTimeout(() => setShareStatus(null), 3000);
   }, []);
+  const handleCopyTeamCode = useCallback(() => {
+    const ids = POSITIONS.map((pos) => roster[pos]?.id || 0);
+    const code = ids.join("-");
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(code).then(() => {
+        setShareStatus({ type: "success", msg: "Code copied!" });
+        clearShareStatus();
+      }).catch(() => {
+        window.prompt("Copy your team code:", code);
+      });
+    } else {
+      window.prompt("Copy your team code:", code);
+    }
+  }, [roster, clearShareStatus]);
   const handleShareLineup = useCallback(async () => {
     const filled = POSITIONS.every((pos) => roster[pos]);
     if (!filled) {
@@ -1664,6 +1667,26 @@ const soundtrackRef = useRef(null);
     });
     const ach = [];
     if (wonChip && unlockAchievementForSave("first_championship")) ach.push("first_championship");
+    const playoffUndefeated = (() => {
+      if (!wonChip || !bracket) return false;
+      let wins = 0, losses = 0;
+      const collect = (matchup) => {
+        if (!matchup?.games?.length) return;
+        const topIsPlayer = matchup.top?.isPlayer, botIsPlayer = matchup.bot?.isPlayer;
+        if (!topIsPlayer && !botIsPlayer) return;
+        const ourIdx = topIsPlayer ? 0 : 1;
+        matchup.games.forEach((g) => { if (g.winnerIdx === ourIdx) wins++; else losses++; });
+      };
+      ["east", "west"].forEach((conf) => {
+        const sub = bracket[conf];
+        if (!sub) return;
+        [...(sub.playIn || []), ...(sub.firstRound || []), ...(sub.semis || [])].forEach(collect);
+        if (sub.finals) collect(sub.finals);
+      });
+      if (bracket.finals) collect(bracket.finals);
+      return losses === 0 && wins >= 4;
+    })();
+    if (wonChip && playoffUndefeated && unlockAchievementForSave("undefeated_playoffs")) ach.push("undefeated_playoffs");
     if (wonChip && (careerStats?.championships ?? 0) + 1 >= 3 && unlockAchievementForSave("three_peat")) ach.push("three_peat");
     if (wonChip && (careerStats?.championships ?? 0) + 1 >= 5 && unlockAchievementForSave("dynasty")) ach.push("dynasty");
     if (wonChip && playerPlayoffSeedThisYear >= 6 && playerPlayoffSeedThisYear <= 8 && unlockAchievementForSave("cinderella")) ach.push("cinderella");
@@ -2741,6 +2764,8 @@ const startSeason = async () => {
     const west = all.filter((t) => t.conference === "West");
     const eastSeeds = seedConference(east, EAST_DIVISIONS);
     const westSeeds = seedConference(west, WEST_DIVISIONS);
+    eastSeeds.forEach((t, i) => { t.playoffSeed = i + 1; });
+    westSeeds.forEach((t, i) => { t.playoffSeed = i + 1; });
     const eastBracket = buildBracket(eastSeeds);
     const westBracket = buildBracket(westSeeds);
     const finalsMatchup = { id: "finals", top: null, bot: null, winner: null, games: [], label: "FINALS" };
@@ -2943,9 +2968,11 @@ const startSeason = async () => {
         const beaten = out.result.playerIsTop ? out.result.botName : out.result.topName;
         setTeamsDefeatedInPlayoffs((prev) => [...prev, beaten]);
         const ach = [];
-        if (!out.result?.playerIsTop && unlockAchievementForSave("upset")) ach.push("upset");
         const parsed = getPlayoffMatchup(out.bracket, matchId);
         const m = parsed?.matchup;
+        const playerSeed = m ? (out.result.playerIsTop ? m.top?.playoffSeed : m.bot?.playoffSeed) : null;
+        const oppSeed = m ? (out.result.playerIsTop ? m.bot?.playoffSeed : m.top?.playoffSeed) : null;
+        if (!out.result?.playerIsTop && playerSeed != null && oppSeed != null && playerSeed > oppSeed && unlockAchievementForSave("upset")) ach.push("upset");
         if (m?.games) {
           const ourIdx = m.top?.isPlayer ? 0 : 1;
           const games = m.games;
@@ -3013,7 +3040,9 @@ const startSeason = async () => {
         const beaten = lastResult.playerIsTop ? lastResult.botName : lastResult.topName;
         setTeamsDefeatedInPlayoffs((prev) => [...prev, beaten]);
         const ach = [];
-        if (!lastResult?.playerIsTop && unlockAchievementForSave("upset")) ach.push("upset");
+        const playerSeed = m ? (lastResult.playerIsTop ? m.top?.playoffSeed : m.bot?.playoffSeed) : null;
+        const oppSeed = m ? (lastResult.playerIsTop ? m.bot?.playoffSeed : m.top?.playoffSeed) : null;
+        if (!lastResult?.playerIsTop && playerSeed != null && oppSeed != null && playerSeed > oppSeed && unlockAchievementForSave("upset")) ach.push("upset");
         if (m?.games) {
           const games = m.games;
           const n = games.length;
@@ -3251,7 +3280,7 @@ if(phase==="teamSetup") return(
         <button onClick={()=>setShowTrophyCase(true)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#fbbf24",cursor:"pointer"}} title="Achievements">🏆 {(unlockedAchievements||[]).length}/{ACHIEVEMENTS.length}</button>
       </div>
       {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{(()=>{const _groups=[];let _cur=null;sortAchievementsForDisplay(ACHIEVEMENTS).forEach(a=>{const cat=(ACHIEVEMENT_META[a.id]||{}).category||"Other";if(cat!==_cur){_groups.push({cat,items:[]});_cur=cat;}_groups[_groups.length-1].items.push(a);});return _groups.map(({cat,items})=>(<React.Fragment key={cat}><div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:1,marginTop:12,marginBottom:6,paddingBottom:4,borderBottom:"1px solid #1e293b"}}>{cat}</div>{items.map(a=>{const unlocked=(unlockedAchievements||[]).includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}{unlocked&&<button onClick={(e)=>{e.stopPropagation();handleShareAchievement(a);}} style={{marginTop:8,background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>📤 Share</button>}</div>);})}</React.Fragment>));})()}</div></div></div>)}
-      {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>handleShareAchievement(a)} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>📤 Share</button><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
+      {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>handleShareAchievement(a)} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>📤 Share</button><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button><button onClick={()=>setNewlyUnlockedAchievements([])} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss all</button></div>);})}
       <div style={{position:"fixed",bottom:16,right:16,zIndex:50,display:"flex",alignItems:"center",gap:6,background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"8px 12px",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
         <button onClick={()=>setSoundOn((s)=>!s)} style={{background:soundOn?"#14532d":"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,color:soundOn?"#22c55e":"#9ca3af",cursor:"pointer"}}>{soundOn?"🔊":"🔈"}</button>
         <button onClick={skipSong} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"8px 10px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}} title="Skip song">⏭ Skip</button>
@@ -3352,7 +3381,7 @@ if(phase==="teamSetup") return(
               </div>
             </div>
           )}
-          {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>handleShareAchievement(a)} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>📤 Share</button><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
+          {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>handleShareAchievement(a)} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>📤 Share</button><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button><button onClick={()=>setNewlyUnlockedAchievements([])} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss all</button></div>);})}
           {showSaveModal && (
             <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>{ setShowSaveModal(false); setSaveOverwriteSlot(null); }}>
               <div style={{background:"#0f172a",borderRadius:14,border:"1px solid #334155",padding:20,maxWidth:360,width:"100%",maxHeight:"80vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
@@ -3832,7 +3861,7 @@ if(phase==="teamSetup") return(
           {playoff && <span style={{fontSize:11,color:"#f59e0b",fontWeight:700}}>Play through playoffs first</span>}
         </div>
         {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{(()=>{const _groups=[];let _cur=null;sortAchievementsForDisplay(ACHIEVEMENTS).forEach(a=>{const cat=(ACHIEVEMENT_META[a.id]||{}).category||"Other";if(cat!==_cur){_groups.push({cat,items:[]});_cur=cat;}_groups[_groups.length-1].items.push(a);});return _groups.map(({cat,items})=>(<React.Fragment key={cat}><div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:1,marginTop:12,marginBottom:6,paddingBottom:4,borderBottom:"1px solid #1e293b"}}>{cat}</div>{items.map(a=>{const unlocked=(unlockedAchievements||[]).includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}{unlocked&&<button onClick={(e)=>{e.stopPropagation();handleShareAchievement(a);}} style={{marginTop:8,background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>📤 Share</button>}</div>);})}</React.Fragment>));})()}</div></div></div>)}
-        {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>handleShareAchievement(a)} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>📤 Share</button><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
+        {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>handleShareAchievement(a)} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>📤 Share</button><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button><button onClick={()=>setNewlyUnlockedAchievements([])} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss all</button></div>);})}
         {shareStatus&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:10001,fontSize:10,fontWeight:600,color:(typeof shareStatus==="object"&&shareStatus.type==="error")?"#f87171":(typeof shareStatus==="object"&&shareStatus.type==="success")?"#22c55e":"#60a5fa",padding:"4px 12px",background:(typeof shareStatus==="object"&&shareStatus.type==="error")?"rgba(248,113,113,0.2)":(typeof shareStatus==="object"&&shareStatus.type==="success")?"rgba(34,197,94,0.2)":"rgba(96,165,250,0.2)",borderRadius:8}}>{typeof shareStatus==="object"?shareStatus.msg:shareStatus}</div>)}
         {saveToast&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:12,fontWeight:700,color:"#22c55e",padding:"10px 20px",background:"rgba(34,197,94,0.2)",borderRadius:8,border:"1px solid #22c55e"}}>✓ Saved</div>)}
         {showSaveModal && (
@@ -4215,7 +4244,7 @@ if(phase==="teamSetup") return(
           </div>
         </div>
         {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{(()=>{const _groups=[];let _cur=null;sortAchievementsForDisplay(ACHIEVEMENTS).forEach(a=>{const cat=(ACHIEVEMENT_META[a.id]||{}).category||"Other";if(cat!==_cur){_groups.push({cat,items:[]});_cur=cat;}_groups[_groups.length-1].items.push(a);});return _groups.map(({cat,items})=>(<React.Fragment key={cat}><div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:1,marginTop:12,marginBottom:6,paddingBottom:4,borderBottom:"1px solid #1e293b"}}>{cat}</div>{items.map(a=>{const unlocked=(unlockedAchievements||[]).includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}{unlocked&&<button onClick={(e)=>{e.stopPropagation();handleShareAchievement(a);}} style={{marginTop:8,background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>📤 Share</button>}</div>);})}</React.Fragment>));})()}</div></div></div>)}
-        {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>handleShareAchievement(a)} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>📤 Share</button><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
+        {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>handleShareAchievement(a)} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>📤 Share</button><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button><button onClick={()=>setNewlyUnlockedAchievements([])} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss all</button></div>);})}
         {shareStatus&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:10001,fontSize:10,fontWeight:600,color:(typeof shareStatus==="object"&&shareStatus.type==="error")?"#f87171":(typeof shareStatus==="object"&&shareStatus.type==="success")?"#22c55e":"#60a5fa",padding:"4px 12px",background:(typeof shareStatus==="object"&&shareStatus.type==="error")?"rgba(248,113,113,0.2)":(typeof shareStatus==="object"&&shareStatus.type==="success")?"rgba(34,197,94,0.2)":"rgba(96,165,250,0.2)",borderRadius:8}}>{typeof shareStatus==="object"?shareStatus.msg:shareStatus}</div>)}
         <div style={{maxWidth:900,margin:"0 auto"}}>
           <div style={{textAlign:"center",marginBottom:20}}>
@@ -4350,7 +4379,7 @@ if(phase==="teamSetup") return(
             <button onClick={()=>setShowScheduleModal(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Full schedule">📅 Schedule</button>
           </div>
           {showTrophyCase&&(<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}><div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div><button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button></div><div style={{display:"flex",flexDirection:"column",gap:10}}>{(()=>{const _groups=[];let _cur=null;sortAchievementsForDisplay(ACHIEVEMENTS).forEach(a=>{const cat=(ACHIEVEMENT_META[a.id]||{}).category||"Other";if(cat!==_cur){_groups.push({cat,items:[]});_cur=cat;}_groups[_groups.length-1].items.push(a);});return _groups.map(({cat,items})=>(<React.Fragment key={cat}><div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:1,marginTop:12,marginBottom:6,paddingBottom:4,borderBottom:"1px solid #1e293b"}}>{cat}</div>{items.map(a=>{const unlocked=(unlockedAchievements||[]).includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}{unlocked&&<button onClick={(e)=>{e.stopPropagation();handleShareAchievement(a);}} style={{marginTop:8,background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>📤 Share</button>}</div>);})}</React.Fragment>));})()}</div></div></div>)}
-          {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>handleShareAchievement(a)} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>📤 Share</button><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button></div>);})}
+          {newlyUnlockedAchievements.map((id,idx)=>{const a=ACHIEVEMENTS.find((x)=>x.id===id);if(!a)return null;return(<div key={id} style={{position:"fixed",top:12+idx*44,left:"50%",transform:"translateX(-50%)",zIndex:9997,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",padding:"10px 16px",borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:8,maxWidth:"95vw"}}><span style={{fontWeight:800,fontSize:12}}>🏆 Achievement unlocked!</span><span style={{fontSize:11}}>{a.icon} {a.label}</span><button onClick={()=>handleShareAchievement(a)} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>📤 Share</button><button onClick={()=>setNewlyUnlockedAchievements((prev)=>prev.filter((x)=>x!==id))} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss</button><button onClick={()=>setNewlyUnlockedAchievements([])} style={{background:"rgba(255,255,255,0.3)",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#fff"}}>Dismiss all</button></div>);})}
           {shareStatus&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:10001,fontSize:10,fontWeight:600,color:(typeof shareStatus==="object"&&shareStatus.type==="error")?"#f87171":(typeof shareStatus==="object"&&shareStatus.type==="success")?"#22c55e":"#60a5fa",padding:"4px 12px",background:(typeof shareStatus==="object"&&shareStatus.type==="error")?"rgba(248,113,113,0.2)":(typeof shareStatus==="object"&&shareStatus.type==="success")?"rgba(34,197,94,0.2)":"rgba(96,165,250,0.2)",borderRadius:8}}>{typeof shareStatus==="object"?shareStatus.msg:shareStatus}</div>)}
           {saveToast&&(<div style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9996,fontSize:12,fontWeight:700,color:"#22c55e",padding:"10px 20px",background:"rgba(34,197,94,0.2)",borderRadius:8,border:"1px solid #22c55e"}}>✓ Saved</div>)}
           {showHistoryModal && (
@@ -4902,7 +4931,7 @@ if(phase==="teamSetup") return(
           <span style={{ fontSize: 11 }}>
             {newlyUnlockedAchievements.map((id) => ACHIEVEMENTS.find((a) => a.id === id)?.label).filter(Boolean).join(", ")}
           </span>
-          <button onClick={() => setNewlyUnlockedAchievements([])} style={{ background: "rgba(255,255,255,0.3)", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#fff" }}>Dismiss</button>
+          <button onClick={() => setNewlyUnlockedAchievements([])} style={{ background: "rgba(255,255,255,0.3)", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#fff" }}>Dismiss all</button>
         </div>
       )}
 

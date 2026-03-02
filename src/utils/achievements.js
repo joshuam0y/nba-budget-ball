@@ -44,6 +44,7 @@ export const ACHIEVEMENTS = [
   { id: "blowout", label: "Blowout", desc: "Win a game by 40+ points", icon: "💥" },
   { id: "overtime_win", label: "Overtime", desc: "Win an overtime game", icon: "⏱️" },
   { id: "sweep", label: "Sweep", desc: "Sweep a playoff series 4–0", icon: "🧹" },
+  { id: "undefeated_playoffs", label: "Undefeated playoffs", desc: "Win the title without losing a playoff game", icon: "💎" },
   { id: "reverse_sweep", label: "Reverse sweep", desc: "Win a series after going down 0–3", icon: "↩️" },
   { id: "game_seven", label: "Game 7", desc: "Win a Game 7", icon: "7️⃣" },
   { id: "upset", label: "Upset", desc: "Beat a higher seed in a playoff series", icon: "🎲" },
