@@ -182,7 +182,7 @@ function groupAwardsByType(list) {
     if (!byAward[award]) byAward[award] = [];
     byAward[award].push(season);
   });
-  const order = ["MVP", "DPOY", "FINALSMVP", "CHAMP", "NBA1", "NBA2", "NBA3", "DEF1", "DEF2", "AS-E-S", "AS-E-R", "AS-W-S", "AS-W-R", "TMVP"];
+  const order = ["MVP", "DPOY", "FINALSMVP", "CHAMP", "AS-E-S", "AS-E-R", "AS-W-S", "AS-W-R", "NBA1", "NBA2", "NBA3", "DEF1", "DEF2", "TMVP"];
   return order.filter((a) => byAward[a]).map((award) => ({
     award,
     label: AWARD_LABELS[award] || award,
