@@ -41,7 +41,7 @@ export function computeMvpVotesForGame(res, myTeamLabel, oppLabel, pog, userWon)
     (stats || []).forEach((s) => {
       if (!s || s.name == null) return;
       const key = playerVoteKey(s.name, teamLabel);
-      const base = (Number(s.pts) || 0) * MVP.pts + (Number(s.reb) || 0) * MVP.reb + (Number(s.ast) || 0) * MVP.ast;
+      const base = (Number(s.pts) || 0) * MVP.pts + (Number(s.reb) || 0) * MVP.reb + (Number(s.ast) || 0) * MVP.ast + (Number(s.stl) || 0) * MVP.stl + (Number(s.blk) || 0) * MVP.blk - (Number(s.tov) || 0) * MVP.tov;
       let v = base;
       if (pog && pog.name === s.name && pog.team === teamLabel) v += MVP.pogBonus;
       if (won) v += MVP.winBonus;
