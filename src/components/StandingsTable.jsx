@@ -26,6 +26,27 @@ export function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
   const east = all.filter((t) => t.conference === "East").sort(standingsSort);
   const west = all.filter((t) => t.conference === "West").sort(standingsSort);
 
+  const SEASON_LENGTH = 82;
+  const gr = (t) => SEASON_LENGTH - (t.w + t.l);
+  const buildClinchMap = (rows) => {
+    const map = {};
+    rows.forEach((t) => { map[t.name] = { clinchedPlayoffs: false, clinchedPlayIn: false, clinchedDivision: false }; });
+    if (rows.length < 11) return map;
+    const seventh = rows[6], eleventh = rows[10];
+    rows.forEach((t, i) => {
+      const rank = i + 1;
+      if (rank <= 6 && seventh && t.w >= (seventh.w || 0) + gr(seventh)) map[t.name].clinchedPlayoffs = true;
+      if (rank <= 10 && eleventh && t.w >= (eleventh.w || 0) + gr(eleventh)) map[t.name].clinchedPlayIn = true;
+    });
+    Array.from(new Set(rows.map((t) => t.division))).forEach((div) => {
+      const divTeams = rows.filter((t) => t.division === div).sort(standingsSort);
+      if (divTeams.length >= 2 && divTeams[0].w >= (divTeams[1].w || 0) + gr(divTeams[1])) map[divTeams[0].name].clinchedDivision = true;
+    });
+    return map;
+  };
+  const eastClinch = buildClinchMap(east);
+  const westClinch = buildClinchMap(west);
+
   const buildRankMap = (rows) => {
     const m = {};
     rows.forEach((t, i) => {
@@ -36,7 +57,7 @@ export function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
   const eastRanks = buildRankMap(east);
   const westRanks = buildRankMap(west);
 
-  const renderTable = (confLabel, color, rows, ranks) => (
+  const renderTable = (confLabel, color, rows, ranks, clinchMap) => (
     <table key={confLabel} style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 280 }}>
       <thead>
         <tr style={{ borderBottom: "1px solid #1e293b" }}>
@@ -76,6 +97,9 @@ export function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
                         </td>
                         <td style={{ padding: "4px 6px", fontWeight: 700, color: t.isPlayer ? "#60a5fa" : "#e2e8f0" }}>
                           {t.isPlayer ? "🌟 " : ""}{t.name}
+                          {clinchMap[t.name]?.clinchedPlayoffs && <span style={{ marginLeft: 2, fontSize: 9, color: "#22c55e", fontWeight: 800 }} title="Clinched playoffs">-x</span>}
+                          {clinchMap[t.name]?.clinchedPlayIn && !clinchMap[t.name]?.clinchedPlayoffs && <span style={{ marginLeft: 2, fontSize: 9, color: "#f59e0b", fontWeight: 800 }} title="Clinched play-in">-w</span>}
+                          {clinchMap[t.name]?.clinchedDivision && <span style={{ marginLeft: 2, fontSize: 9, color: "#60a5fa", fontWeight: 800 }} title="Clinched division">-y</span>}
                           {isDivWinner && <span style={{ marginLeft: 4, fontSize: 9, background: "#0369a1", color: "#e0f2fe", borderRadius: 3, padding: "1px 4px" }}>DIV</span>}
                           {idx === 5 && <span style={{ marginLeft: 4, fontSize: 9, background: "#14532d", color: "#4ade80", borderRadius: 3, padding: "1px 4px" }}>6</span>}
                           {(idx === 6 || idx === 7) && <span style={{ marginLeft: 4, fontSize: 9, background: "#78350f", color: "#fbbf24", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
@@ -107,6 +131,9 @@ export function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
                   </td>
                   <td style={{ padding: "4px 6px", fontWeight: 700, color: t.isPlayer ? "#60a5fa" : "#e2e8f0" }}>
                     {t.isPlayer ? "🌟 " : ""}{t.name}
+                    {clinchMap[t.name]?.clinchedPlayoffs && <span style={{ marginLeft: 2, fontSize: 9, color: "#22c55e", fontWeight: 800 }} title="Clinched playoffs">-x</span>}
+                    {clinchMap[t.name]?.clinchedPlayIn && !clinchMap[t.name]?.clinchedPlayoffs && <span style={{ marginLeft: 2, fontSize: 9, color: "#f59e0b", fontWeight: 800 }} title="Clinched play-in">-w</span>}
+                    {clinchMap[t.name]?.clinchedDivision && <span style={{ marginLeft: 2, fontSize: 9, color: "#60a5fa", fontWeight: 800 }} title="Clinched division">-y</span>}
                     {isDivWinner && <span style={{ marginLeft: 4, fontSize: 9, background: "#0369a1", color: "#e0f2fe", borderRadius: 3, padding: "1px 4px" }}>DIV</span>}
                     {idx === 5 && <span style={{ marginLeft: 4, fontSize: 9, background: "#14532d", color: "#4ade80", borderRadius: 3, padding: "1px 4px" }}>6</span>}
                     {(idx === 6 || idx === 7) && <span style={{ marginLeft: 4, fontSize: 9, background: "#78350f", color: "#fbbf24", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
@@ -160,10 +187,10 @@ export function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: 10, overflowX: "auto" }}>
-        {renderTable("EAST", "#3b82f6", east, eastRanks)}
-        {renderTable("WEST", "#f59e0b", west, westRanks)}
+        {renderTable("EAST", "#3b82f6", east, eastRanks, eastClinch)}
+        {renderTable("WEST", "#f59e0b", west, westRanks, westClinch)}
       </div>
-      <div style={{ padding: "6px 12px", borderTop: "2px dashed #1e293b", fontSize: 9, color: "#22c55e" }}>▲ You’re in {userMeta.conference} ({userMeta.division}) · Top 6 direct · 7–10 play-in</div>
+      <div style={{ padding: "6px 12px", borderTop: "2px dashed #1e293b", fontSize: 9, color: "#22c55e" }}>▲ You’re in {userMeta.conference} ({userMeta.division}) · Top 6 direct · 7–10 play-in · -x clinched playoffs · -w clinched play-in · -y clinched division</div>
     </div>
   );
 }

@@ -119,6 +119,7 @@ const ACHIEVEMENT_META = {
   all_league_leaders: { category: "Player awards", difficulty: 5 },
   make_finals: { category: "Playoff runs", difficulty: 2 },
   three_point_leader: { category: "Player awards", difficulty: 3 },
+  clinched_division: { category: "Season milestones", difficulty: 3 },
 
   // Career / longevity
   seasons_10: { category: "Career grind", difficulty: 2 },
@@ -1467,6 +1468,25 @@ const soundtrackRef = useRef(null);
     return max;
   }, [seasonGameResults]);
 
+  // Clinching: only true when mathematically locked (no one can catch you)
+  const clinchStatus = useMemo(() => {
+    if (!season?.gp || !aiTeams?.length) return { clinchedPlayoffs: false, clinchedPlayIn: false, clinchedTopSeed: false, clinchedDivision: false };
+    const userW = season.w ?? 0, userL = season.l ?? 0;
+    const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
+    const all = [{ name: myTeamName, w: userW, l: userL, conference: userMeta.conference, division: userMeta.division }, ...(aiTeams || []).map((t) => ({ name: t.name, w: t.w, l: t.l, conference: t.conference, division: t.division }))];
+    const gr = (t) => 82 - ((t.w || 0) + (t.l || 0));
+    const conf = all.filter((t) => t.conference === userMeta.conference).sort((a, b) => (b.w - b.l) - (a.w - a.l));
+    const userRank = conf.findIndex((t) => t.name === myTeamName) + 1;
+    const seventh = conf[6], eleventh = conf[10], second = conf[1];
+    const clinchedPlayoffs = userRank >= 1 && userRank <= 6 && seventh && userW >= (seventh.w || 0) + gr(seventh);
+    const clinchedPlayIn = userRank >= 1 && userRank <= 10 && eleventh && userW >= (eleventh.w || 0) + gr(eleventh);
+    const clinchedTopSeed = userRank === 1 && second && userW >= (second.w || 0) + gr(second);
+    const divTeams = all.filter((t) => t.division === userMeta.division).sort((a, b) => (b.w - b.l) - (a.w - a.l));
+    const divSecond = divTeams[1];
+    const clinchedDivision = divTeams[0]?.name === myTeamName && divSecond && userW >= (divSecond.w || 0) + gr(divSecond);
+    return { clinchedPlayoffs, clinchedPlayIn, clinchedTopSeed, clinchedDivision };
+  }, [season, aiTeams, myTeamName]);
+
   // In-season achievements: pop as soon as they're earned (don't wait for season end)
   useEffect(() => {
     if (phase !== "game" && phase !== "allStarBreak") return;
@@ -1480,16 +1500,9 @@ const soundtrackRef = useRef(null);
       if (opponentsBeaten.size >= 29 && unlockAchievementForSave("beat_every_team")) unlocked.push("beat_every_team");
       if (userW > 41 && unlockAchievementForSave("winning_season")) unlocked.push("winning_season");
       if (userW + userL >= 82 && userW === 82 && unlockAchievementForSave("perfect_82")) unlocked.push("perfect_82");
-      const confRank = (() => {
-        if (!aiTeams?.length) return 15;
-        const all = [{ name: myTeamName, w: userW, l: userL, isPlayer: true }, ...(aiTeams || []).map((t) => ({ name: t.name, w: t.w, l: t.l, isPlayer: false }))];
-        const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
-        const conf = all.filter((t) => t.name === myTeamName || (aiTeams || []).find((a) => a.name === t.name)?.conference === userMeta.conference);
-        conf.sort((a, b) => (b.w - b.l) - (a.w - a.l));
-        const idx = conf.findIndex((t) => t.name === myTeamName);
-        return idx >= 0 ? idx + 1 : 15;
-      })();
-      if (confRank === 1 && unlockAchievementForSave("one_seed")) unlocked.push("one_seed");
+      if (clinchStatus.clinchedTopSeed && unlockAchievementForSave("one_seed")) unlocked.push("one_seed");
+      if (clinchStatus.clinchedPlayoffs && unlockAchievementForSave("first_playoff")) unlocked.push("first_playoff");
+      if (clinchStatus.clinchedDivision && unlockAchievementForSave("clinched_division")) unlocked.push("clinched_division");
       const homeAway = (seasonGameResults || []).reduce((acc, r) => {
         if (r && r.home === true) acc.homeW += r.won ? 1 : 0; else if (r && r.home === false) acc.awayW += r.won ? 1 : 0;
         if (r && r.home === true) acc.homeL += r.won ? 0 : 1; else if (r && r.home === false) acc.awayL += r.won ? 0 : 1;
@@ -1518,7 +1531,7 @@ const soundtrackRef = useRef(null);
       if (myTeamAllStarStarters >= 2 && unlockAchievementForSave("all_star_starter_2")) unlocked.push("all_star_starter_2");
     }
     if (unlocked.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...unlocked]);
-  }, [phase, season, seasonGameResults, aiTeams, myTeamName, allStarSelections, maxWinStreak, unlockAchievementForSave]);
+  }, [phase, season, seasonGameResults, aiTeams, myTeamName, allStarSelections, maxWinStreak, clinchStatus, unlockAchievementForSave]);
 
   useEffect(() => {
     if (phase !== "seasonEnd" || !season?.gp) return;

@@ -70,6 +70,7 @@ export const ACHIEVEMENTS = [
   { id: "all_league_leaders", label: "Led team in all 5", desc: "One player leads your team in points, rebounds, assists, steals, and blocks in a season", icon: "👑" },
   { id: "make_finals", label: "Make the Finals", desc: "Reach the NBA Finals", icon: "🏆" },
   { id: "three_point_leader", label: "3-point leader", desc: "Your player leads the league in 3PM (three-pointers made)", icon: "🎯" },
+  { id: "clinched_division", label: "Clinched division", desc: "Clinch your division title during the season", icon: "📋" },
 ];
 
 const STORAGE_KEY = "nba_budget_ball_achievements";
