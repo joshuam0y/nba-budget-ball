@@ -22,7 +22,6 @@ export const ACHIEVEMENTS = [
   { id: "fifty_wins", label: "50-win season", desc: "Win 50+ games in the regular season", icon: "📈" },
   { id: "one_seed", label: "Top seed", desc: "Finish #1 in your conference", icon: "👑" },
   { id: "all_nba_winner", label: "All-NBA on your team", desc: "Your player makes All-NBA (1st, 2nd, or 3rd team)", icon: "📋" },
-  { id: "first_finals", label: "Finals debut", desc: "Reach the Finals for the first time", icon: "🎯" },
   { id: "dynasty", label: "Dynasty", desc: "Win 5 championships", icon: "👑" },
   { id: "winning_season", label: "Winning season", desc: "Finish above .500 for the first time", icon: "📊" },
   { id: "play_in_survivor", label: "Play-in survivor", desc: "Reach the first round after starting in the play-in (7–10 seed)", icon: "🔓" },
@@ -46,6 +45,8 @@ export const ACHIEVEMENTS = [
   { id: "hundred_point_game", label: "100-point game", desc: "A player scores 100+ points in a game", icon: "💯" },
   { id: "quadruple_double", label: "Quadruple-double", desc: "A player records a quadruple-double in a game", icon: "🌟" },
   { id: "sixty_wins", label: "60-win season", desc: "Win 60+ games in the regular season", icon: "📈" },
+  { id: "seventy_wins", label: "70-win season", desc: "Win 70+ games in the regular season", icon: "📈" },
+  { id: "curry_who", label: "Curry Who?", desc: "Win 74+ games (beat the 73–9 Warriors)", icon: "🏀" },
   { id: "blowout", label: "Blowout", desc: "Win a game by 40+ points", icon: "💥" },
   { id: "overtime_win", label: "Overtime", desc: "Win an overtime game", icon: "⏱️" },
   { id: "sweep", label: "Sweep", desc: "Sweep a playoff series 4–0", icon: "🧹" },
@@ -71,6 +72,12 @@ export const ACHIEVEMENTS = [
   { id: "make_finals", label: "Make the Finals", desc: "Win the conference finals and reach the NBA Finals", icon: "🏆" },
   { id: "three_point_leader", label: "3-point leader", desc: "Your player leads the league in 3PM (three-pointers made)", icon: "🎯" },
   { id: "clinched_division", label: "Clinched division", desc: "Clinch your division title during the season", icon: "📋" },
+  { id: "finals_mvp_winner", label: "Finals MVP on your team", desc: "Your player wins Finals MVP", icon: "🏆" },
+  { id: "mega_blowout", label: "Mega blowout", desc: "Win a game by 50+ points", icon: "💥" },
+  { id: "twenty_twenty", label: "20–20 game", desc: "A player has 20+ in two of points, rebounds, and assists in a game", icon: "📊" },
+  { id: "thirty_thirty", label: "30–30 game", desc: "A player has 30+ in two of points, rebounds, and assists in a game", icon: "📊" },
+  { id: "forty_forty", label: "40–40 game", desc: "A player has 40+ in two of points, rebounds, and assists in a game", icon: "📊" },
+  { id: "twenty_twenty_twenty", label: "20–20–20 game", desc: "A player has 20+ points, rebounds, and assists in a game", icon: "🌟" },
 ];
 
 const STORAGE_KEY = "nba_budget_ball_achievements";

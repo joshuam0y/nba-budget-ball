@@ -54,7 +54,9 @@ const ACHIEVEMENT_META = {
   fifty_wins: { category: "Season milestones", difficulty: 3 },
   win_streak_10: { category: "Season milestones", difficulty: 3 },
   sixty_wins: { category: "Season milestones", difficulty: 4 },
-  perfect_82: { category: "Season milestones", difficulty: 5 },
+  seventy_wins: { category: "Season milestones", difficulty: 5 },
+  curry_who: { category: "Season milestones", difficulty: 6 },
+  perfect_82: { category: "Season milestones", difficulty: 7 },
   one_seed: { category: "Season milestones", difficulty: 3 },
   play_in_survivor: { category: "Season milestones", difficulty: 2 },
   home_court: { category: "Season milestones", difficulty: 4 },
@@ -63,7 +65,6 @@ const ACHIEVEMENT_META = {
   first_playoff_win: { category: "Season milestones", difficulty: 1 },
 
   // Playoff runs / championships
-  first_finals: { category: "Playoff runs", difficulty: 2 },
   first_championship: { category: "Playoff runs", difficulty: 3 },
   three_peat: { category: "Playoff runs", difficulty: 5 },
   dynasty: { category: "Playoff runs", difficulty: 5 },
@@ -112,14 +113,20 @@ const ACHIEVEMENT_META = {
   five_double_figures: { category: "Game feats", difficulty: 3 },
   five_by_five: { category: "Game feats", difficulty: 5 },
   double_double: { category: "Game feats", difficulty: 2 },
-  conference_finals: { category: "Playoff runs", difficulty: 3 },
   second_round: { category: "Playoff runs", difficulty: 2 },
+  conference_finals: { category: "Playoff runs", difficulty: 3 },
+  make_finals: { category: "Playoff runs", difficulty: 4 },
   elimination_win: { category: "Playoff runs", difficulty: 3 },
   beat_every_team: { category: "Season milestones", difficulty: 4 },
   all_league_leaders: { category: "Player awards", difficulty: 5 },
-  make_finals: { category: "Playoff runs", difficulty: 2 },
   three_point_leader: { category: "Player awards", difficulty: 3 },
+  finals_mvp_winner: { category: "Player awards", difficulty: 4 },
   clinched_division: { category: "Season milestones", difficulty: 3 },
+  mega_blowout: { category: "Game feats", difficulty: 3 },
+  twenty_twenty: { category: "Game feats", difficulty: 4 },
+  thirty_thirty: { category: "Game feats", difficulty: 5 },
+  forty_forty: { category: "Game feats", difficulty: 6 },
+  twenty_twenty_twenty: { category: "Game feats", difficulty: 5 },
 
   // Career / longevity
   seasons_10: { category: "Career grind", difficulty: 2 },
@@ -175,7 +182,7 @@ function groupAwardsByType(list) {
     if (!byAward[award]) byAward[award] = [];
     byAward[award].push(season);
   });
-  const order = ["MVP", "FINALSMVP", "CHAMP", "AS-E-S", "AS-E-R", "AS-W-S", "AS-W-R", "NBA1", "NBA2", "NBA3", "DPOY", "DEF1", "DEF2", "TMVP"];
+  const order = ["MVP", "DPOY", "FINALSMVP", "CHAMP", "NBA1", "NBA2", "NBA3", "DEF1", "DEF2", "AS-E-S", "AS-E-R", "AS-W-S", "AS-W-R", "TMVP"];
   return order.filter((a) => byAward[a]).map((award) => ({
     award,
     label: AWARD_LABELS[award] || award,
@@ -1495,6 +1502,8 @@ const soundtrackRef = useRef(null);
       const userW = season.w ?? 0, userL = season.l ?? 0;
       if (userW >= 50 && unlockAchievementForSave("fifty_wins")) unlocked.push("fifty_wins");
       if (userW >= 60 && unlockAchievementForSave("sixty_wins")) unlocked.push("sixty_wins");
+      if (userW >= 70 && unlockAchievementForSave("seventy_wins")) unlocked.push("seventy_wins");
+      if (userW >= 74 && unlockAchievementForSave("curry_who")) unlocked.push("curry_who");
       if (maxWinStreak >= 10 && unlockAchievementForSave("win_streak_10")) unlocked.push("win_streak_10");
       const opponentsBeaten = new Set((seasonGameResults || []).filter((r) => r?.won && r?.oppName).map((r) => r.oppName));
       if (opponentsBeaten.size >= 29 && unlockAchievementForSave("beat_every_team")) unlocked.push("beat_every_team");
@@ -1609,6 +1618,8 @@ const soundtrackRef = useRef(null);
     })();
     if (userW >= 50 && unlockAchievementForSave("fifty_wins")) unlocked.push("fifty_wins");
     if (userW >= 60 && unlockAchievementForSave("sixty_wins")) unlocked.push("sixty_wins");
+    if (userW >= 70 && unlockAchievementForSave("seventy_wins")) unlocked.push("seventy_wins");
+    if (userW >= 74 && unlockAchievementForSave("curry_who")) unlocked.push("curry_who");
     if (confRank === 1 && unlockAchievementForSave("one_seed")) unlocked.push("one_seed");
     if (userW > 41 && unlockAchievementForSave("winning_season")) unlocked.push("winning_season");
     const homeAway = (seasonGameResults || []).reduce((acc, r) => {
@@ -1791,12 +1802,13 @@ const soundtrackRef = useRef(null);
       return hasMVP && hasDPOY;
     });
     if (wonChip && hasMVPAndDPOYThisSeason && unlockAchievementForSave("triple_crown")) ach.push("triple_crown");
+    const finalsMVPOnOurTeam = wonChip && finalsMVPName && rosterNames.has(finalsMVPName);
+    if (finalsMVPOnOurTeam && unlockAchievementForSave("finals_mvp_winner")) ach.push("finals_mvp_winner");
     const finalsLoser = bracket.finals?.top && bracket.champion ? (bracket.champion === bracket.finals.top ? bracket.finals.bot : bracket.finals.top) : null;
     if (wonChip && lastEliminatorTeamName && finalsLoser?.name === lastEliminatorTeamName && unlockAchievementForSave("revenge")) {
       ach.push("revenge");
       setLastEliminatorTeamName(null);
     }
-    if (madeFinals && unlockAchievementForSave("first_finals")) ach.push("first_finals");
     if (madeFinals && unlockAchievementForSave("make_finals")) ach.push("make_finals");
     if (wonChip && careerStats?.lastSeasonMadePlayoffs === false && unlockAchievementForSave("bounce_back")) ach.push("bounce_back");
     if (wonChip && teamsDefeatedInPlayoffs?.length > 0 && seasonGameResults?.length > 0) {
@@ -2622,6 +2634,7 @@ const startSeason = async () => {
     const ach = [];
     if (won && winsBeforeThisGame === 0 && unlockAchievementForSave("first_win")) ach.push("first_win");
     if (won && (res.myScore || 0) - (res.oppScore || 0) >= 40 && unlockAchievementForSave("blowout")) ach.push("blowout");
+    if (won && (res.myScore || 0) - (res.oppScore || 0) >= 50 && unlockAchievementForSave("mega_blowout")) ach.push("mega_blowout");
     if (won && (res.ot || 0) > 0 && unlockAchievementForSave("overtime_win")) ach.push("overtime_win");
     const margin = (res.myScore || 0) - (res.oppScore || 0);
     if (won && margin >= 1 && margin <= 3 && unlockAchievementForSave("clutch")) ach.push("clutch");
@@ -2642,6 +2655,14 @@ const startSeason = async () => {
       const doubleDouble = (p >= 10 && r >= 10 && a < 10) || (p >= 10 && a >= 10 && r < 10) || (r >= 10 && a >= 10 && p < 10);
       if (doubleDouble && !ach.includes("double_double") && unlockAchievementForSave("double_double")) ach.push("double_double");
       if (p >= 5 && r >= 5 && a >= 5 && st >= 5 && b >= 5 && !ach.includes("five_by_five") && unlockAchievementForSave("five_by_five")) ach.push("five_by_five");
+      const two20 = (p >= 20 && r >= 20) || (p >= 20 && a >= 20) || (r >= 20 && a >= 20);
+      const two30 = (p >= 30 && r >= 30) || (p >= 30 && a >= 30) || (r >= 30 && a >= 30);
+      const two40 = (p >= 40 && r >= 40) || (p >= 40 && a >= 40) || (r >= 40 && a >= 40);
+      const three20 = p >= 20 && r >= 20 && a >= 20;
+      if (two20 && !ach.includes("twenty_twenty") && unlockAchievementForSave("twenty_twenty")) ach.push("twenty_twenty");
+      if (two30 && !ach.includes("thirty_thirty") && unlockAchievementForSave("thirty_thirty")) ach.push("thirty_thirty");
+      if (two40 && !ach.includes("forty_forty") && unlockAchievementForSave("forty_forty")) ach.push("forty_forty");
+      if (three20 && !ach.includes("twenty_twenty_twenty") && unlockAchievementForSave("twenty_twenty_twenty")) ach.push("twenty_twenty_twenty");
     });
     if (ach.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...ach]);
   };
@@ -2743,6 +2764,7 @@ const startSeason = async () => {
         const won = res.myScore > res.oppScore;
         if (won && totalWinsBeforeGame === 0 && unlockAchievementForSave("first_win")) accSimAchievements.push("first_win");
         if (won && (res.myScore || 0) - (res.oppScore || 0) >= 40 && unlockAchievementForSave("blowout")) accSimAchievements.push("blowout");
+        if (won && (res.myScore || 0) - (res.oppScore || 0) >= 50 && unlockAchievementForSave("mega_blowout")) accSimAchievements.push("mega_blowout");
         if (won && (res.ot || 0) > 0 && unlockAchievementForSave("overtime_win")) accSimAchievements.push("overtime_win");
         const simMargin = (res.myScore || 0) - (res.oppScore || 0);
         if (won && simMargin >= 1 && simMargin <= 3 && unlockAchievementForSave("clutch")) accSimAchievements.push("clutch");
@@ -2763,6 +2785,14 @@ const startSeason = async () => {
           const doubleDouble = (p >= 10 && r >= 10 && a < 10) || (p >= 10 && a >= 10 && r < 10) || (r >= 10 && a >= 10 && p < 10);
           if (doubleDouble && !accSimAchievements.includes("double_double") && unlockAchievementForSave("double_double")) accSimAchievements.push("double_double");
           if (p >= 5 && r >= 5 && a >= 5 && st >= 5 && b >= 5 && !accSimAchievements.includes("five_by_five") && unlockAchievementForSave("five_by_five")) accSimAchievements.push("five_by_five");
+          const simTwo20 = (p >= 20 && r >= 20) || (p >= 20 && a >= 20) || (r >= 20 && a >= 20);
+          const simTwo30 = (p >= 30 && r >= 30) || (p >= 30 && a >= 30) || (r >= 30 && a >= 30);
+          const simTwo40 = (p >= 40 && r >= 40) || (p >= 40 && a >= 40) || (r >= 40 && a >= 40);
+          const simThree20 = p >= 20 && r >= 20 && a >= 20;
+          if (simTwo20 && !accSimAchievements.includes("twenty_twenty") && unlockAchievementForSave("twenty_twenty")) accSimAchievements.push("twenty_twenty");
+          if (simTwo30 && !accSimAchievements.includes("thirty_thirty") && unlockAchievementForSave("thirty_thirty")) accSimAchievements.push("thirty_thirty");
+          if (simTwo40 && !accSimAchievements.includes("forty_forty") && unlockAchievementForSave("forty_forty")) accSimAchievements.push("forty_forty");
+          if (simThree20 && !accSimAchievements.includes("twenty_twenty_twenty") && unlockAchievementForSave("twenty_twenty_twenty")) accSimAchievements.push("twenty_twenty_twenty");
         });
         const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
         const dayIndex = g - 1;
