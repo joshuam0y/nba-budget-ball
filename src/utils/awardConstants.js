@@ -41,7 +41,7 @@ export const MVP = {
 export const DPOY = {
   stl: 3.0,
   blk: 2.0,
-  reb: 0.15,
+  reb: 0.05,
   pogBonus: 1,
   winBonus: 6,
 };
