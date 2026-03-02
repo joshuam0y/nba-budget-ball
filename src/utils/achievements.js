@@ -5,6 +5,10 @@ export const ACHIEVEMENTS = [
   { id: "first_playoff", label: "First playoff berth", desc: "Make the playoffs for the first time", icon: "🎟" },
   { id: "first_championship", label: "First championship", desc: "Win the title for the first time", icon: "🏆" },
   { id: "perfect_82", label: "Perfect season", desc: "Go 82–0 in the regular season", icon: "💯" },
+  { id: "all_star_1", label: "1 All-Star", desc: "Have 1 player selected as an All-Star", icon: "⭐" },
+  { id: "all_star_2", label: "2 All-Stars", desc: "Have 2 players selected as All-Stars", icon: "⭐" },
+  { id: "all_star_3", label: "3 All-Stars", desc: "Have 3 players selected as All-Stars", icon: "⭐" },
+  { id: "all_star_4", label: "4 All-Stars", desc: "Have 4 players selected as All-Stars", icon: "⭐" },
   { id: "all_five_all_star", label: "All 5 All-Stars", desc: "Have all 5 starters selected as All-Stars", icon: "⭐" },
   { id: "three_peat", label: "Three-peat", desc: "Win 3 championships in a row", icon: "3️⃣" },
   { id: "mvp_winner", label: "MVP on your team", desc: "Your player wins League MVP", icon: "🏅" },
@@ -46,6 +50,7 @@ export const ACHIEVEMENTS = [
   { id: "first_win", label: "First win", desc: "Win your first game", icon: "✅" },
   { id: "first_playoff_win", label: "First playoff win", desc: "Win your first playoff game", icon: "🎟" },
   { id: "all_star_starter", label: "All-Star starter", desc: "Have a player named an All-Star starter", icon: "⭐" },
+  { id: "all_star_starter_2", label: "2 All-Star starters", desc: "Have 2 players named All-Star starters", icon: "⭐" },
   { id: "bounce_back", label: "Bounce back", desc: "Win the title the season after missing the playoffs", icon: "🔄" },
   { id: "rivalry", label: "Rivalry", desc: "Beat the same team 4 times in the regular season and again in the playoffs", icon: "⚔️" },
 ];

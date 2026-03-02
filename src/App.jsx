@@ -82,8 +82,13 @@ const ACHIEVEMENT_META = {
   dpoy_winner: { category: "Player awards", difficulty: 3 },
   all_nba_winner: { category: "Player awards", difficulty: 2 },
   all_defensive_winner: { category: "Player awards", difficulty: 2 },
-  all_five_all_star: { category: "Player awards", difficulty: 6 },
-  all_star_starter: { category: "Player awards", difficulty: 2 },
+  all_star_1: { category: "Player awards", difficulty: 1 },
+  all_star_2: { category: "Player awards", difficulty: 2 },
+  all_star_3: { category: "Player awards", difficulty: 3 },
+  all_star_4: { category: "Player awards", difficulty: 4 },
+  all_five_all_star: { category: "Player awards", difficulty: 7 },
+  all_star_starter: { category: "Player awards", difficulty: 5 },
+  all_star_starter_2: { category: "Player awards", difficulty: 6 },
   triple_crown: { category: "Player awards", difficulty: 5 },
   scoring_title: { category: "Player awards", difficulty: 3 },
   rebounding_champion: { category: "Player awards", difficulty: 3 },
@@ -1468,6 +1473,10 @@ const soundtrackRef = useRef(null);
     })();
     const unlocked = [];
     if (userW + userL >= 82 && userW === 82 && unlockAchievementForSave("perfect_82")) unlocked.push("perfect_82");
+    if (myTeamAllStars >= 1 && unlockAchievementForSave("all_star_1")) unlocked.push("all_star_1");
+    if (myTeamAllStars >= 2 && unlockAchievementForSave("all_star_2")) unlocked.push("all_star_2");
+    if (myTeamAllStars >= 3 && unlockAchievementForSave("all_star_3")) unlocked.push("all_star_3");
+    if (myTeamAllStars >= 4 && unlockAchievementForSave("all_star_4")) unlocked.push("all_star_4");
     if (myTeamAllStars >= 5 && unlockAchievementForSave("all_five_all_star")) unlocked.push("all_five_all_star");
     const myTeamAllStarStarters = allStarSelections ? (() => {
       const eastStarters = allStarSelections.east?.starters || [];
@@ -1475,6 +1484,7 @@ const soundtrackRef = useRef(null);
       return eastStarters.concat(westStarters).filter((p) => p?.team === myTeamName).length;
     })() : 0;
     if (myTeamAllStarStarters >= 1 && unlockAchievementForSave("all_star_starter")) unlocked.push("all_star_starter");
+    if (myTeamAllStarStarters >= 2 && unlockAchievementForSave("all_star_starter_2")) unlocked.push("all_star_starter_2");
     if (maxWinStreak >= 10 && unlockAchievementForSave("win_streak_10")) unlocked.push("win_streak_10");
     if (mvpName && rosterNames.has(mvpName) && unlockAchievementForSave("mvp_winner")) unlocked.push("mvp_winner");
     if (dpoyName && rosterNames.has(dpoyName) && unlockAchievementForSave("dpoy_winner")) unlocked.push("dpoy_winner");
@@ -3907,6 +3917,23 @@ if(phase==="teamSetup") return(
             const leaderPts = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.ppg || 0) > (best.ppg || 0) ? p : best), null) : null;
             const leaderReb = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.rpg || 0) > (best.rpg || 0) ? p : best), null) : null;
             const leaderAst = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.apg || 0) > (best.apg || 0) ? p : best), null) : null;
+            const leaderStl = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.spg || 0) > (best.spg || 0) ? p : best), null) : null;
+            const leaderBlk = playerRows.length ? playerRows.reduce((best, p) => (!best || (p.bpg || 0) > (best.bpg || 0) ? p : best), null) : null;
+            const leagueChampSuffix = (() => {
+              const MIN_GP = 41;
+              const entries = Object.values(leagueLeaders || {}).filter((r) => r && (r.gp || 0) >= MIN_GP);
+              if (!entries.length) return { pts: "", reb: "", ast: "", stl: "", blk: "" };
+              const withPG = entries.map((p) => ({ ...p, gp: p.gp || 1, ppg: (p.pts || 0) / (p.gp || 1), rpg: (p.reb || 0) / (p.gp || 1), apg: (p.ast || 0) / (p.gp || 1), spg: (p.stl || 0) / (p.gp || 1), bpg: (p.blk || 0) / (p.gp || 1) }));
+              const best = (key) => withPG.reduce((b, r) => (!b || (r[key] || 0) > (b[key] || 0) ? r : b), null);
+              const ptsL = best("ppg"), rebL = best("rpg"), astL = best("apg"), stlL = best("spg"), blkL = best("bpg");
+              return {
+                pts: leaderPts && ptsL && leaderPts.name === ptsL.name ? " (scoring champion)" : "",
+                reb: leaderReb && rebL && leaderReb.name === rebL.name ? " (rebounding champion)" : "",
+                ast: leaderAst && astL && leaderAst.name === astL.name ? " (assists leader)" : "",
+                stl: leaderStl && stlL && leaderStl.name === stlL.name ? " (steals leader)" : "",
+                blk: leaderBlk && blkL && leaderBlk.name === blkL.name ? " (blocks leader)" : "",
+              };
+            })();
             const careerAllStarCount = (name) => (playerAwards[name] || []).filter((e) => e.award && String(e.award).startsWith("AS-")).length;
             const myAllStarsThisSeason = allStarSelections ? (() => {
               const east = [...(allStarSelections.east?.starters || []), ...(allStarSelections.east?.reserves || [])];
@@ -3989,9 +4016,11 @@ if(phase==="teamSetup") return(
                   {myAllStarsThisSeason.map((p) => { const n = careerAllStarCount(p.name); return n >= 1 ? <div key={p.name} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f59e0b"}}><span style={{color:"#f59e0b",fontSize:14}}>⭐</span><span>{p.name} made his {n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"} All-Star team</span></div> : null; })}
                   {myAllNBAThisSeason.map(({ name, award }) => { const n = careerNBACount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #a78bfa"}}><span style={{color:"#a78bfa",fontSize:14}}>📋</span><span>{name} made {AWARD_LABELS[award] || award} for the {ord} time</span></div>; })}
                   {myAllDefensiveThisSeason.map(({ name, award }) => { const n = careerDefCount(name, award); const ord = n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th"; return <div key={`${name}-${award}`} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #4ade80"}}><span style={{color:"#4ade80",fontSize:14}}>🔒</span><span>{name} made {AWARD_LABELS[award] || award} for the {ord} time</span></div>; })}
-                  {leaderPts && <div key="pts" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f87171"}}><span style={{color:"#f87171",fontSize:14}}>🔥</span><span>{leaderPts.name} led the team in points ({rf(leaderPts.ppg, 1)} PPG)</span></div>}
-                  {leaderReb && <div key="reb" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #22c55e"}}><span style={{color:"#22c55e",fontSize:14}}>📦</span><span>{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG)</span></div>}
-                  {leaderAst && <div key="ast" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #38bdf8"}}><span style={{color:"#38bdf8",fontSize:14}}>🎯</span><span>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG)</span></div>}
+                  {leaderPts && <div key="pts" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f87171"}}><span style={{color:"#f87171",fontSize:14}}>🔥</span><span>{leaderPts.name} led the team in points ({rf(leaderPts.ppg, 1)} PPG){leagueChampSuffix.pts}</span></div>}
+                  {leaderReb && <div key="reb" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #22c55e"}}><span style={{color:"#22c55e",fontSize:14}}>📦</span><span>{leaderReb.name} led the team in rebounds ({rf(leaderReb.rpg, 1)} RPG){leagueChampSuffix.reb}</span></div>}
+                  {leaderAst && <div key="ast" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #38bdf8"}}><span style={{color:"#38bdf8",fontSize:14}}>🎯</span><span>{leaderAst.name} led the team in assists ({rf(leaderAst.apg, 1)} APG){leagueChampSuffix.ast}</span></div>}
+                  {leaderStl && <div key="stl" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #a78bfa"}}><span style={{color:"#a78bfa",fontSize:14}}>✋</span><span>{leaderStl.name} led the team in steals ({rf(leaderStl.spg, 1)} SPG){leagueChampSuffix.stl}</span></div>}
+                  {leaderBlk && <div key="blk" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #64748b"}}><span style={{color:"#64748b",fontSize:14}}>🚫</span><span>{leaderBlk.name} led the team in blocks ({rf(leaderBlk.bpg, 1)} BPG){leagueChampSuffix.blk}</span></div>}
                   {bestStreak > 0 && <div key="streak" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #fbbf24"}}><span style={{color:"#fbbf24",fontSize:14}}>🔥</span><span>Best win streak: {bestStreak} games</span></div>}
                   {allStarCount > 0 && <div key="allstar" style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 10px",borderRadius:8,background:"rgba(15,23,42,0.5)",borderLeft:"3px solid #f59e0b"}}><span style={{color:"#f59e0b",fontSize:14}}>⭐</span><span>All-Stars: {allStarCount}</span></div>}
                   {bestWin && (() => {
