@@ -1,5 +1,5 @@
 import "./index.css";
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { supabase } from "./supabase";
