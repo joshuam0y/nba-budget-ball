@@ -30,9 +30,10 @@ export function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
   const gr = (t) => SEASON_LENGTH - (t.w + t.l);
   const buildClinchMap = (rows) => {
     const map = {};
-    rows.forEach((t) => { map[t.name] = { clinchedPlayoffs: false, clinchedPlayIn: false, clinchedDivision: false }; });
+    rows.forEach((t) => { map[t.name] = { clinchedPlayoffs: false, clinchedPlayIn: false, clinchedDivision: false, clinchedConference: false }; });
     if (rows.length < 11) return map;
-    const seventh = rows[6], eleventh = rows[10];
+    const seventh = rows[6], eleventh = rows[10], second = rows[1];
+    if (rows.length >= 2 && second && rows[0].w >= (second.w || 0) + gr(second)) map[rows[0].name].clinchedConference = true;
     rows.forEach((t, i) => {
       const rank = i + 1;
       if (rank <= 6 && seventh && t.w >= (seventh.w || 0) + gr(seventh)) map[t.name].clinchedPlayoffs = true;
@@ -97,9 +98,10 @@ export function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
                         </td>
                         <td style={{ padding: "4px 6px", fontWeight: 700, color: t.isPlayer ? "#60a5fa" : "#e2e8f0" }}>
                           {t.isPlayer ? "🌟 " : ""}{t.name}
-                          {clinchMap[t.name]?.clinchedPlayoffs && <span style={{ marginLeft: 2, fontSize: 9, color: "#22c55e", fontWeight: 800 }} title="Clinched playoffs">-x</span>}
-                          {clinchMap[t.name]?.clinchedPlayIn && !clinchMap[t.name]?.clinchedPlayoffs && <span style={{ marginLeft: 2, fontSize: 9, color: "#f59e0b", fontWeight: 800 }} title="Clinched play-in">-w</span>}
-                          {clinchMap[t.name]?.clinchedDivision && <span style={{ marginLeft: 2, fontSize: 9, color: "#60a5fa", fontWeight: 800 }} title="Clinched division">-y</span>}
+                          {clinchMap[t.name]?.clinchedConference && <span style={{ marginLeft: 2, fontSize: 9, color: "#a78bfa", fontWeight: 800 }} title="Clinched conference leader">-z</span>}
+                          {!clinchMap[t.name]?.clinchedConference && clinchMap[t.name]?.clinchedPlayoffs && <span style={{ marginLeft: 2, fontSize: 9, color: "#22c55e", fontWeight: 800 }} title="Clinched playoffs">-x</span>}
+                          {!clinchMap[t.name]?.clinchedConference && !clinchMap[t.name]?.clinchedPlayoffs && clinchMap[t.name]?.clinchedDivision && <span style={{ marginLeft: 2, fontSize: 9, color: "#60a5fa", fontWeight: 800 }} title="Clinched division">-y</span>}
+                          {!clinchMap[t.name]?.clinchedConference && !clinchMap[t.name]?.clinchedPlayoffs && !clinchMap[t.name]?.clinchedDivision && clinchMap[t.name]?.clinchedPlayIn && <span style={{ marginLeft: 2, fontSize: 9, color: "#f59e0b", fontWeight: 800 }} title="Clinched play-in">-w</span>}
                           {isDivWinner && <span style={{ marginLeft: 4, fontSize: 9, background: "#0369a1", color: "#e0f2fe", borderRadius: 3, padding: "1px 4px" }}>DIV</span>}
                           {idx === 5 && <span style={{ marginLeft: 4, fontSize: 9, background: "#14532d", color: "#4ade80", borderRadius: 3, padding: "1px 4px" }}>6</span>}
                           {(idx === 6 || idx === 7) && <span style={{ marginLeft: 4, fontSize: 9, background: "#78350f", color: "#fbbf24", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
@@ -131,9 +133,10 @@ export function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
                   </td>
                   <td style={{ padding: "4px 6px", fontWeight: 700, color: t.isPlayer ? "#60a5fa" : "#e2e8f0" }}>
                     {t.isPlayer ? "🌟 " : ""}{t.name}
-                    {clinchMap[t.name]?.clinchedPlayoffs && <span style={{ marginLeft: 2, fontSize: 9, color: "#22c55e", fontWeight: 800 }} title="Clinched playoffs">-x</span>}
-                    {clinchMap[t.name]?.clinchedPlayIn && !clinchMap[t.name]?.clinchedPlayoffs && <span style={{ marginLeft: 2, fontSize: 9, color: "#f59e0b", fontWeight: 800 }} title="Clinched play-in">-w</span>}
-                    {clinchMap[t.name]?.clinchedDivision && <span style={{ marginLeft: 2, fontSize: 9, color: "#60a5fa", fontWeight: 800 }} title="Clinched division">-y</span>}
+                    {clinchMap[t.name]?.clinchedConference && <span style={{ marginLeft: 2, fontSize: 9, color: "#a78bfa", fontWeight: 800 }} title="Clinched conference leader">-z</span>}
+                    {!clinchMap[t.name]?.clinchedConference && clinchMap[t.name]?.clinchedPlayoffs && <span style={{ marginLeft: 2, fontSize: 9, color: "#22c55e", fontWeight: 800 }} title="Clinched playoffs">-x</span>}
+                    {!clinchMap[t.name]?.clinchedConference && !clinchMap[t.name]?.clinchedPlayoffs && clinchMap[t.name]?.clinchedDivision && <span style={{ marginLeft: 2, fontSize: 9, color: "#60a5fa", fontWeight: 800 }} title="Clinched division">-y</span>}
+                    {!clinchMap[t.name]?.clinchedConference && !clinchMap[t.name]?.clinchedPlayoffs && !clinchMap[t.name]?.clinchedDivision && clinchMap[t.name]?.clinchedPlayIn && <span style={{ marginLeft: 2, fontSize: 9, color: "#f59e0b", fontWeight: 800 }} title="Clinched play-in">-w</span>}
                     {isDivWinner && <span style={{ marginLeft: 4, fontSize: 9, background: "#0369a1", color: "#e0f2fe", borderRadius: 3, padding: "1px 4px" }}>DIV</span>}
                     {idx === 5 && <span style={{ marginLeft: 4, fontSize: 9, background: "#14532d", color: "#4ade80", borderRadius: 3, padding: "1px 4px" }}>6</span>}
                     {(idx === 6 || idx === 7) && <span style={{ marginLeft: 4, fontSize: 9, background: "#78350f", color: "#fbbf24", borderRadius: 3, padding: "1px 4px" }}>PI</span>}
@@ -190,7 +193,7 @@ export function StandingsTable({ aiTeams, myRecord, myName, highlight }) {
         {renderTable("EAST", "#3b82f6", east, eastRanks, eastClinch)}
         {renderTable("WEST", "#f59e0b", west, westRanks, westClinch)}
       </div>
-      <div style={{ padding: "6px 12px", borderTop: "2px dashed #1e293b", fontSize: 9, color: "#22c55e" }}>▲ You’re in {userMeta.conference} ({userMeta.division}) · Top 6 direct · 7–10 play-in · -x clinched playoffs · -w clinched play-in · -y clinched division</div>
+      <div style={{ padding: "6px 12px", borderTop: "2px dashed #1e293b", fontSize: 9, color: "#22c55e" }}>▲ You’re in {userMeta.conference} ({userMeta.division}) · Top 6 direct · 7–10 play-in · -z conf leader · -x playoffs · -y division · -w play-in</div>
     </div>
   );
 }
