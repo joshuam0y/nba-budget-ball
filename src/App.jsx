@@ -3329,15 +3329,12 @@ if(phase==="teamSetup") return(
           {showTrophyCase&&(
             <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowTrophyCase(false)}>
               <div style={{background:"#0f172a",borderRadius:16,border:"2px solid #334155",maxWidth:420,width:"100%",maxHeight:"85vh",overflow:"auto",padding:20}} onClick={(e)=>e.stopPropagation()}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                   <div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>🏆 Achievements</div>
-                  <div style={{display:"flex",gap:6}}>
-                    <button onClick={handleShareAchievements} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>📤 Share</button>
-                    <button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button>
-                  </div>
+                  <button onClick={()=>setShowTrophyCase(false)} style={{background:"#334155",color:"#e2e8f0",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Close</button>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {ACHIEVEMENTS.map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}{unlocked&&<button onClick={(e)=>{e.stopPropagation();handleShareAchievement(a);}} style={{marginTop:8,background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>📤 Share</button>}</div>);})}
+                  {sortAchievementsForDisplay(ACHIEVEMENTS).map((a)=>{const unlocked=unlockedAchievements.includes(a.id);return(<div key={a.id} style={{background:unlocked?"#1e293b":"#0f172a",border:"1px solid #334155",borderRadius:10,padding:12,opacity:unlocked?1:0.65}}><div style={{fontSize:14,fontWeight:700,color:unlocked?"#e2e8f0":"#64748b"}}>{a.icon} {a.label}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{a.desc}</div>{unlocked&&<div style={{fontSize:9,color:"#22c55e",marginTop:6,fontWeight:700}}>✓ Unlocked</div>}{unlocked&&<button onClick={(e)=>{e.stopPropagation();handleShareAchievement(a);}} style={{marginTop:8,background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>📤 Share</button>}</div>);})}
                 </div>
               </div>
             </div>
@@ -4832,15 +4829,12 @@ if(phase==="teamSetup") return(
       {showTrophyCase && (
         <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowTrophyCase(false)}>
           <div style={{ background: "#0f172a", borderRadius: 16, border: "2px solid #334155", maxWidth: 420, width: "100%", maxHeight: "85vh", overflow: "auto", padding: 20 }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 20, fontWeight: 900, color: "#fbbf24" }}>🏆 Achievements</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={handleShareAchievements} style={{ background: "#1e293b", color: "#94a3b8", border: "1px solid #334155", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>📤 Share</button>
-                <button onClick={() => setShowTrophyCase(false)} style={{ background: "#334155", color: "#e2e8f0", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>Close</button>
-              </div>
+              <button onClick={() => setShowTrophyCase(false)} style={{ background: "#334155", color: "#e2e8f0", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>Close</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {ACHIEVEMENTS.map((a) => {
+              {sortAchievementsForDisplay(ACHIEVEMENTS).map((a) => {
                 const unlocked = unlockedAchievements.includes(a.id);
                 return (
                   <div key={a.id} style={{ background: unlocked ? "#1e293b" : "#0f172a", border: "1px solid #334155", borderRadius: 10, padding: 12, opacity: unlocked ? 1 : 0.65 }}>
