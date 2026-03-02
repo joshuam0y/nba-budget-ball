@@ -4336,32 +4336,6 @@ if(phase==="teamSetup") return(
           <div style={{marginBottom:14}}>
             <StandingsTable aiTeams={finalAi} myRecord={{ w: userRecord.w, l: userRecord.l, eff: userRecord.eff }} myName={myTeamName} highlight/>
           </div>
-          {allStarSelections && (allStarSelections.east?.starters?.length > 0 || allStarSelections.west?.starters?.length > 0 || (allStarSelections.east?.reserves?.length || 0) + (allStarSelections.west?.reserves?.length || 0) > 0) && (() => {
-            const isMyPlayer = (p) => p?.team === myTeamName;
-            const rowStyle = (p) => ({ fontSize: 11, color: isMyPlayer(p) ? "#22c55e" : "#e2e8f0", fontWeight: isMyPlayer(p) ? 700 : 400, background: isMyPlayer(p) ? "rgba(34,197,94,0.2)" : "transparent", padding: isMyPlayer(p) ? "2px 6px" : 0, borderRadius: 4 });
-            const reserveRowStyle = (p) => ({ fontSize: 11, color: isMyPlayer(p) ? "#22c55e" : "#94a3b8", fontWeight: isMyPlayer(p) ? 700 : 400, background: isMyPlayer(p) ? "rgba(34,197,94,0.2)" : "transparent", padding: isMyPlayer(p) ? "2px 6px" : 0, borderRadius: 4 });
-            return (
-            <div style={{marginBottom:14}}>
-              <div style={{fontSize:12,color:"#fbbf24",fontWeight:800,letterSpacing:2,marginBottom:8}}>⭐ ALL-STAR (First 50 games)</div>
-              <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12}}>
-                <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"2px solid #3b82f6"}}>
-                  <div style={{fontSize:12,fontWeight:800,color:"#60a5fa",marginBottom:8}}>EAST</div>
-                  {allStarSelections.east?.starters?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
-                  {(allStarSelections.east?.starters || []).map((p,i)=>(<div key={i} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} {p.allStarRole==="Starter"?"★":""}</div>))}
-                  {allStarSelections.east?.reserves?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:8,marginBottom:4}}>Reserves</div>}
-                  {(allStarSelections.east?.reserves || []).map((p,i)=>(<div key={i} style={reserveRowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team}</div>))}
-                </div>
-                <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"2px solid #ef4444"}}>
-                  <div style={{fontSize:12,fontWeight:800,color:"#f87171",marginBottom:8}}>WEST</div>
-                  {allStarSelections.west?.starters?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
-                  {(allStarSelections.west?.starters || []).map((p,i)=>(<div key={i} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} {p.allStarRole==="Starter"?"★":""}</div>))}
-                  {allStarSelections.west?.reserves?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:8,marginBottom:4}}>Reserves</div>}
-                  {(allStarSelections.west?.reserves || []).map((p,i)=>(<div key={i} style={reserveRowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team}</div>))}
-                </div>
-              </div>
-            </div>
-            );
-          })()}
           {leagueMVP && (
             <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:10,marginBottom:14}}>
               <div style={{background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #fbbf24",textAlign:"center"}}>
@@ -4400,35 +4374,62 @@ if(phase==="teamSetup") return(
               </div>
             );
           })()}
-          {(() => {
-            if (!allStarSelections) return null;
+          {phase === "seasonEnd" && showStatChampTab && (() => {
+            const entries = Object.values(leagueLeaders || {}).filter((r) => r && (r.gp || 0) > 0);
+            if (!entries.length) return null;
+            const MIN_GP = 41;
+            const withPG = entries
+              .filter((p) => (p.gp || 0) >= MIN_GP)
+              .map((p) => {
+                const gp = p.gp || 1;
+                return {
+                  ...p,
+                  gp,
+                  ppg: (p.pts || 0) / gp,
+                  rpg: (p.reb || 0) / gp,
+                  apg: (p.ast || 0) / gp,
+                  spg: (p.stl || 0) / gp,
+                  bpg: (p.blk || 0) / gp,
+                  tpm: p.tpm || 0,
+                };
+              });
+            if (!withPG.length) return null;
+            const topN = (key, n = 3) =>
+              [...withPG].sort((a, b) => (b[key] || 0) - (a[key] || 0)).slice(0, n);
+            const categories = [
+              { key: "ppg", label: "Scoring", fmt: (p) => `${rf(p.ppg, 1)} PPG` },
+              { key: "rpg", label: "Rebounds", fmt: (p) => `${rf(p.rpg, 1)} RPG` },
+              { key: "apg", label: "Assists", fmt: (p) => `${rf(p.apg, 1)} APG` },
+              { key: "spg", label: "Steals", fmt: (p) => `${rf(p.spg, 1)} SPG` },
+              { key: "bpg", label: "Blocks", fmt: (p) => `${rf(p.bpg, 1)} BPG` },
+              { key: "tpm", label: "3-pointers made", fmt: (p) => `${p.tpm ?? 0} 3PM` },
+            ];
+            const isMyPlayer = (p) => p?.team === myTeamName;
             const rowStyle = (p) => ({
-              color: p?.team === myTeamName ? "#22c55e" : "#e2e8f0",
-              fontWeight: p?.team === myTeamName ? 700 : 400,
-            });
-            const reserveRowStyle = (p) => ({
-              color: p?.team === myTeamName ? "#22c55e" : "#e2e8f0",
-              fontWeight: p?.team === myTeamName ? 700 : 400,
-              opacity: 0.9,
+              color: isMyPlayer(p) ? "#22c55e" : "#e2e8f0",
+              fontWeight: isMyPlayer(p) ? 700 : 400,
+              background: isMyPlayer(p) ? "rgba(34,197,94,0.2)" : "transparent",
+              padding: isMyPlayer(p) ? "2px 4px" : 0,
+              borderRadius: 4,
             });
             return (
-              <div style={{marginBottom:14,background:"#020617",borderRadius:14,padding:12,border:"1px solid #334155"}}>
-                <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:6}}>⭐ ALL-STAR SELECTIONS</div>
-                <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:14,fontSize:11}}>
-                  <div>
-                    <div style={{fontSize:12,fontWeight:800,color:"#60a5fa",marginBottom:8}}>EAST</div>
-                    {allStarSelections.east?.starters?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
-                    {(allStarSelections.east?.starters || []).map((p,i)=>(<div key={i} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} {p.allStarRole==="Starter"?"★":""}</div>))}
-                    {allStarSelections.east?.reserves?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:8,marginBottom:4}}>Reserves</div>}
-                    {(allStarSelections.east?.reserves || []).map((p,i)=>(<div key={i} style={reserveRowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team}</div>))}
-                  </div>
-                  <div>
-                    <div style={{fontSize:12,fontWeight:800,color:"#f87171",marginBottom:8}}>WEST</div>
-                    {allStarSelections.west?.starters?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>Starters</div>}
-                    {(allStarSelections.west?.starters || []).map((p,i)=>(<div key={i} style={rowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team} {p.allStarRole==="Starter"?"★":""}</div>))}
-                    {allStarSelections.west?.reserves?.length > 0 && <div style={{fontSize:10,color:"#64748b",marginTop:8,marginBottom:4}}>Reserves</div>}
-                    {(allStarSelections.west?.reserves || []).map((p,i)=>(<div key={i} style={reserveRowStyle(p)}>{p.name} <span style={{color:"#64748b",fontSize:9}}>({p.pos||"—"})</span> · {p.team}</div>))}
-                  </div>
+              <div style={{marginBottom:14,background:"#0f172a",borderRadius:12,padding:12,border:"1px solid #334155"}}>
+                <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:6}}>🎯 STAT LEADERS (full season)</div>
+                <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,fontSize:10}}>
+                  {categories.map((cat) => (
+                    <div key={cat.key}>
+                      <div style={{color:"#eab308",fontWeight:700,marginBottom:3}}>{cat.label}</div>
+                      {topN(cat.key).map((p, i) => (
+                        <div key={`${cat.key}-${i}-${p.name}|${p.team}`} style={rowStyle(p)}>
+                          {i + 1}. {p.name}{" "}
+                          <span style={{color:"#64748b",fontSize:9}}>
+                            ({p.pos || "—"}) · {p.team}
+                          </span>{" "}
+                          <span style={{color:"#94a3b8",fontWeight:500}}>{cat.fmt(p)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
