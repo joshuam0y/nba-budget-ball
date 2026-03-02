@@ -100,9 +100,23 @@ const ACHIEVEMENT_META = {
   // Single-game feats / game moments
   triple_double: { category: "Game feats", difficulty: 2 },
   fifty_point_game: { category: "Game feats", difficulty: 3 },
+  sixty_point_game: { category: "Game feats", difficulty: 4 },
+  seventy_point_game: { category: "Game feats", difficulty: 5 },
+  eighty_point_game: { category: "Game feats", difficulty: 6 },
+  ninety_point_game: { category: "Game feats", difficulty: 7 },
+  hundred_point_game: { category: "Game feats", difficulty: 8 },
   quadruple_double: { category: "Game feats", difficulty: 5 },
   blowout: { category: "Game feats", difficulty: 2 },
   overtime_win: { category: "Game feats", difficulty: 1 },
+  clutch: { category: "Game feats", difficulty: 2 },
+  five_double_figures: { category: "Game feats", difficulty: 3 },
+  five_by_five: { category: "Game feats", difficulty: 5 },
+  double_double: { category: "Game feats", difficulty: 2 },
+  conference_finals: { category: "Playoff runs", difficulty: 3 },
+  second_round: { category: "Playoff runs", difficulty: 2 },
+  elimination_win: { category: "Playoff runs", difficulty: 3 },
+  beat_every_team: { category: "Season milestones", difficulty: 4 },
+  all_league_leaders: { category: "Player awards", difficulty: 6 },
 
   // Career / longevity
   seasons_10: { category: "Career grind", difficulty: 2 },
@@ -1505,7 +1519,12 @@ const soundtrackRef = useRef(null);
       if (astLeader && rosterNames.has(astLeader.name) && unlockAchievementForSave("assists_leader")) unlocked.push("assists_leader");
       if (stlLeader && rosterNames.has(stlLeader.name) && unlockAchievementForSave("steals_leader")) unlocked.push("steals_leader");
       if (blkLeader && rosterNames.has(blkLeader.name) && unlockAchievementForSave("blocks_leader")) unlocked.push("blocks_leader");
+      if (ptsLeader && rebLeader && astLeader && stlLeader && blkLeader &&
+          rosterNames.has(ptsLeader.name) && rosterNames.has(rebLeader.name) && rosterNames.has(astLeader.name) && rosterNames.has(stlLeader.name) && rosterNames.has(blkLeader.name) &&
+          unlockAchievementForSave("all_league_leaders")) unlocked.push("all_league_leaders");
     }
+    const opponentsBeaten = new Set((seasonGameResults || []).filter((r) => r?.won && r?.oppName).map((r) => r.oppName));
+    if (opponentsBeaten.size >= 29 && unlockAchievementForSave("beat_every_team")) unlocked.push("beat_every_team");
     const confRank = (() => {
       const all = [{ name: myTeamName, w: userW, l: userL, isPlayer: true }, ...(aiTeams || []).map((t) => ({ name: t.name, w: t.w, l: t.l, isPlayer: false }))];
       const userMeta = getNBATeamsWithMeta()[NUM_TEAMS - 1];
@@ -2529,13 +2548,25 @@ const startSeason = async () => {
     if (won && winsBeforeThisGame === 0 && unlockAchievementForSave("first_win")) ach.push("first_win");
     if (won && (res.myScore || 0) - (res.oppScore || 0) >= 40 && unlockAchievementForSave("blowout")) ach.push("blowout");
     if (won && (res.ot || 0) > 0 && unlockAchievementForSave("overtime_win")) ach.push("overtime_win");
+    const margin = (res.myScore || 0) - (res.oppScore || 0);
+    if (won && margin >= 1 && margin <= 3 && unlockAchievementForSave("clutch")) ach.push("clutch");
+    const with10Plus = (res.myStats || []).filter((s) => (s.pts || 0) >= 10).length;
+    if (with10Plus >= 5 && unlockAchievementForSave("five_double_figures")) ach.push("five_double_figures");
     (res.myStats || []).forEach((s) => {
       const p = s.pts || 0, r = s.reb || 0, a = s.ast || 0, st = s.stl || 0, b = s.blk || 0;
       if (p >= 50 && unlockAchievementForSave("fifty_point_game")) ach.push("fifty_point_game");
+      if (p >= 60 && unlockAchievementForSave("sixty_point_game")) ach.push("sixty_point_game");
+      if (p >= 70 && unlockAchievementForSave("seventy_point_game")) ach.push("seventy_point_game");
+      if (p >= 80 && unlockAchievementForSave("eighty_point_game")) ach.push("eighty_point_game");
+      if (p >= 90 && unlockAchievementForSave("ninety_point_game")) ach.push("ninety_point_game");
+      if (p >= 100 && unlockAchievementForSave("hundred_point_game")) ach.push("hundred_point_game");
       const tripleDouble = p >= 10 && r >= 10 && a >= 10;
       const quadDouble = tripleDouble && (st >= 10 || b >= 10);
       if (quadDouble && unlockAchievementForSave("quadruple_double")) ach.push("quadruple_double");
       else if (tripleDouble && unlockAchievementForSave("triple_double")) ach.push("triple_double");
+      const doubleDouble = (p >= 10 && r >= 10 && a < 10) || (p >= 10 && a >= 10 && r < 10) || (r >= 10 && a >= 10 && p < 10);
+      if (doubleDouble && unlockAchievementForSave("double_double")) ach.push("double_double");
+      if (p >= 5 && r >= 5 && a >= 5 && st >= 5 && b >= 5 && unlockAchievementForSave("five_by_five")) ach.push("five_by_five");
     });
     if (ach.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...ach]);
   };
@@ -2638,13 +2669,25 @@ const startSeason = async () => {
         if (won && totalWinsBeforeGame === 0 && unlockAchievementForSave("first_win")) accSimAchievements.push("first_win");
         if (won && (res.myScore || 0) - (res.oppScore || 0) >= 40 && unlockAchievementForSave("blowout")) accSimAchievements.push("blowout");
         if (won && (res.ot || 0) > 0 && unlockAchievementForSave("overtime_win")) accSimAchievements.push("overtime_win");
+        const simMargin = (res.myScore || 0) - (res.oppScore || 0);
+        if (won && simMargin >= 1 && simMargin <= 3 && unlockAchievementForSave("clutch")) accSimAchievements.push("clutch");
+        const simWith10 = (res.myStats || []).filter((s) => (s.pts || 0) >= 10).length;
+        if (simWith10 >= 5 && unlockAchievementForSave("five_double_figures")) accSimAchievements.push("five_double_figures");
         (res.myStats || []).forEach((s) => {
           const p = s.pts || 0, r = s.reb || 0, a = s.ast || 0, st = s.stl || 0, b = s.blk || 0;
           if (p >= 50 && unlockAchievementForSave("fifty_point_game")) accSimAchievements.push("fifty_point_game");
+          if (p >= 60 && unlockAchievementForSave("sixty_point_game")) accSimAchievements.push("sixty_point_game");
+          if (p >= 70 && unlockAchievementForSave("seventy_point_game")) accSimAchievements.push("seventy_point_game");
+          if (p >= 80 && unlockAchievementForSave("eighty_point_game")) accSimAchievements.push("eighty_point_game");
+          if (p >= 90 && unlockAchievementForSave("ninety_point_game")) accSimAchievements.push("ninety_point_game");
+          if (p >= 100 && unlockAchievementForSave("hundred_point_game")) accSimAchievements.push("hundred_point_game");
           const tripleDouble = p >= 10 && r >= 10 && a >= 10;
           const quadDouble = tripleDouble && (st >= 10 || b >= 10);
           if (quadDouble && unlockAchievementForSave("quadruple_double")) accSimAchievements.push("quadruple_double");
           else if (tripleDouble && unlockAchievementForSave("triple_double")) accSimAchievements.push("triple_double");
+          const doubleDouble = (p >= 10 && r >= 10 && a < 10) || (p >= 10 && a >= 10 && r < 10) || (r >= 10 && a >= 10 && p < 10);
+          if (doubleDouble && unlockAchievementForSave("double_double")) accSimAchievements.push("double_double");
+          if (p >= 5 && r >= 5 && a >= 5 && st >= 5 && b >= 5 && unlockAchievementForSave("five_by_five")) accSimAchievements.push("five_by_five");
         });
         const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
         const dayIndex = g - 1;
@@ -2982,6 +3025,17 @@ const startSeason = async () => {
       const prevPlayoffWins = careerStats?.playoffWins ?? 0;
       setCareerStats((prev) => ({ ...prev, playoffWins: (prev.playoffWins ?? 0) + 1 }));
       if (prevPlayoffWins === 0 && unlockAchievementForSave("first_playoff_win")) setNewlyUnlockedAchievements((prev) => [...prev, "first_playoff_win"]);
+      const elimParsed = getPlayoffMatchup(out.bracket, matchId);
+      const elimMatchup = elimParsed?.matchup;
+      const elimSlot = elimParsed?.slot ?? (matchId === "finals" ? "finals" : (matchId.split("-")[1] || ""));
+      const elimOurIdx = elimMatchup?.top?.isPlayer ? 0 : 1;
+      const elimGames = elimMatchup?.games || [];
+      const lastG = elimGames[elimGames.length - 1];
+      const weWonThisGame = lastG && lastG.winnerIdx === elimOurIdx;
+      const elimWinsNeeded = elimSlot.startsWith("pi") ? 1 : 4;
+      const oppWinsBefore = elimGames.slice(0, -1).filter((g) => g.winnerIdx === 1 - elimOurIdx).length;
+      const wasEliminationGame = elimSlot.startsWith("pi") || (elimWinsNeeded === 4 && oppWinsBefore === 3);
+      if (weWonThisGame && wasEliminationGame && unlockAchievementForSave("elimination_win")) setNewlyUnlockedAchievements((prev) => [...prev, "elimination_win"]);
       if (out.result?.seriesOver && out.result?.topName && out.result?.botName) {
         const beaten = out.result.playerIsTop ? out.result.botName : out.result.topName;
         setTeamsDefeatedInPlayoffs((prev) => [...prev, beaten]);
@@ -2999,6 +3053,9 @@ const startSeason = async () => {
           if (n === 7 && games[6].winnerIdx === ourIdx && unlockAchievementForSave("game_seven")) ach.push("game_seven");
           if (n === 7 && games[0].winnerIdx !== ourIdx && games[1].winnerIdx !== ourIdx && games[2].winnerIdx !== ourIdx && unlockAchievementForSave("reverse_sweep")) ach.push("reverse_sweep");
         }
+        const slot = matchId === "finals" ? "finals" : (matchId.split("-")[1] || "");
+        if ((slot === "sf1" || slot === "sf2") && unlockAchievementForSave("conference_finals")) ach.push("conference_finals");
+        if ((slot === "fr1" || slot === "fr2" || slot === "fr3" || slot === "fr4") && unlockAchievementForSave("second_round")) ach.push("second_round");
         if (ach.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...ach]);
         if (lastEliminatorTeamName && beaten === lastEliminatorTeamName && unlockAchievementForSave("revenge")) {
           setNewlyUnlockedAchievements((prev) => [...prev, "revenge"]);
@@ -3040,6 +3097,19 @@ const startSeason = async () => {
         setNewlyUnlockedAchievements((prev) => [...prev, "revenge"]);
         setLastEliminatorTeamName(null);
       }
+      if (out.result?.winner?.isPlayer) {
+        const simElimParsed = getPlayoffMatchup(b, matchId);
+        const simElimM = simElimParsed?.matchup;
+        const simElimSlot = simElimParsed?.slot ?? (matchId === "finals" ? "finals" : (matchId.split("-")[1] || ""));
+        const simOurIdx = simElimM?.top?.isPlayer ? 0 : 1;
+        const simElimGames = simElimM?.games || [];
+        const simLastG = simElimGames[simElimGames.length - 1];
+        const simWeWon = simLastG && simLastG.winnerIdx === simOurIdx;
+        const simElimNeeded = simElimSlot.startsWith("pi") ? 1 : 4;
+        const simOppBefore = simElimGames.slice(0, -1).filter((g) => g.winnerIdx === 1 - simOurIdx).length;
+        const simWasElim = simElimSlot.startsWith("pi") || (simElimNeeded === 4 && simOppBefore === 3);
+        if (simWeWon && simWasElim && unlockAchievementForSave("elimination_win")) setNewlyUnlockedAchievements((prev) => [...prev, "elimination_win"]);
+      }
       if (matchId === "finals" && out.result?.myStats) {
         updateFinalsLeaders(out.result, out.result.topName, out.result.botName);
       }
@@ -3068,6 +3138,9 @@ const startSeason = async () => {
           if (n === 7 && games[6].winnerIdx === ourIdx && unlockAchievementForSave("game_seven")) ach.push("game_seven");
           if (n === 7 && games[0].winnerIdx !== ourIdx && games[1].winnerIdx !== ourIdx && games[2].winnerIdx !== ourIdx && unlockAchievementForSave("reverse_sweep")) ach.push("reverse_sweep");
         }
+        const seriesSlot = matchId === "finals" ? "finals" : (matchId.split("-")[1] || "");
+        if ((seriesSlot === "sf1" || seriesSlot === "sf2") && unlockAchievementForSave("conference_finals")) ach.push("conference_finals");
+        if ((seriesSlot === "fr1" || seriesSlot === "fr2" || seriesSlot === "fr3" || seriesSlot === "fr4") && unlockAchievementForSave("second_round")) ach.push("second_round");
         if (ach.length > 0) setNewlyUnlockedAchievements((prev) => [...prev, ...ach]);
       }
     }

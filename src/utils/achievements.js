@@ -39,6 +39,11 @@ export const ACHIEVEMENTS = [
   { id: "seasons_100", label: "Century", desc: "Complete 100 seasons", icon: "💯" },
   { id: "triple_double", label: "Triple-double", desc: "A player records a triple-double in a game", icon: "📊" },
   { id: "fifty_point_game", label: "50-point game", desc: "A player scores 50+ points in a game", icon: "🔥" },
+  { id: "sixty_point_game", label: "60-point game", desc: "A player scores 60+ points in a game", icon: "🔥" },
+  { id: "seventy_point_game", label: "70-point game", desc: "A player scores 70+ points in a game", icon: "🔥" },
+  { id: "eighty_point_game", label: "80-point game", desc: "A player scores 80+ points in a game", icon: "🔥" },
+  { id: "ninety_point_game", label: "90-point game", desc: "A player scores 90+ points in a game", icon: "🔥" },
+  { id: "hundred_point_game", label: "100-point game", desc: "A player scores 100+ points in a game", icon: "💯" },
   { id: "quadruple_double", label: "Quadruple-double", desc: "A player records a quadruple-double in a game", icon: "🌟" },
   { id: "sixty_wins", label: "60-win season", desc: "Win 60+ games in the regular season", icon: "📈" },
   { id: "blowout", label: "Blowout", desc: "Win a game by 40+ points", icon: "💥" },
@@ -54,6 +59,15 @@ export const ACHIEVEMENTS = [
   { id: "all_star_starter_2", label: "2 All-Star starters", desc: "Have 2 players named All-Star starters", icon: "⭐" },
   { id: "bounce_back", label: "Bounce back", desc: "Win the title the season after missing the playoffs", icon: "🔄" },
   { id: "rivalry", label: "Rivalry", desc: "Beat the same team 4 times in the regular season and again in the playoffs", icon: "⚔️" },
+  { id: "clutch", label: "Clutch", desc: "Win a game by 1–3 points", icon: "🎯" },
+  { id: "five_double_figures", label: "Five in double figures", desc: "Have 5 players score 10+ points in a game", icon: "✋" },
+  { id: "five_by_five", label: "Five-by-five", desc: "A player has 5+ points, rebounds, assists, steals, and blocks in a game", icon: "📋" },
+  { id: "conference_finals", label: "Conference finals", desc: "Reach the conference finals (final four)", icon: "🏅" },
+  { id: "beat_every_team", label: "Beat every team", desc: "Beat all 29 other teams in one regular season", icon: "🌐" },
+  { id: "elimination_win", label: "Elimination win", desc: "Win a playoff game when facing elimination", icon: "💪" },
+  { id: "second_round", label: "Second round", desc: "Reach the second round of the playoffs", icon: "📈" },
+  { id: "double_double", label: "Double-double", desc: "A player has 10+ in two of points, rebounds, and assists in a game", icon: "📊" },
+  { id: "all_league_leaders", label: "All league leaders", desc: "Your team has the league leader in all five stats (pts, reb, ast, stl, blk) in one season", icon: "👑" },
 ];
 
 const STORAGE_KEY = "nba_budget_ball_achievements";
