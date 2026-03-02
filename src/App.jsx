@@ -2474,6 +2474,7 @@ const startSeason = async () => {
     const oppIndex = schedule[USER_INDEX][gameNum - 1];
     const opp = aiTeams[oppIndex];
     if (!opp) return;
+    const winsBeforeThisGame = (careerStats?.totalWins ?? 0) + (season?.w ?? 0);
     const isHome = scheduleHome?.[USER_INDEX]?.[gameNum - 1] ?? null;
     const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty, isHome });
     const won = res.myScore > res.oppScore;
@@ -2525,8 +2526,7 @@ const startSeason = async () => {
     });
     setResult(res);
     const ach = [];
-    const totalWinsBefore = (careerStats?.totalWins || 0) + (season?.w || 0);
-    if (won && totalWinsBefore === 0 && unlockAchievementForSave("first_win")) ach.push("first_win");
+    if (won && winsBeforeThisGame === 0 && unlockAchievementForSave("first_win")) ach.push("first_win");
     if (won && (res.myScore || 0) - (res.oppScore || 0) >= 40 && unlockAchievementForSave("blowout")) ach.push("blowout");
     if (won && (res.ot || 0) > 0 && unlockAchievementForSave("overtime_win")) ach.push("overtime_win");
     (res.myStats || []).forEach((s) => {
@@ -2622,8 +2622,11 @@ const startSeason = async () => {
     let localGp = season?.gp ?? 0;
     const accSimResults = [];
     const accSimHistory = [];
+    const careerTotalWins = careerStats?.totalWins ?? 0;
+    const accSimAchievements = [];
     try {
       for (let k = 0; k < toPlay; k++) {
+        const totalWinsBeforeGame = careerTotalWins + localW;
         const g = gameNum + k;
         const USER_INDEX = NUM_TEAMS - 1;
         const oppIndex = schedule[USER_INDEX]?.[g - 1];
@@ -2632,6 +2635,17 @@ const startSeason = async () => {
         const isHome = scheduleHome?.[USER_INDEX]?.[g - 1] ?? null;
         const res = simulate(myLineup, opp.lineup, teamRoster, { difficulty, isHome });
         const won = res.myScore > res.oppScore;
+        if (won && totalWinsBeforeGame === 0 && unlockAchievementForSave("first_win")) accSimAchievements.push("first_win");
+        if (won && (res.myScore || 0) - (res.oppScore || 0) >= 40 && unlockAchievementForSave("blowout")) accSimAchievements.push("blowout");
+        if (won && (res.ot || 0) > 0 && unlockAchievementForSave("overtime_win")) accSimAchievements.push("overtime_win");
+        (res.myStats || []).forEach((s) => {
+          const p = s.pts || 0, r = s.reb || 0, a = s.ast || 0, st = s.stl || 0, b = s.blk || 0;
+          if (p >= 50 && unlockAchievementForSave("fifty_point_game")) accSimAchievements.push("fifty_point_game");
+          const tripleDouble = p >= 10 && r >= 10 && a >= 10;
+          const quadDouble = tripleDouble && (st >= 10 || b >= 10);
+          if (quadDouble && unlockAchievementForSave("quadruple_double")) accSimAchievements.push("quadruple_double");
+          else if (tripleDouble && unlockAchievementForSave("triple_double")) accSimAchievements.push("triple_double");
+        });
         const uniqueStats = [...new Map(res.myStats.map((s) => [s.name, s])).values()];
         const dayIndex = g - 1;
         const allStats = [
@@ -2692,6 +2706,10 @@ const startSeason = async () => {
       if (accSimHistory.length > 0) {
         const recent = accSimHistory.slice(-GAME_HISTORY_MAX).reverse();
         setGameHistory((prev) => [...recent, ...prev].slice(0, GAME_HISTORY_MAX));
+      }
+      if (accSimAchievements.length > 0) {
+        const unique = [...new Set(accSimAchievements)];
+        setNewlyUnlockedAchievements((prev) => [...prev, ...unique]);
       }
       const gamesActuallyPlayed = accSimResults.length;
       const nextGameNum = Math.min(gameNum + gamesActuallyPlayed, SEASON_LENGTH);
