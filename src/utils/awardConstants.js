@@ -43,5 +43,5 @@ export const DPOY = {
   blk: 2.0,
   reb: 0.05,
   pogBonus: 0,
-  winBonus: 16,
+  winBonus: 12,
 };
