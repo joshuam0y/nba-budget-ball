@@ -1464,7 +1464,7 @@ const soundtrackRef = useRef(null);
       const tovPen = (r.tpg || 0) / maxTpg * 0.5;
       const spgN = (r.spg || 0) / maxSPG, bpgN = (r.bpg || 0) / maxBPG;
       r.mvpScore = (r.teamPct ?? 0.4) * 2 + ppgN * 4 + rpgN * 1.2 + apgN * 1.6 + fgN + tpN - tovPen + spgN * 0.9 + bpgN * 0.6;
-      r.dpoyScore = (r.spg / maxSPG) * 3.0 + (r.bpg / maxBPG) * 2.0 + (r.rpg / maxRpg) * 0.5 + r.teamPct * 1.0;
+      r.dpoyScore = (r.spg / maxSPG) * 3.0 + (r.bpg / maxBPG) * 2.0 + (r.rpg / maxRpg) * 0.5 + r.teamPct * 2.0;
     });
     const voteLeader = (votesMap) => {
       if (!votesMap || Object.keys(votesMap).length === 0) return null;
@@ -4079,7 +4079,7 @@ if(phase==="teamSetup") return(
         r.mvpScore = teamPct * 2 + ppgN * 4 + rpgN * 1.2 + apgN * 1.6 + fgN + tpN - tovPen + spgN * 0.9 + bpgN * 0.6;
 
         const defScore = (r.spg / maxSPG) * 3.0 + (r.bpg / maxBPG) * 2.0 + (r.rpg / maxRpg) * 0.5;
-        r.dpoyScore = defScore + teamPct * 1.0;
+        r.dpoyScore = defScore + teamPct * 2.0;
       });
 
       // Use same ranking as in-game race and award: vote totals. Fallback to score if no votes.
@@ -5189,7 +5189,7 @@ if(phase==="teamSetup") return(
             return (
               <div style={{marginBottom:10,background:"#0f172a",borderRadius:10,padding:12,border:"1px solid #334155"}}>
                 <div style={{fontSize:10,color:"#fbbf24",fontWeight:800,letterSpacing:1,marginBottom:6}}>🏅 MVP & DPOY RACE (through Game {gp})</div>
-                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>MVP: 0.5·pts + 0.2·reb + 0.25·ast + 0.15·stl + 0.1·blk − 0.1·tov, +10 POG, +14 per win. DPOY: 3·stl + 2·blk + 0.5·reb, +10 per win (no POG). Score: +1·win%.</div>
+                <div style={{fontSize:9,color:"#64748b",marginBottom:8}}>MVP: 0.5·pts + 0.2·reb + 0.25·ast + 0.15·stl + 0.1·blk − 0.1·tov, +10 POG, +14 per win. DPOY: 3·stl + 2·blk + 0.5·reb, +16 per win (no POG). Score: +2·win%.</div>
                 <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,fontSize:10}}>
                   <div>
                     <div style={{color:"#fbbf24",fontWeight:700,marginBottom:4}}>MVP</div>
