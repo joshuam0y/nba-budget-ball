@@ -37,11 +37,11 @@ export const MVP = {
   winBonus: 35,
 };
 
-/** DPOY: per-game votes. Base = stl*S + blk*B + reb*R, +pogBonus POG, +winBonus win. */
+/** DPOY: per-game votes. Base = stl*S + blk*B + reb*R, +pogBonus POG, +winBonus win. Wins/POG matter less than for MVP. */
 export const DPOY = {
   stl: 3.0,
   blk: 2.0,
   reb: 0.05,
-  pogBonus: 1,
-  winBonus: 12,
+  pogBonus: 0,
+  winBonus: 4,
 };

@@ -22,7 +22,7 @@ function getPosKey(p) {
 /**
  * All-NBA formula: record + counting stats + defense, position-based (1 C, 2 F, 2 G per team).
  * Score = teamWinPct*2 + (ppg/max)*4 + (rpg/max)*1.2 + (apg/max)*1.6 + fg%*0.5 + 3p%*0.3 - tov*0.5 + (spg/max)*0.9 + (bpg/max)*0.6.
- * Teams are filled in MVP race order: sort all players by vote total (then score), then assign each to the first team with an open slot for their position (1st → 2nd → 3rd).
+ * Teams are filled by All-NBA score only (not MVP votes), so All-NBA = best by production; MVP can differ (votes/POG matter for MVP).
  */
 export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
   const byPos = { guard: [], forward: [], center: [] };
@@ -61,22 +61,19 @@ export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
     byPos[key].forEach((r) => { r.allNbaScore = score(r); });
   });
 
-  // MVP race order: all players sorted by vote total (desc), then by All-NBA score (desc)
-  const getVote = (r) => (mvpVotes && Number(mvpVotes[playerVoteKey(r.name, r.team)])) || 0;
-  const mvpOrder = [...byPos.guard, ...byPos.forward, ...byPos.center].sort((a, b) => {
-    const va = getVote(a), vb = getVote(b);
-    if (vb !== va) return vb - va;
-    return (b.allNbaScore || 0) - (a.allNbaScore || 0);
-  });
+  // All-NBA order: by score only (no votes), so All-NBA = best production; MVP stays vote-based and can differ
+  const allNbaOrder = [...byPos.guard, ...byPos.forward, ...byPos.center].sort(
+    (a, b) => (b.allNbaScore || 0) - (a.allNbaScore || 0)
+  );
 
-  // Fill 1st, then 2nd, then 3rd team by MVP order; each team gets 2 G, 2 F, 1 C
+  // Fill 1st, then 2nd, then 3rd team by score order; each team gets 2 G, 2 F, 1 C
   const slots = { guard: 2, forward: 2, center: 1 };
   const teams = [
     { guard: [], forward: [], center: [] },
     { guard: [], forward: [], center: [] },
     { guard: [], forward: [], center: [] },
   ];
-  for (const p of mvpOrder) {
+  for (const p of allNbaOrder) {
     const posKey = getPosKey(p);
     for (const team of teams) {
       if (team[posKey].length < slots[posKey]) {
@@ -117,7 +114,7 @@ export function buildAllDefensiveTeams(players, teamWinPct, dpoyVotes = null) {
     const spgN = (r.spg || 0) / maxSpg;
     const bpgN = (r.bpg || 0) / maxBpg;
     const rpgN = (r.rpg || 0) / maxRpg;
-    return teamPct * 1 + spgN * 3 + bpgN * 2 + rpgN * 0.5;
+    return teamPct * 0.5 + spgN * 3 + bpgN * 2 + rpgN * 0.5;
   };
   players.forEach((r) => { r.allDefScore = score(r); });
 
@@ -255,7 +252,7 @@ export function AllNBAAllDefensive({ leaders, teamRecords, myTeamName, dpoyVotes
         🏅 ALL-NBA & ALL-DEFENSIVE
       </div>
       <div style={{ fontSize: 9, color: "#64748b", marginBottom: 10 }}>
-        All-NBA: 1 C, 2 F, 2 G per team · PPG/RPG/APG/efficiency + defense (stl/blk) + record. All-Defensive: 2 G, 3 F/C · follows DPOY race. Green = your team.
+        All-NBA: 1 C, 2 F, 2 G per team · by score only (best production). MVP = by votes (POG/wins). All-Defensive: 2 G, 3 F/C · follows DPOY race. Green = your team.
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
