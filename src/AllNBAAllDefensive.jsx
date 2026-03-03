@@ -117,7 +117,7 @@ export function buildAllDefensiveTeams(players, teamWinPct, dpoyVotes = null) {
     const spgN = (r.spg || 0) / maxSpg;
     const bpgN = (r.bpg || 0) / maxBpg;
     const rpgN = (r.rpg || 0) / maxRpg;
-    return teamPct * 0.75 + spgN * 3 + bpgN * 2 + rpgN * 0.5;
+    return teamPct * 1.0 + spgN * 3 + bpgN * 2 + rpgN * 0.5;
   };
   players.forEach((r) => { r.allDefScore = score(r); });
 

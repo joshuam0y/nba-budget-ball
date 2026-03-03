@@ -25,7 +25,7 @@ export function gameScore(s) {
   return (Number(s.pts) || 0) + (Number(s.reb) || 0) * ALL_STAR.reb + (Number(s.ast) || 0) * ALL_STAR.ast + (Number(s.stl) || 0) * ALL_STAR.stl + (Number(s.blk) || 0) * ALL_STAR.blk - (Number(s.tov) || 0) * ALL_STAR.tov;
 }
 
-/** MVP: per-game votes. Base = pts*P + reb*R + ast*A + stl*S + blk*B - tov*T, +pogBonus POG, +winBonus win. Higher POG so All-NBA favors true standouts (most POGs) not just everyone on a great team. */
+/** MVP: per-game votes. Base = pts*P + reb*R + ast*A + stl*S + blk*B - tov*T, +pogBonus POG, +winBonus win. POG a bit more, wins a tiny bit less. */
 export const MVP = {
   pts: 0.5,
   reb: 0.2,
@@ -33,8 +33,8 @@ export const MVP = {
   stl: 0.15,
   blk: 0.1,
   tov: 0.1, // subtracted
-  pogBonus: 8,
-  winBonus: 18,
+  pogBonus: 10,
+  winBonus: 14,
 };
 
 /** DPOY: per-game votes. Base = stl*S + blk*B + reb*R, +pogBonus POG, +winBonus win. Wins/POG matter less than for MVP. */
@@ -43,5 +43,5 @@ export const DPOY = {
   blk: 2.0,
   reb: 0.05,
   pogBonus: 0,
-  winBonus: 6,
+  winBonus: 10,
 };
