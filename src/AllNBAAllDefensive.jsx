@@ -22,7 +22,7 @@ function getPosKey(p) {
 /**
  * All-NBA formula: record + counting stats + defense, position-based (1 C, 2 F, 2 G per team).
  * Score = teamWinPct*2 + (ppg/max)*4 + (rpg/max)*1.2 + (apg/max)*1.6 + fg%*0.5 + 3p%*0.3 - tov*0.5 + (spg/max)*0.9 + (bpg/max)*0.6.
- * Teams are filled by All-NBA score only (not MVP votes), so All-NBA = best by production; MVP can differ (votes/POG matter for MVP).
+ * Teams are filled in MVP race order (votes then score), so POG and wins matter for All-NBA too.
  */
 export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
   const byPos = { guard: [], forward: [], center: [] };
@@ -61,12 +61,15 @@ export function buildAllNBATeams(players, teamWinPct, mvpVotes = null) {
     byPos[key].forEach((r) => { r.allNbaScore = score(r); });
   });
 
-  // All-NBA order: by score only (no votes), so All-NBA = best production; MVP stays vote-based and can differ
-  const allNbaOrder = [...byPos.guard, ...byPos.forward, ...byPos.center].sort(
-    (a, b) => (b.allNbaScore || 0) - (a.allNbaScore || 0)
-  );
+  // All-NBA order: by MVP race (votes then score), so POG and wins matter
+  const getVote = (r) => (mvpVotes && Number(mvpVotes[playerVoteKey(r.name, r.team)])) || 0;
+  const allNbaOrder = [...byPos.guard, ...byPos.forward, ...byPos.center].sort((a, b) => {
+    const va = getVote(a), vb = getVote(b);
+    if (vb !== va) return vb - va;
+    return (b.allNbaScore || 0) - (a.allNbaScore || 0);
+  });
 
-  // Fill 1st, then 2nd, then 3rd team by score order; each team gets 2 G, 2 F, 1 C
+  // Fill 1st, then 2nd, then 3rd team by MVP race order; each team gets 2 G, 2 F, 1 C
   const slots = { guard: 2, forward: 2, center: 1 };
   const teams = [
     { guard: [], forward: [], center: [] },
@@ -252,7 +255,7 @@ export function AllNBAAllDefensive({ leaders, teamRecords, myTeamName, dpoyVotes
         🏅 ALL-NBA & ALL-DEFENSIVE
       </div>
       <div style={{ fontSize: 9, color: "#64748b", marginBottom: 10 }}>
-        All-NBA: 1 C, 2 F, 2 G per team · by score only (best production). MVP = by votes (POG/wins). All-Defensive: 2 G, 3 F/C · follows DPOY race. Green = your team.
+        All-NBA: 1 C, 2 F, 2 G per team · by MVP race (votes + score; POG & wins matter). All-Defensive: 2 G, 3 F/C · follows DPOY race. Green = your team.
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
